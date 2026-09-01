@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frequência — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item active"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Frequência</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name">Ana Carolina</span><span class="user-role">Pedagoga</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Frequência</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Chamada diária</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Registre a presença dos alunos</p>
+          </div>
+          <div style="display:flex; gap: var(--esp-3);">
+            <button class="btn btn-ghost"><i class="fa-solid fa-chevron-left"></i> Dia anterior</button>
+            <button class="btn btn-ghost">Próximo dia <i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="form-group">
+            <label>Turma <span class="required">*</span></label>
+            <select class="select">
+              <option>Turma A — Manhã</option>
+              <option>Turma B — Tarde</option>
+              <option>Turma C — Manhã</option>
+              <option>Turma D — Integral</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Data <span class="required">*</span></label>
+            <input type="date" class="input" value="2026-09-01" />
+          </div>
+          <div class="form-group">
+            <label>Marcar todos como</label>
+            <div style="display:flex; gap: var(--esp-2);">
+              <button class="btn btn-sm" style="background: var(--cor-sucesso); color: white;" onclick="document.querySelectorAll('.attendance-toggle').forEach(b=>{b.classList.remove('absent'); b.classList.add('present'); b.innerHTML='<i class=&quot;fa-solid fa-check&quot;></i> Presente';}); atualizarContagemFrequencia();"><i class="fa-solid fa-check"></i> Presentes</button>
+              <button class="btn btn-sm" style="background: var(--cor-erro); color: white;" onclick="document.querySelectorAll('.attendance-toggle').forEach(b=>{b.classList.remove('present'); b.classList.add('absent'); b.innerHTML='<i class=&quot;fa-solid fa-xmark&quot;></i> Ausente';}); atualizarContagemFrequencia();"><i class="fa-solid fa-xmark"></i> Ausentes</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid" style="grid-template-columns: 2fr 1fr; gap: var(--esp-5);">
+          <div class="card" style="padding: 0;">
+            <div class="table-wrapper">
+              <table class="table attendance-table">
+                <thead>
+                  <tr>
+                    <th>Aluno</th>
+                    <th>Status</th>
+                    <th>Observações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Lucas Oliveira</strong></div></div></td><td><button class="attendance-toggle present" onclick="togglePresenca(this)"><i class="fa-solid fa-check"></i> Presente</button></td><td><input type="text" class="input" placeholder="—" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Fernanda Lima</strong></div></div></td><td><button class="attendance-toggle present" onclick="togglePresenca(this)"><i class="fa-solid fa-check"></i> Presente</button></td><td><input type="text" class="input" placeholder="—" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Júlia Mendes</strong></div></div></td><td><button class="attendance-toggle present" onclick="togglePresenca(this)"><i class="fa-solid fa-check"></i> Presente</button></td><td><input type="text" class="input" placeholder="—" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Beatriz Santos</strong></div></div></td><td><button class="attendance-toggle absent" onclick="togglePresenca(this)"><i class="fa-solid fa-xmark"></i> Ausente</button></td><td><input type="text" class="input" value="Gripe - justificado" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Gabriel Ferreira</strong></div></div></td><td><button class="attendance-toggle present" onclick="togglePresenca(this)"><i class="fa-solid fa-check"></i> Presente</button></td><td><input type="text" class="input" placeholder="—" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Ana Clara Vieira</strong></div></div></td><td><button class="attendance-toggle present" onclick="togglePresenca(this)"><i class="fa-solid fa-check"></i> Presente</button></td><td><input type="text" class="input" placeholder="—" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Roberto Carlos</strong></div></div></td><td><button class="attendance-toggle present" onclick="togglePresenca(this)"><i class="fa-solid fa-check"></i> Presente</button></td><td><input type="text" class="input" placeholder="—" /></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:var(--esp-2)"><div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div><div><strong>Camila Souza</strong></div></div></td><td><button class="attendance-toggle absent" onclick="togglePresenca(this)"><i class="fa-solid fa-xmark"></i> Ausente</button></td><td><input type="text" class="input" value="Sem justificativa" /></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: var(--esp-4); border-top: 1px solid var(--cor-borda); background: var(--cor-fundo);">
+              <div>
+                <strong id="attendanceCount">6 presentes / 2 ausentes — Total: 8</strong>
+              </div>
+              <div style="display:flex; gap: var(--esp-3);">
+                <button class="btn btn-ghost">Cancelar</button>
+                <button class="btn btn-primary" onclick="showToast('Frequência salva com sucesso!', 'success');"><i class="fa-solid fa-check"></i> Salvar chamada</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card" style="background: var(--cor-fundo);">
+              <h3 style="margin-bottom: var(--esp-3); font-size: var(--tamanho-body);">⚠️ Faltas recorrentes</h3>
+              <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin-bottom: var(--esp-3);">Alunos com 3+ faltas consecutivas</p>
+              <ul style="display:flex; flex-direction:column; gap: var(--esp-3);">
+                <li style="display:flex; align-items:center; gap: var(--esp-2);">
+                  <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                  <div style="flex:1">
+                    <strong style="font-size: var(--tamanho-label);">Beatriz Santos</strong>
+                    <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">5 faltas</div>
+                  </div>
+                  <span class="badge danger">5</span>
+                </li>
+                <li style="display:flex; align-items:center; gap: var(--esp-2);">
+                  <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                  <div style="flex:1">
+                    <strong style="font-size: var(--tamanho-label);">Camila Souza</strong>
+                    <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">3 faltas</div>
+                  </div>
+                  <span class="badge warning">3</span>
+                </li>
+                <li style="display:flex; align-items:center; gap: var(--esp-2);">
+                  <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                  <div style="flex:1">
+                    <strong style="font-size: var(--tamanho-label);">Pedro Henrique</strong>
+                    <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">3 faltas</div>
+                  </div>
+                  <span class="badge warning">3</span>
+                </li>
+              </ul>
+              <button class="btn btn-outline btn-block" style="margin-top: var(--esp-3);" onclick="window.location='alunos/detalhe.html'">
+                <i class="fa-solid fa-phone"></i> Verificar contatos
+              </button>
+            </div>
+
+            <div class="card" style="margin-top: var(--esp-4); background: var(--cor-primaria-clara); border-color: var(--cor-primaria);">
+              <h3 style="margin-bottom: var(--esp-2); font-size: var(--tamanho-body); color: var(--cor-primaria-escura);">
+                <i class="fa-solid fa-circle-info"></i> Como registrar
+              </h3>
+              <ul style="font-size: var(--tamanho-label); color: var(--cor-texto); padding-left: var(--esp-4); list-style: disc;">
+                <li>Clique no botão de status para alternar entre Presente e Ausente.</li>
+                <li>Use os botões no topo para marcar todos rapidamente.</li>
+                <li>Adicione observações no campo ao lado (ex: "justificado", "saúde").</li>
+                <li>Não esqueça de clicar em <strong>Salvar chamada</strong>.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script src="assets/js/interacoes.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+    atualizarContagemFrequencia();
+  </script>
+</body>
+</html>

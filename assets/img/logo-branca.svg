@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <g>
+    <circle cx="30" cy="30" r="22" fill="#fff"/>
+    <path d="M22 28c0-2 2-4 4-4h2v-3c0-2 2-3 4-3s4 1 4 3v3h2c2 0 4 2 4 4v10c0 2-2 4-4 4h-2v3c0 2-2 3-4 3s-4-1-4-3v-3h-2c-2 0-4-2-4-4V28z" fill="#1F5E3D"/>
+    <circle cx="28" cy="33" r="2" fill="#fff"/>
+    <circle cx="36" cy="33" r="2" fill="#fff"/>
+  </g>
+  <text x="65" y="26" font-family="Roboto, sans-serif" font-size="16" font-weight="700" fill="#fff">Fundação</text>
+  <text x="65" y="46" font-family="Roboto, sans-serif" font-size="18" font-weight="700" fill="#fff">Toque</text>
+</svg>

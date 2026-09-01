@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Usuários — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item active"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Usuários e perfis</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name" id="userName">Maria Aparecida</span><span class="user-role" id="userRole">Direção</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Usuários</span>
+        </nav>
+
+        <div class="restricted-banner">
+          <i class="fa-solid fa-user-shield"></i>
+          <div>
+            <strong>Acesso restrito à Direção</strong>
+            <p style="font-size: var(--tamanho-label); margin: 0; color: var(--cor-texto-secundario);">
+              Apenas usuários com perfil de Direção podem gerenciar outros usuários e perfis de acesso.
+            </p>
+          </div>
+        </div>
+
+        <div class="page-header">
+          <div>
+            <h1>Usuários do sistema</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Gerencie quem tem acesso e quais permissões</p>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modalUsuario')"><i class="fa-solid fa-user-plus"></i> Novo usuário</button>
+        </div>
+
+        <!-- Cards de perfis -->
+        <h3 style="margin-bottom: var(--esp-3);">Perfis de acesso</h3>
+        <div class="grid cols-3" style="margin-bottom: var(--esp-5);">
+          <div class="card">
+            <div style="display:flex; align-items:center; gap: var(--esp-3); margin-bottom: var(--esp-3);">
+              <div class="stat-icon green"><i class="fa-solid fa-user-shield"></i></div>
+              <div>
+                <h3 style="font-size: var(--tamanho-body);">Direção</h3>
+                <span class="badge primary">1 usuário</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario);">Acesso completo: cadastros, relatórios de prestação de contas, gerenciamento de usuários.</p>
+          </div>
+          <div class="card">
+            <div style="display:flex; align-items:center; gap: var(--esp-3); margin-bottom: var(--esp-3);">
+              <div class="stat-icon blue"><i class="fa-solid fa-chalkboard-user"></i></div>
+              <div>
+                <h3 style="font-size: var(--tamanho-body);">Pedagogas</h3>
+                <span class="badge primary">3 usuários</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario);">Cadastro pedagógico, evolução, relatórios pedagógicos. Sem acesso a usuários.</p>
+          </div>
+          <div class="card">
+            <div style="display:flex; align-items:center; gap: var(--esp-3); margin-bottom: var(--esp-3);">
+              <div class="stat-icon orange"><i class="fa-solid fa-user-tie"></i></div>
+              <div>
+                <h3 style="font-size: var(--tamanho-body);">Administrativo</h3>
+                <span class="badge primary">1 usuário</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario);">Cadastro de alunos, frequência, documentação. Sem acesso pedagógico.</p>
+          </div>
+        </div>
+
+        <!-- Tabela de usuários -->
+        <div class="card" style="padding: 0;">
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Usuário</th>
+                  <th>E-mail</th>
+                  <th>Perfil</th>
+                  <th>Status</th>
+                  <th>Último acesso</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                      <div><strong>Maria Aparecida Santos</strong><div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Diretora</div></div>
+                    </div>
+                  </td>
+                  <td>direcao@fundacaotoque.org.br</td>
+                  <td><span class="badge success">Direção</span></td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td>Hoje, 09:15</td>
+                  <td class="actions">
+                    <button class="btn-icon"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                      <div><strong>Ana Carolina Silva</strong><div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Pedagoga</div></div>
+                    </div>
+                  </td>
+                  <td>pedagoga@fundacaotoque.org.br</td>
+                  <td><span class="badge info">Pedagoga</span></td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td>Hoje, 11:42</td>
+                  <td class="actions">
+                    <button class="btn-icon"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                      <div><strong>Roberto Mendes</strong><div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Auxiliar administrativo</div></div>
+                    </div>
+                  </td>
+                  <td>admin@fundacaotoque.org.br</td>
+                  <td><span class="badge warning">Administrativo</span></td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td>Hoje, 08:30</td>
+                  <td class="actions">
+                    <button class="btn-icon"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                      <div><strong>Carla Souza</strong><div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Pedagoga</div></div>
+                    </div>
+                  </td>
+                  <td>carla@fundacaotoque.org.br</td>
+                  <td><span class="badge info">Pedagoga</span></td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td>Ontem, 16:45</td>
+                  <td class="actions">
+                    <button class="btn-icon"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt=""></div>
+                      <div><strong>Marcos Pereira</strong><div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Educador</div></div>
+                    </div>
+                  </td>
+                  <td>marcos@fundacaotoque.org.br</td>
+                  <td><span class="badge info">Pedagoga</span></td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td>31/08, 14:20</td>
+                  <td class="actions">
+                    <button class="btn-icon"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalUsuario">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Novo usuário</h2>
+        <button class="modal-close" onclick="closeModal('modalUsuario')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome completo <span class="required">*</span></label>
+            <input type="text" class="input" />
+          </div>
+          <div class="form-group">
+            <label>E-mail <span class="required">*</span></label>
+            <input type="email" class="input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Perfil de acesso <span class="required">*</span></label>
+          <select class="select">
+            <option>Selecione</option>
+            <option>Direção</option>
+            <option>Pedagoga</option>
+            <option>Administrativo</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Senha temporária <span class="required">*</span></label>
+            <input type="password" class="input" placeholder="Mínimo 8 caracteres" />
+          </div>
+          <div class="form-group">
+            <label>Confirmar senha <span class="required">*</span></label>
+            <input type="password" class="input" />
+          </div>
+        </div>
+        <div class="alert info">
+          <i class="fa-solid fa-circle-info"></i>
+          <div class="alert-content">
+            <strong>Senha temporária</strong>
+            <p>O usuário será solicitado a trocar a senha no primeiro acesso.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalUsuario')">Cancelar</button>
+        <button class="btn btn-primary" onclick="closeModal('modalUsuario'); showToast('Usuário cadastrado com sucesso!', 'success');">Cadastrar</button>
+      </div>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    // Forçar usuário direção na página de usuários
+    if (!user.role) {
+      sessionStorage.setItem('toque_user', JSON.stringify({role: 'direcao', nome: 'Maria Aparecida Santos', email: 'direcao@fundacaotoque.org.br'}));
+    }
+  </script>
+</body>
+</html>

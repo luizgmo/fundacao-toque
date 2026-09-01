@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evolução — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item active"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Evolução do aluno</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name">Ana Carolina</span><span class="user-role">Pedagoga</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Evolução</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Registros de evolução</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Acompanhe o desenvolvimento de cada aluno</p>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modalEvolucao')"><i class="fa-solid fa-plus"></i> Nova observação</button>
+        </div>
+
+        <div class="grid" style="grid-template-columns: 1fr 2fr; gap: var(--esp-5);">
+          <!-- Formulário rápido -->
+          <div class="card">
+            <h3 style="margin-bottom: var(--esp-3); font-size: var(--tamanho-body);">📝 Novo registro rápido</h3>
+            <form>
+              <div class="form-group">
+                <label>Aluno <span class="required">*</span></label>
+                <input type="text" class="input" placeholder="Buscar aluno..." />
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Data <span class="required">*</span></label>
+                  <input type="date" class="input" />
+                </div>
+                <div class="form-group">
+                  <label>Área <span class="required">*</span></label>
+                  <select class="select">
+                    <option>Cognitiva</option>
+                    <option>Motora</option>
+                    <option>Social</option>
+                    <option>Comunicação</option>
+                    <option>Autonomia</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Descrição da observação <span class="required">*</span></label>
+                <textarea class="textarea" rows="4" placeholder="Descreva a evolução observada..."></textarea>
+              </div>
+              <div class="form-group">
+                <label>Profissional responsável</label>
+                <input type="text" class="input" value="Ana Carolina Silva" />
+              </div>
+              <button type="button" class="btn btn-primary btn-block" onclick="showToast('Observação registrada com sucesso!', 'success');">
+                <i class="fa-solid fa-save"></i> Salvar registro
+              </button>
+            </form>
+          </div>
+
+          <!-- Lista de registros -->
+          <div>
+            <div class="filter-bar">
+              <div class="form-group">
+                <label>Aluno</label>
+                <select class="select">
+                  <option>Todos os alunos</option>
+                  <option>Lucas Oliveira</option>
+                  <option>Beatriz Santos</option>
+                  <option>Pedro Henrique</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Área</label>
+                <select class="select">
+                  <option>Todas</option>
+                  <option>Cognitiva</option>
+                  <option>Motora</option>
+                  <option>Social</option>
+                  <option>Comunicação</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Período</label>
+                <select class="select">
+                  <option>Último mês</option>
+                  <option>Últimos 3 meses</option>
+                  <option>Último ano</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="timeline">
+              <div class="timeline-item">
+                <div class="timeline-date">28/08/2026 — Cognitiva — Ana Carolina</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <div style="display:flex; justify-content:space-between; align-items:start; gap: var(--esp-3);">
+                    <div>
+                      <h4 style="margin-bottom: var(--esp-1);">Lucas Oliveira Santos</h4>
+                      <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                        Identifica números até 10. Inicia reconhecimento de letras do alfabeto.
+                      </p>
+                    </div>
+                    <span class="badge info">Cognitiva</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-date">20/08/2026 — Motora — Ana Carolina</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <div style="display:flex; justify-content:space-between; align-items:start; gap: var(--esp-3);">
+                    <div>
+                      <h4 style="margin-bottom: var(--esp-1);">Lucas Oliveira Santos</h4>
+                      <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                        Boa coordenação motora fina. Consegue segurar lápis com firmeza.
+                      </p>
+                    </div>
+                    <span class="badge warning">Motora</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-date">15/08/2026 — Social — Roberto Mendes</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <div style="display:flex; justify-content:space-between; align-items:start; gap: var(--esp-3);">
+                    <div>
+                      <h4 style="margin-bottom: var(--esp-1);">Beatriz Santos Lima</h4>
+                      <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                        Interage bem com colegas. Iniciou diálogo com outro aluno durante oficina de musicalização.
+                      </p>
+                    </div>
+                    <span class="badge success">Social</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-date">10/08/2026 — Comunicação — Ana Carolina</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <div style="display:flex; justify-content:space-between; align-items:start; gap: var(--esp-3);">
+                    <div>
+                      <h4 style="margin-bottom: var(--esp-1);">Lucas Oliveira Santos</h4>
+                      <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                        Ampliou vocabulário para 30 palavras. Inicia formação de frases curtas.
+                      </p>
+                    </div>
+                    <span class="badge danger">Comunicação</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-date">05/08/2026 — Autonomia — Carla Souza</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <div style="display:flex; justify-content:space-between; align-items:start; gap: var(--esp-3);">
+                    <div>
+                      <h4 style="margin-bottom: var(--esp-1);">Júlia Mendes Rocha</h4>
+                      <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                        Consegue ir ao banheiro sozinha. Alimenta-se com pouca ajuda.
+                      </p>
+                    </div>
+                    <span class="badge primary">Autonomia</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalEvolucao">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Registrar observação de evolução</h2>
+        <button class="modal-close" onclick="closeModal('modalEvolucao')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Aluno <span class="required">*</span></label>
+          <input type="text" class="input" placeholder="Buscar aluno..." />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Data <span class="required">*</span></label>
+            <input type="date" class="input" />
+          </div>
+          <div class="form-group">
+            <label>Área avaliada <span class="required">*</span></label>
+            <select class="select">
+              <option>Cognitiva</option>
+              <option>Motora</option>
+              <option>Social</option>
+              <option>Comunicação</option>
+              <option>Autonomia</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Descrição <span class="required">*</span></label>
+          <textarea class="textarea" rows="5" placeholder="Descreva a evolução observada..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Profissional responsável</label>
+          <input type="text" class="input" value="Ana Carolina Silva" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalEvolucao')">Cancelar</button>
+        <button class="btn btn-primary" onclick="closeModal('modalEvolucao'); showToast('Observação registrada!', 'success');">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>

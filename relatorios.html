@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relatórios — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item active"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Relatórios</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name">Ana Carolina</span><span class="user-role">Pedagoga</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Relatórios</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Relatórios de Prestação de Contas</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Gere relatórios para órgãos financiadores</p>
+          </div>
+        </div>
+
+        <!-- Atalhos rápidos -->
+        <div class="grid cols-3" style="margin-bottom: var(--esp-5);">
+          <button class="quick-action-card" onclick="showToast('Gerando relatório diário...', 'success');">
+            <i class="fa-solid fa-calendar-day"></i>
+            <h3>Relatório diário</h3>
+            <p>Atividades e frequência do dia</p>
+          </button>
+          <button class="quick-action-card" onclick="showToast('Gerando relatório semestral...', 'success');">
+            <i class="fa-solid fa-calendar"></i>
+            <h3>Relatório semestral</h3>
+            <p>Consolidado do semestre</p>
+          </button>
+          <button class="quick-action-card" onclick="showToast('Gerando relatório anual...', 'success');">
+            <i class="fa-solid fa-chart-pie"></i>
+            <h3>Relatório anual</h3>
+            <p>Visão geral do ano</p>
+          </button>
+        </div>
+
+        <!-- Filtros -->
+        <div class="card">
+          <h3 style="margin-bottom: var(--esp-3); font-size: var(--tamanho-h3);">🔍 Filtros do relatório</h3>
+          <div class="form-row cols-4">
+            <div class="form-group">
+              <label>Data início</label>
+              <input type="date" class="input" value="2026-08-01" />
+            </div>
+            <div class="form-group">
+              <label>Data fim</label>
+              <input type="date" class="input" value="2026-09-01" />
+            </div>
+            <div class="form-group">
+              <label>Turma(s)</label>
+              <select class="select" multiple size="1">
+                <option>Todas as turmas</option>
+                <option>Turma A</option>
+                <option>Turma B</option>
+                <option>Turma C</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Tipo de relatório</label>
+              <select class="select">
+                <option>Consolidado (todos)</option>
+                <option>Apenas atividades</option>
+                <option>Apenas frequência</option>
+                <option>Apenas fotos</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex; gap: var(--esp-3); margin-top: var(--esp-3);">
+            <button class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> Gerar relatório</button>
+            <button class="btn btn-outline"><i class="fa-solid fa-file-pdf"></i> Exportar PDF</button>
+            <button class="btn btn-outline"><i class="fa-solid fa-print"></i> Imprimir</button>
+          </div>
+        </div>
+
+        <!-- Pré-visualização -->
+        <div class="card" style="margin-top: var(--esp-5);">
+          <div class="card-header">
+            <h2 class="card-title">Pré-visualização</h2>
+            <span class="badge success">Pronto para exportação</span>
+          </div>
+
+          <div class="pdf-preview">
+            <div class="pdf-header">
+              <img src="assets/img/logo.svg" alt="Fundação Toque" style="height: 60px;" />
+              <div>
+                <h2>Fundação Toque — FUNBESCO</h2>
+                <p>Fundação para o Bem Estar Educacional, Esportivo, Social, Cultural e Ocupacional de Araraquara e Região</p>
+                <p>CNPJ: 08.409.109/0001-99</p>
+              </div>
+            </div>
+
+            <div class="pdf-section">
+              <h3>Relatório de Atividades e Frequência</h3>
+              <p><strong>Período:</strong> 01/08/2026 a 01/09/2026</p>
+              <p><strong>Emitido em:</strong> 01/09/2026 por Ana Carolina Silva (Pedagoga)</p>
+            </div>
+
+            <div class="pdf-section">
+              <h3>Resumo Geral</h3>
+              <div class="grid cols-4">
+                <div style="text-align: center; padding: var(--esp-3); background: var(--cor-fundo); border-radius: var(--radius-sm);">
+                  <div style="font-size: 24px; font-weight: 700; color: var(--cor-primaria);">47</div>
+                  <div style="font-size: var(--tamanho-label);">Alunos atendidos</div>
+                </div>
+                <div style="text-align: center; padding: var(--esp-3); background: var(--cor-fundo); border-radius: var(--radius-sm);">
+                  <div style="font-size: 24px; font-weight: 700; color: var(--cor-info);">5</div>
+                  <div style="font-size: var(--tamanho-label);">Turmas ativas</div>
+                </div>
+                <div style="text-align: center; padding: var(--esp-3); background: var(--cor-fundo); border-radius: var(--radius-sm);">
+                  <div style="font-size: 24px; font-weight: 700; color: var(--cor-acento);">12</div>
+                  <div style="font-size: var(--tamanho-label);">Oficinas realizadas</div>
+                </div>
+                <div style="text-align: center; padding: var(--esp-3); background: var(--cor-fundo); border-radius: var(--radius-sm);">
+                  <div style="font-size: 24px; font-weight: 700; color: var(--cor-sucesso);">87%</div>
+                  <div style="font-size: var(--tamanho-label);">Frequência média</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pdf-section">
+              <h3>Atividades realizadas no período</h3>
+              <table class="table" style="font-size: var(--tamanho-label);">
+                <thead>
+                  <tr><th>Data</th><th>Turma</th><th>Oficinas</th><th>Presentes</th><th>Registrado por</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>01/09/2026</td><td>Turma A</td><td>Musicalização, Horta/NEMA</td><td>10/12</td><td>Ana Carolina</td></tr>
+                  <tr><td>31/08/2026</td><td>Turma B</td><td>Dança, Culinária</td><td>9/10</td><td>Roberto Mendes</td></tr>
+                  <tr><td>31/08/2026</td><td>Turma C</td><td>Alfabetização, Informática</td><td>7/8</td><td>Ana Carolina</td></tr>
+                  <tr><td>30/08/2026</td><td>Turma A</td><td>Artes, Musicalização</td><td>11/12</td><td>Carla Souza</td></tr>
+                  <tr><td>29/08/2026</td><td>Turma B</td><td>Esporte, Dança</td><td>8/10</td><td>Marcos Pereira</td></tr>
+                </tbody>
+              </table>
+              <p style="text-align: center; font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario); margin-top: var(--esp-3);">
+                Exibindo 5 de 132 registros
+              </p>
+            </div>
+
+            <div class="pdf-section">
+              <h3>Frequência por turma</h3>
+              <div class="bar-chart">
+                <div class="bar-row"><span class="bar-label">Turma A</span><div class="bar-track"><div class="bar-fill success" style="width: 92%;">92%</div></div></div>
+                <div class="bar-row"><span class="bar-label">Turma B</span><div class="bar-track"><div class="bar-fill success" style="width: 85%;">85%</div></div></div>
+                <div class="bar-row"><span class="bar-label">Turma C</span><div class="bar-track"><div class="bar-fill success" style="width: 88%;">88%</div></div></div>
+                <div class="bar-row"><span class="bar-label">Turma D</span><div class="bar-track"><div class="bar-fill warning" style="width: 78%;">78%</div></div></div>
+                <div class="bar-row"><span class="bar-label">Turma E</span><div class="bar-track"><div class="bar-fill success" style="width: 90%;">90%</div></div></div>
+              </div>
+            </div>
+
+            <div class="pdf-section">
+              <h3>Registro fotográfico</h3>
+              <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin-bottom: var(--esp-3);">
+                Total de 24 fotos anexadas no período
+              </p>
+              <div class="photo-grid">
+                <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+              </div>
+            </div>
+
+            <div style="margin-top: var(--esp-6); padding-top: var(--esp-4); border-top: 1px solid var(--cor-borda); display: flex; justify-content: space-between; font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">
+              <div>
+                <p style="margin: 4px 0;"><strong>Responsável:</strong> Maria Aparecida Santos</p>
+                <p style="margin: 4px 0;">Diretora — Fundação Toque</p>
+              </div>
+              <div style="text-align: right;">
+                <p style="margin: 4px 0;">Página 1 de 1</p>
+                <p style="margin: 4px 0;">Emitido em 01/09/2026</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap: var(--esp-3); margin-top: var(--esp-4); justify-content: flex-end;">
+            <button class="btn btn-ghost"><i class="fa-solid fa-arrows-rotate"></i> Atualizar</button>
+            <button class="btn btn-outline"><i class="fa-solid fa-print"></i> Imprimir</button>
+            <button class="btn btn-primary" onclick="showToast('PDF gerado com sucesso!', 'success');"><i class="fa-solid fa-file-pdf"></i> Exportar PDF</button>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>

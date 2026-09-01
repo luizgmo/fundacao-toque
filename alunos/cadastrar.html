@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cadastrar aluno — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="../assets/css/variables.css" />
+  <link rel="stylesheet" href="../assets/css/reset.css" />
+  <link rel="stylesheet" href="../assets/css/layout.css" />
+  <link rel="stylesheet" href="../assets/css/components.css" />
+  <link rel="stylesheet" href="../assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="../assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="../dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="listar.html" class="menu-item active"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="../turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="../oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="../frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="../atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="../evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="../relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="../usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="../index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Cadastrar aluno</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info">
+              <span class="user-name" id="userName">Ana Carolina</span>
+              <span class="user-role" id="userRole">Pedagoga</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="../dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <a href="listar.html">Alunos</a>
+          <span class="separator">›</span>
+          <span class="current">Cadastrar</span>
+        </nav>
+
+        <div class="page-header">
+          <h1>Novo cadastro de aluno</h1>
+          <a href="listar.html" class="btn btn-ghost"><i class="fa-solid fa-xmark"></i> Cancelar</a>
+        </div>
+
+        <div class="card">
+          <!-- Stepper -->
+          <div class="stepper">
+            <div class="step active" data-step="1">
+              <div class="step-circle">1</div>
+              <div class="step-label">Dados pessoais</div>
+            </div>
+            <div class="step" data-step="2">
+              <div class="step-circle">2</div>
+              <div class="step-label">Responsável</div>
+            </div>
+            <div class="step" data-step="3">
+              <div class="step-circle">3</div>
+              <div class="step-label">Documentos</div>
+            </div>
+            <div class="step" data-step="4">
+              <div class="step-circle">4</div>
+              <div class="step-label">Vínculos</div>
+            </div>
+            <div class="step" data-step="5">
+              <div class="step-circle">5</div>
+              <div class="step-label">Revisão</div>
+            </div>
+          </div>
+
+          <form id="cadastroForm">
+            <!-- Etapa 1: Dados pessoais -->
+            <div class="wizard-step active" data-step="1">
+              <h2 style="margin-bottom: var(--esp-4);">Dados pessoais</h2>
+              <div class="form-group">
+                <label>Foto do aluno (opcional)</label>
+                <div style="display:flex; align-items:center; gap: var(--esp-4);">
+                  <div class="avatar lg"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                  <button type="button" class="btn btn-outline"><i class="fa-solid fa-camera"></i> Anexar foto</button>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nome completo <span class="required">*</span></label>
+                  <input type="text" class="input" placeholder="Nome do aluno" required />
+                </div>
+                <div class="form-group">
+                  <label>Data de nascimento <span class="required">*</span></label>
+                  <input type="date" class="input" required />
+                </div>
+              </div>
+              <div class="form-row cols-3">
+                <div class="form-group">
+                  <label>Sexo <span class="required">*</span></label>
+                  <select class="select" required>
+                    <option>Selecione</option>
+                    <option>Feminino</option>
+                    <option>Masculino</option>
+                    <option>Outro</option>
+                    <option>Prefere não informar</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Tipo de deficiência <span class="required">*</span></label>
+                  <select class="select" required>
+                    <option>Selecione</option>
+                    <option>Intelectual</option>
+                    <option>Múltipla</option>
+                    <option>Física</option>
+                    <option>Autismo (TEA)</option>
+                    <option>Síndrome de Down</option>
+                    <option>Paralisia Cerebral</option>
+                    <option>Outra</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>CID <span class="required">*</span></label>
+                  <input type="text" class="input" placeholder="Ex: F71" required />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Observações gerais</label>
+                <textarea class="textarea" placeholder="Informações adicionais relevantes..."></textarea>
+              </div>
+            </div>
+
+            <!-- Etapa 2: Responsável -->
+            <div class="wizard-step" data-step="2" style="display:none">
+              <h2 style="margin-bottom: var(--esp-4);">Dados do responsável e contato</h2>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nome do responsável <span class="required">*</span></label>
+                  <input type="text" class="input" required />
+                </div>
+                <div class="form-group">
+                  <label>Parentesco <span class="required">*</span></label>
+                  <select class="select" required>
+                    <option>Mãe</option>
+                    <option>Pai</option>
+                    <option>Avó/Avô</option>
+                    <option>Tio/Tia</option>
+                    <option>Responsável legal</option>
+                    <option>Outro</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>CPF do responsável</label>
+                  <input type="text" class="input" placeholder="000.000.000-00" />
+                </div>
+                <div class="form-group">
+                  <label>RG</label>
+                  <input type="text" class="input" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Telefone principal <span class="required">*</span></label>
+                  <input type="tel" class="input" placeholder="(16) 99999-9999" required />
+                </div>
+                <div class="form-group">
+                  <label>Telefone secundário</label>
+                  <input type="tel" class="input" placeholder="(16) 99999-9999" />
+                </div>
+                <div class="form-group">
+                  <label>E-mail</label>
+                  <input type="email" class="input" placeholder="email@exemplo.com" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Endereço completo</label>
+                <input type="text" class="input" placeholder="Rua, número, bairro, cidade" />
+              </div>
+            </div>
+
+            <!-- Etapa 3: Documentos -->
+            <div class="wizard-step" data-step="3" style="display:none">
+              <h2 style="margin-bottom: var(--esp-4);">Documentos</h2>
+
+              <div class="form-group">
+                <label>Ficha médica (PDF ou imagem) <span class="required">*</span></label>
+                <div class="upload-zone" onclick="handleUpload(this,'uploadMedica')">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <p><strong>Clique para anexar</strong> ou arraste arquivos aqui</p>
+                  <p style="font-size: var(--tamanho-pequeno); margin-top: 4px;">PDF, JPG ou PNG — até 10MB</p>
+                </div>
+                <div id="uploadMedica" class="upload-list"></div>
+              </div>
+
+              <div class="form-group">
+                <label>Ficha de matrícula</label>
+                <div class="upload-zone" onclick="handleUpload(this,'uploadMatricula')">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <p><strong>Clique para anexar</strong> ou arraste arquivos aqui</p>
+                </div>
+                <div id="uploadMatricula" class="upload-list"></div>
+              </div>
+
+              <div class="lgpd-box">
+                <h4><i class="fa-solid fa-shield-halved"></i> Autorização LGPD</h4>
+                <p style="font-size: var(--tamanho-label); margin-bottom: var(--esp-3);">
+                  Conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), é necessária a autorização
+                  expressa do responsável para tratamento de dados pessoais e imagem do aluno.
+                </p>
+                <label class="checkbox">
+                  <input type="checkbox" required />
+                  <span>Autorizo o uso da imagem do aluno em materiais institucionais e relatórios de prestação de contas.</span>
+                </label>
+                <label class="checkbox">
+                  <input type="checkbox" required />
+                  <span>Autorizo o tratamento dos dados pessoais para fins pedagógicos e administrativos da Fundação Toque.</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Etapa 4: Vínculos -->
+            <div class="wizard-step" data-step="4" style="display:none">
+              <h2 style="margin-bottom: var(--esp-4);">Vínculos do aluno</h2>
+
+              <div class="form-group">
+                <label>Turma(s) <span class="required">*</span></label>
+                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--esp-2);">
+                  <label class="checkbox"><input type="checkbox" /> <span>Turma A — Manhã (8h–12h)</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>Turma B — Tarde (13h–17h)</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>Turma C — Manhã (8h–12h)</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>Turma D — Integral</span></label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Oficinas <span class="required">*</span></label>
+                <p class="form-help">Selecione as oficinas conforme o plano individual do aluno.</p>
+                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--esp-2);">
+                  <label class="checkbox"><input type="checkbox" /> <span>🎵 Musicalização</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>💃 Dança</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>🍳 Culinária</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>🌱 Horta/NEMA</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>🎨 Artes</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>⚽ Esporte</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>📚 Alfabetização</span></label>
+                  <label class="checkbox"><input type="checkbox" /> <span>🖥️ Informática</span></label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Grau de dependência</label>
+                <select class="select">
+                  <option>Selecione</option>
+                  <option>Baixo</option>
+                  <option>Médio</option>
+                  <option>Alto</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Etapa 5: Revisão -->
+            <div class="wizard-step" data-step="5" style="display:none">
+              <h2 style="margin-bottom: var(--esp-4);">Revisão dos dados</h2>
+              <p style="color: var(--cor-texto-secundario); margin-bottom: var(--esp-5);">
+                Confira os dados informados antes de finalizar o cadastro.
+              </p>
+
+              <div class="card" style="background: var(--cor-fundo);">
+                <h3 style="font-size: var(--tamanho-body); margin-bottom: var(--esp-3);">📋 Dados pessoais</h3>
+                <p style="margin: 4px 0;"><strong>Nome:</strong> Lucas Oliveira Santos</p>
+                <p style="margin: 4px 0;"><strong>Data de nascimento:</strong> 15/03/2008</p>
+                <p style="margin: 4px 0;"><strong>Sexo:</strong> Masculino</p>
+                <p style="margin: 4px 0;"><strong>Deficiência / CID:</strong> Intelectual / F71</p>
+              </div>
+
+              <div class="card" style="background: var(--cor-fundo);">
+                <h3 style="font-size: var(--tamanho-body); margin-bottom: var(--esp-3);">👨‍👩‍👦 Responsável</h3>
+                <p style="margin: 4px 0;"><strong>Nome:</strong> Maria Oliveira</p>
+                <p style="margin: 4px 0;"><strong>Parentesco:</strong> Mãe</p>
+                <p style="margin: 4px 0;"><strong>Telefone:</strong> (16) 99999-9999</p>
+              </div>
+
+              <div class="card" style="background: var(--cor-fundo);">
+                <h3 style="font-size: var(--tamanho-body); margin-bottom: var(--esp-3);">📎 Documentos</h3>
+                <p style="margin: 4px 0;"><strong>Ficha médica:</strong> ✅ Anexada</p>
+                <p style="margin: 4px 0;"><strong>LGPD:</strong> ✅ Autorização concedida</p>
+              </div>
+
+              <div class="card" style="background: var(--cor-fundo);">
+                <h3 style="font-size: var(--tamanho-body); margin-bottom: var(--esp-3);">🔗 Vínculos</h3>
+                <p style="margin: 4px 0;"><strong>Turma:</strong> Turma A — Manhã</p>
+                <p style="margin: 4px 0;"><strong>Oficinas:</strong> Musicalização, Horta/NEMA</p>
+              </div>
+            </div>
+
+            <!-- Footer fixo -->
+            <div class="wizard-footer">
+              <button type="button" class="btn btn-ghost" id="wizardPrev" onclick="prevStep()" style="visibility: hidden;">
+                <i class="fa-solid fa-chevron-left"></i> Voltar
+              </button>
+              <div style="display:flex; gap: var(--esp-3);">
+                <button type="button" class="btn btn-outline" onclick="window.location.href='listar.html'">Salvar rascunho</button>
+                <button type="button" class="btn btn-primary" id="wizardNext" onclick="nextStep()">
+                  Próximo <i class="fa-solid fa-chevron-right"></i>
+                </button>
+                <button type="button" class="btn btn-coral" id="wizardSubmit" style="display:none" onclick="showToast('Aluno cadastrado com sucesso!', 'success'); setTimeout(()=>window.location='listar.html', 1500)">
+                  <i class="fa-solid fa-check"></i> Finalizar cadastro
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/footer.js"></script>
+  <script src="../assets/js/modals.js"></script>
+  <script src="../assets/js/interacoes.js"></script>
+  <script>
+    // Custom next/prev for the wizard that handles the .wizard-step display
+    document.getElementById('wizardNext').onclick = function() {
+      const active = document.querySelector('.wizard-step.active');
+      const next = active.nextElementSibling;
+      if (next && next.classList.contains('wizard-step')) {
+        active.style.display = 'none';
+        active.classList.remove('active');
+        next.style.display = 'block';
+        next.classList.add('active');
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active','completed'));
+        const stepNum = parseInt(next.dataset.step);
+        for (let i = 1; i < stepNum; i++) {
+          document.querySelector(`.step[data-step="${i}"]`).classList.add('completed');
+        }
+        document.querySelector(`.step[data-step="${stepNum}"]`).classList.add('active');
+        document.getElementById('wizardPrev').style.visibility = 'visible';
+        if (stepNum === 5) {
+          this.style.display = 'none';
+          document.getElementById('wizardSubmit').style.display = 'inline-flex';
+        }
+      }
+    };
+    document.getElementById('wizardPrev').onclick = function() {
+      const active = document.querySelector('.wizard-step.active');
+      const prev = active.previousElementSibling;
+      if (prev && prev.classList.contains('wizard-step')) {
+        active.style.display = 'none';
+        active.classList.remove('active');
+        prev.style.display = 'block';
+        prev.classList.add('active');
+        const stepNum = parseInt(prev.dataset.step);
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active','completed'));
+        for (let i = 1; i < stepNum; i++) {
+          document.querySelector(`.step[data-step="${i}"]`).classList.add('completed');
+        }
+        document.querySelector(`.step[data-step="${stepNum}"]`).classList.add('active');
+        document.getElementById('wizardNext').style.display = 'inline-flex';
+        document.getElementById('wizardSubmit').style.display = 'none';
+        if (stepNum === 1) this.style.visibility = 'hidden';
+      }
+    };
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>

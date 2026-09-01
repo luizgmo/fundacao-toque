@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alunos — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="../assets/css/variables.css" />
+  <link rel="stylesheet" href="../assets/css/reset.css" />
+  <link rel="stylesheet" href="../assets/css/layout.css" />
+  <link rel="stylesheet" href="../assets/css/components.css" />
+  <link rel="stylesheet" href="../assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="../assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="../dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="listar.html" class="menu-item active"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="../turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="../oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="../frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="../atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="../evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="../relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="../usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="../index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Alunos</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info">
+              <span class="user-name" id="userName">Ana Carolina</span>
+              <span class="user-role" id="userRole">Pedagoga</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="../dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Alunos</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Alunos</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Gerencie os alunos assistidos pela Fundação</p>
+          </div>
+          <a href="cadastrar.html" class="btn btn-primary"><i class="fa-solid fa-user-plus"></i> Cadastrar aluno</a>
+        </div>
+
+        <!-- Resumo -->
+        <div class="grid cols-4" style="margin-bottom: var(--esp-5);">
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fa-solid fa-users"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">47</div>
+              <div class="stat-label">Total de alunos</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fa-solid fa-user-check"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">38</div>
+              <div class="stat-label">Ativos</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange"><i class="fa-solid fa-user-clock"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">7</div>
+              <div class="stat-label">Em acompanhamento</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon red"><i class="fa-solid fa-user-xmark"></i></div>
+            <div class="stat-content">
+              <div class="stat-value">2</div>
+              <div class="stat-label">Inativos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filter-bar">
+          <div class="form-group">
+            <label>Buscar</label>
+            <input type="text" class="input" id="searchAluno" placeholder="Nome do aluno..." oninput="filterTable('searchAluno','tabelaAlunos')" />
+          </div>
+          <div class="form-group">
+            <label>Turma</label>
+            <select class="select">
+              <option>Todas as turmas</option>
+              <option>Turma A — Manhã</option>
+              <option>Turma B — Tarde</option>
+              <option>Turma C — Manhã</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Oficina</label>
+            <select class="select">
+              <option>Todas</option>
+              <option>Musicalização</option>
+              <option>Dança</option>
+              <option>Horta/NEMA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select class="select">
+              <option>Todos</option>
+              <option>Ativo</option>
+              <option>Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card" style="padding: 0;">
+          <div class="table-wrapper">
+            <table class="table" id="tabelaAlunos">
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Data de nasc.</th>
+                  <th>Idade</th>
+                  <th>Turma</th>
+                  <th>Deficiência / CID</th>
+                  <th>Status</th>
+                  <th style="width: 130px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Lucas Oliveira Santos</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Maria Oliveira</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>15/03/2008</td>
+                  <td>18 anos</td>
+                  <td>Turma A</td>
+                  <td>Intelectual / F71</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon" title="Ver"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Beatriz Santos Lima</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: João Lima</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>22/07/2010</td>
+                  <td>16 anos</td>
+                  <td>Turma B</td>
+                  <td>Múltipla / G80</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Pedro Henrique Souza</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Carla Souza</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>10/11/2005</td>
+                  <td>20 anos</td>
+                  <td>Turma C</td>
+                  <td>Intelectual / F72</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Fernanda Lima Costa</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Marcos Costa</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>05/02/2012</td>
+                  <td>14 anos</td>
+                  <td>Turma A</td>
+                  <td>Intelectual / F70</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Gabriel Ferreira</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Sandra Ferreira</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>30/08/2009</td>
+                  <td>17 anos</td>
+                  <td>Turma B</td>
+                  <td>Autismo / F84</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Júlia Mendes Rocha</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Paulo Rocha</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>18/01/2014</td>
+                  <td>12 anos</td>
+                  <td>Turma A</td>
+                  <td>Síndrome de Down / Q90</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Rafael Cardoso</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Lucia Cardoso</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>25/06/2007</td>
+                  <td>19 anos</td>
+                  <td>Turma C</td>
+                  <td>Intelectual / F71</td>
+                  <td><span class="badge warning">Em acompanhamento</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <div style="display:flex; align-items:center; gap: var(--esp-3);">
+                      <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+                      <div>
+                        <strong>Ana Clara Vieira</strong>
+                        <div style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Resp: Roberto Vieira</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>09/04/2011</td>
+                  <td>15 anos</td>
+                  <td>Turma B</td>
+                  <td>Paralisia Cerebral / G80</td>
+                  <td><span class="badge success">Ativo</span></td>
+                  <td class="actions">
+                    <a href="detalhe.html" class="btn-icon"><i class="fa-solid fa-eye"></i></a>
+                    <button class="btn-icon"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Paginação -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding: var(--esp-3) var(--esp-4); border-top: 1px solid var(--cor-borda);">
+            <span style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario);">Mostrando 1–8 de 47 resultados</span>
+            <div style="display:flex; gap: var(--esp-1);">
+              <button class="btn-icon" disabled><i class="fa-solid fa-chevron-left"></i></button>
+              <button class="btn btn-sm btn-primary" style="min-width:36px; padding:0;">1</button>
+              <button class="btn btn-sm btn-ghost" style="min-width:36px; padding:0;">2</button>
+              <button class="btn btn-sm btn-ghost" style="min-width:36px; padding:0;">3</button>
+              <button class="btn btn-sm btn-ghost" style="min-width:36px; padding:0;">…</button>
+              <button class="btn btn-sm btn-ghost" style="min-width:36px; padding:0;">6</button>
+              <button class="btn-icon"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/footer.js"></script>
+  <script src="../assets/js/modals.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>
