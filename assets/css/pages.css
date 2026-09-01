@@ -249,3 +249,83 @@
   margin-bottom: var(--esp-4);
 }
 .lgpd-box h4 { color: var(--cor-primaria-escura); margin-bottom: var(--esp-2); }
+
+/* ============================
+   RESPONSIVIDADE — páginas
+   ============================ */
+
+/* Linhas de botões de ação (relatórios etc.) */
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-3);
+  margin-top: var(--esp-3);
+}
+.actions-row-end { justify-content: flex-end; margin-top: var(--esp-4); }
+
+@media (max-width: 640px) {
+  .actions-row .btn {
+    flex: 1 1 100%;
+  }
+  .actions-row-end { justify-content: stretch; }
+}
+
+@media (max-width: 900px) {
+  /* Grids com larguras definidas inline (ex.: 2fr 1fr no dashboard) */
+  [style*="2fr 1fr"],
+  [style*="1fr 2fr"],
+  [style*="1fr 1fr 1fr"],
+  [style*="3fr 2fr"],
+  [style*="2fr 2fr"],
+  [style*="1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .welcome-banner {
+    padding: var(--esp-4);
+  }
+  .welcome-banner .welcome-icon { display: none; }
+
+  .student-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--esp-3);
+  }
+
+  .role-selector { grid-template-columns: 1fr; }
+
+  .photo-grid { grid-template-columns: repeat(2, 1fr); }
+
+  .pdf-preview { padding: var(--esp-4); }
+  .pdf-header { flex-wrap: wrap; }
+  .pdf-preview [style*="justify-content: space-between"] { flex-wrap: wrap; gap: var(--esp-2); }
+
+  .filter-bar { padding: var(--esp-3); }
+  .filter-bar .input,
+  .filter-bar .select,
+  .filter-bar .form-group { min-width: 100%; flex: 1 1 100%; }
+
+  .entity-card .entity-actions { flex-wrap: wrap; }
+  .entity-card .entity-actions .btn { flex: 1; }
+  .entity-card .entity-actions .btn-icon { flex: 0 0 auto; }
+
+  .bar-label { width: 100px; font-size: var(--tamanho-pequeno); }
+}
+
+@media (max-width: 480px) {
+  .photo-grid { grid-template-columns: 1fr; }
+  .wizard-footer {
+    flex-direction: column-reverse;
+    gap: var(--esp-2);
+  }
+  .wizard-footer .btn { width: 100%; }
+}
+
+/* Login: card confortável em qualquer tela */
+@media (max-width: 480px) {
+  .login-card { padding: var(--esp-5) var(--esp-4); }
+  .login-logo { height: 56px; }
+  .login-card h1 { font-size: 22px; }
+}

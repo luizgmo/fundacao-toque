@@ -3,14 +3,28 @@
    ============================ */
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
-  if (sidebar) sidebar.classList.toggle('open');
+  if (!sidebar) return;
+  sidebar.classList.toggle('open');
+  let backdrop = document.querySelector('.sidebar-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.className = 'sidebar-backdrop';
+    backdrop.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      backdrop.classList.remove('show');
+    });
+    document.body.appendChild(backdrop);
+  }
+  backdrop.classList.toggle('show', sidebar.classList.contains('open'));
 }
 document.addEventListener('click', (e) => {
   const sidebar = document.querySelector('.sidebar');
   const toggle = document.querySelector('.btn-menu-toggle');
+  const backdrop = document.querySelector('.sidebar-backdrop');
   if (sidebar && sidebar.classList.contains('open')
       && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
     sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('show');
   }
 });
 

@@ -204,7 +204,23 @@ label .required { color: var(--cor-erro); }
 .table tbody tr { transition: background 0.2s; }
 .table tbody tr:hover { background: var(--cor-fundo); }
 .table tbody tr:last-child td { border-bottom: none; }
-.table .actions { display: flex; gap: var(--esp-1); }
+
+/* Coluna de ações: o td deve continuar sendo table-cell para alinhar
+   verticalmente ao centro da linha (display:flex aqui quebra o alinhamento) */
+.table td.actions {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.table td.actions > * {
+  vertical-align: middle;
+  margin-right: var(--esp-2);
+}
+.table td.actions > *:last-child { margin-right: 0; }
+
+/* A tabela mantém uma largura mínima confortável e o wrapper faz scroll,
+   em vez de espremer as colunas (bug visual nos ícones de ação) */
+.table-wrapper .table { min-width: 720px; }
+.table td { vertical-align: middle; }
 
 /* --- BADGES --- */
 .badge {
@@ -306,6 +322,33 @@ label .required { color: var(--cor-erro); }
 }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* Responsividade de componentes */
+@media (max-width: 640px) {
+  .modal {
+    max-width: 100%;
+    max-height: 94vh;
+    margin: var(--esp-2);
+  }
+  .modal-header, .modal-body { padding: var(--esp-4); }
+  .modal-footer {
+    flex-direction: column-reverse;
+    gap: var(--esp-2);
+  }
+  .modal-footer .btn { width: 100%; }
+  .toast {
+    left: var(--esp-3);
+    right: var(--esp-3);
+    bottom: var(--esp-3);
+    max-width: none;
+  }
+  .stepper { flex-wrap: wrap; gap: var(--esp-3); }
+  .step-label { max-width: 90px; font-size: 12px; }
+  .table th, .table td { padding: var(--esp-2) var(--esp-3); }
+  .btn { white-space: normal; }
+  .upload-zone { padding: var(--esp-4); }
+  .whatsapp-float { width: 52px; height: 52px; font-size: 24px; bottom: var(--esp-3); right: var(--esp-3); }
+}
 
 /* --- AVATAR --- */
 .avatar {
@@ -483,6 +526,10 @@ label .required { color: var(--cor-erro); }
 .grid {
   display: grid;
   gap: var(--esp-4);
+}
+/* Itens de grid/flex nunca devem forçar overflow da página */
+.grid > *, .form-row > *, .card, .timeline-item {
+  min-width: 0;
 }
 .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
