@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed": "node scripts/seed-firestore.mjs seed",
+    "seed:reset": "node scripts/seed-firestore.mjs reset"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "lucide-react": "^1.43.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
