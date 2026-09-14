@@ -1,0 +1,147 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Padrão: negar tudo. Acesso concedido apenas por regras explícitas.
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+
+    // Perfis: direcao | pedagogia | administrativo
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.papel;
+    }
+
+    function isDirection() {
+      return isSignedIn() && userRole() == 'direcao';
+    }
+
+    function isPedagogue() {
+      return isSignedIn() && userRole() == 'pedagogia';
+    }
+
+    function isAdministrative() {
+      return isSignedIn() && userRole() == 'administrativo';
+    }
+
+    // usuarios — apenas Direção gerencia usuários e perfis
+    match /usuarios/{userId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection();
+    }
+
+    // alunos — Direção e Administrativo gerenciam cadastro; Pedagogia lê e atualiza.
+    match /alunos/{studentId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isDirection() || isAdministrative();
+      allow update: if isSignedIn();
+    }
+
+    // fichas_medicas — dados sensíveis (LGPD); ajustar com a Fundação.
+    match /fichas_medicas/{studentId} {
+      allow read: if isDirection() || isPedagogue();
+      allow create, update, delete: if isDirection();
+    }
+
+    match /responsaveis/{guardianId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isAdministrative();
+    }
+
+    match /documentos_aluno/{documentId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isAdministrative();
+    }
+
+    match /turmas/{classId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    match /oficinas/{workshopId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    match /turma_oficinas/{classWorkshopId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    match /horarios_oficinas/{scheduleId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    match /matriculas/{enrollmentId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    match /aluno_oficinas/{assignmentId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue();
+    }
+
+    match /registros_atividade/{activityId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isDirection();
+    }
+
+    match /anexos/{attachmentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isDirection();
+    }
+
+    match /registros_evolucao/{progressId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isDirection();
+    }
+
+    match /modelos_formulario/{templateId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue();
+    }
+
+    match /relatorios_pedagogicos/{reportId} {
+      allow read: if isSignedIn();
+      allow create, update: if isDirection() || isPedagogue();
+      allow delete: if isDirection();
+    }
+
+    match /sessoes_chamada/{sessionId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    // ID determinístico ({sessao_id}_{aluno_id}) impede presença duplicada
+    match /registros_presenca/{recordId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    match /contatos_familia/{contactId} {
+      allow read: if isSignedIn();
+      allow create, update: if isDirection() || isPedagogue() || isAdministrative();
+      allow delete: if isDirection();
+    }
+
+    match /relatorios_gerados/{reportId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isDirection();
+    }
+
+    match /configuracoes_sistema/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isDirection();
+    }
+  }
+}
