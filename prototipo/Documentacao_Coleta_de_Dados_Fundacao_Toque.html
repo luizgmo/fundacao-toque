@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instrumentos para Coleta de Dados — Sistema Web de Gestão da Fundação Toque</title>
+<style>
+  :root{
+    --verde:#2E8B57; --verde-escuro:#1F5E3D; --laranja:#F39C12;
+    --cinza:#5a6b60; --fundo:#f4f8f5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#22302a;background:#dfe7e1;}
+  .page{width:210mm;min-height:297mm;background:#fff;margin:10px auto;padding:24mm 20mm;
+        display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.15);}
+  @page{size:A4;margin:0;}
+  @media print{
+    body{background:#fff;}
+    .page{margin:0;box-shadow:none;page-break-after:always;}
+    .hint{display:none;}
+  }
+  .hint{position:fixed;top:8px;right:8px;background:#1F5E3D;color:#fff;padding:8px 14px;
+        border-radius:6px;font-size:12px;z-index:99;}
+  h1{color:var(--verde-escuro);font-size:26px;margin-bottom:16px;border-left:6px solid var(--laranja);padding-left:12px;}
+  h2{color:var(--verde);font-size:17px;margin:18px 0 6px;}
+  p,li{font-size:13.5px;line-height:1.6;color:var(--cinza);}
+  ul,ol{padding-left:22px;margin:6px 0;}
+  b,strong{color:#2b3a32;}
+  .header-band{display:flex;justify-content:space-between;align-items:center;
+               border-bottom:2px solid var(--fundo);padding-bottom:8px;margin-bottom:20px;
+               font-size:11px;color:#8aa193;text-transform:uppercase;letter-spacing:.08em;}
+  .foot{margin-top:auto;border-top:2px solid var(--fundo);padding-top:10px;
+        font-size:11px;color:#8aa193;display:flex;justify-content:space-between;}
+  .cover{background:linear-gradient(160deg,var(--verde-escuro) 0%,var(--verde) 70%);
+         color:#fff;justify-content:center;}
+  .cover h1{color:#fff;border:none;padding:0;font-size:36px;line-height:1.2;}
+  .cover h1 span{color:var(--laranja);}
+  .cover .tag{display:inline-block;background:var(--laranja);color:#fff;font-size:12px;font-weight:700;
+              letter-spacing:.14em;text-transform:uppercase;padding:7px 14px;border-radius:20px;margin-bottom:26px;width:fit-content;}
+  .cover p{color:rgba(255,255,255,.9);font-size:15px;}
+  .cover .team{margin-top:34px;font-size:13px;line-height:1.8;}
+  .cover .inst{margin-top:34px;font-size:13px;opacity:.75;line-height:1.6;}
+  .q{background:var(--fundo);border-left:4px solid var(--verde);border-radius:6px;
+     padding:10px 14px;margin-bottom:10px;}
+  .q b{display:block;margin-bottom:2px;}
+  .q .obs{font-size:12px;color:#8aa193;font-style:normal;}
+  table.prio{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;}
+  table.prio th{background:var(--verde);color:#fff;padding:8px;}
+  table.prio td{padding:8px 10px;border-bottom:1px solid #e3ece6;}
+  table.prio td.c{text-align:center;}
+</style>
+</head>
+<body>
+<div class="hint">Exportar PDF: Ctrl+P → Layout "Retrato" → Sem margens → Ativar "Gráficos de plano de fundo"</div>
+
+<!-- CAPA -->
+<section class="page cover">
+  <div>
+    <span class="tag">Documento de Coleta de Dados</span>
+    <h1>Instrumentos para Coleta de Dados<br><span>Sistema Web de Gestão da Fundação Toque</span></h1>
+    <div class="team">
+      Cauan Cunha Mendes – AQ3031713<br>
+      João Henrique Correa Reis – AQ3029514<br>
+      Luiz Gustavo Monico – AQ302993X<br>
+      Mateus Costa da Silva – AQ3029425<br>
+      Tiago Setti Mendes – AQ3029956<br>
+      Victor Rodrigues Herculini – AQ3028968
+    </div>
+    <p class="inst">Equipe RootTech — Instituto Federal de Educação, Ciência e Tecnologia de São Paulo, Câmpus Araraquara<br>Araraquara/SP — 2026</p>
+  </div>
+</section>
+
+<!-- 1. METODOLOGIA -->
+<section class="page">
+  <div class="header-band"><span>Coleta de Dados — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h1>1. Metodologia de Coleta de Dados</h1>
+  <p>O objetivo da coleta de dados é compreender o processo atual de gestão dos alunos assistidos pela Fundação Toque — cadastro, organização em turmas e oficinas, acompanhamento da evolução, controle de frequência e prestação de contas — identificando dificuldades, necessidades dos usuários e requisitos para o desenvolvimento do sistema.</p>
+  <h2>Técnicas de coleta selecionadas</h2>
+  <ul>
+    <li><b>Entrevista semiestruturada</b>;</li>
+    <li><b>Questionário</b>;</li>
+    <li><b>Análise de documentos e relatórios</b>.</li>
+  </ul>
+  <p>A coleta já foi iniciada junto à equipe da instituição, por meio de entrevista com representantes da Fundação Toque e de um formulário online respondido pela equipe (disponível ao final deste documento).</p>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>02</span></div>
+</section>
+
+<!-- 2. ENTREVISTA -->
+<section class="page">
+  <div class="header-band"><span>Coleta de Dados — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h1>2. Entrevista Semiestruturada</h1>
+  <p>A entrevista foi realizada com representantes e profissionais da Fundação Toque envolvidos na gestão dos alunos, turmas e oficinas. O objetivo é obter informações detalhadas sobre o funcionamento atual do atendimento — cadastro dos assistidos, organização das turmas (manhã e tarde), oficinas realizadas, acompanhamento da evolução, controle de frequência e prestação de contas — identificando dificuldades, necessidades e possíveis melhorias.</p>
+  <p>A entrevista é composta por perguntas abertas e fechadas, permitindo que novos questionamentos sejam realizados de acordo com as respostas obtidas. Os pontos explorados incluem:</p>
+  <ol>
+    <li>Como é realizado hoje o cadastro dos alunos/assistidos e onde as informações são guardadas (papel, planilha, pasta física, outro sistema);</li>
+    <li>Quais informações são mantidas sobre cada aluno (dados pessoais, responsável, tipo de deficiência, condições de saúde, medicamentos, alergias, autorização de uso de imagem) e quais exigem cuidado especial, como laudos e diagnósticos;</li>
+    <li>Como os alunos são organizados nas turmas da manhã e da tarde e como ocorre a divisão por oficinas;</li>
+    <li>Como é decidido em qual turma e em quais oficinas cada aluno entra;</li>
+    <li>Como é feito o acompanhamento da evolução de cada aluno (anotações da pedagoga, relatórios de terapeutas, observações da psicóloga) e se há algo compartilhado entre a equipe;</li>
+    <li>Como é realizado o controle de presença e como a equipe age diante de faltas recorrentes;</li>
+    <li>Quais informações precisam ser relatadas periodicamente à prefeitura, editais ou outros financiadores, e como esses relatórios são montados;</li>
+    <li>Quais pessoas da equipe usariam o sistema no dia a dia e em que quantidade;</li>
+    <li>Quais funcionalidades são consideradas essenciais, importantes, desejáveis ou desnecessárias (priorização).</li>
+  </ol>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>03</span></div>
+</section>
+
+<!-- 3. QUESTIONARIO (parte 1) -->
+<section class="page">
+  <div class="header-band"><span>Coleta de Dados — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h1>3. Questionário</h1>
+  <p>Foi elaborado um questionário destinado à equipe da Fundação Toque, com o objetivo de coletar informações sobre o processo atual, as necessidades do sistema e a priorização das funcionalidades. O questionário utiliza questões abertas, de múltipla escolha e de priorização, conforme descrito abaixo.</p>
+
+  <h2>3.1. Identificação do Respondente</h2>
+  <div class="q"><b>1. Cargo / função</b></div>
+
+  <h2>3.2. Cadastro dos alunos/assistidos</h2>
+  <div class="q"><b>2. Quais informações vocês gostariam de manter registradas sobre cada aluno?</b>
+    <span class="obs">(ex.: nome, data de nascimento, responsável e contato, tipo de deficiência, condições de saúde, medicamentos, alergias, autorização de uso de imagem, entre outros) — obrigatória</span></div>
+  <div class="q"><b>3. Hoje, onde e como essas informações são guardadas (papel, planilha, pasta física, outro sistema)?</b> <span class="obs">— obrigatória</span></div>
+  <div class="q"><b>4. Existe alguma informação sensível que precisa de cuidado especial (ex.: laudos médicos, diagnósticos)? Se sim, quem pode ter acesso a ela?</b></div>
+
+  <h2>3.3. Turmas e oficinas</h2>
+  <div class="q"><b>5. Hoje os alunos são organizados em turma da manhã e turma da tarde. Dentro de cada turma, os alunos também são divididos por tipo de oficina ou todos participam das mesmas atividades no mesmo horário?</b> <span class="obs">— obrigatória</span></div>
+  <div class="q"><b>6. Como é decidido em qual turma e em quais oficinas cada aluno vai entrar?</b> <span class="obs">— obrigatória</span></div>
+  <div class="q"><b>7. Vocês gostariam de registrar, dia a dia, quais atividades foram realizadas em cada turma (ex.: "terça de manhã: musicalização e horta")?</b> <span class="obs">— Sim / Não</span></div>
+
+  <h2>3.4. Acompanhamento do progresso</h2>
+  <div class="q"><b>8. Hoje, como é feito o acompanhamento da evolução de cada aluno (ex.: anotações da pedagoga, relatório da fisioterapeuta, observações da psicóloga)? Cada profissional registra separadamente ou já existe algo compartilhado entre a equipe?</b></div>
+  <div class="q"><b>9. Vocês gostariam que o sistema permitisse registrar observações/evolução de um aluno ao longo do tempo, para consulta posterior por toda a equipe?</b> <span class="obs">— Sim / Não</span></div>
+  <div class="q"><b>10. Com que frequência esse acompanhamento costuma ser feito?</b> <span class="obs">— Diário / Semanal / Mensal / Outro</span></div>
+  <div class="q"><b>11. Existe algum modelo ou formulário de avaliação que a equipe já utiliza e que poderia servir de base?</b> <span class="obs">— Sim / Não</span></div>
+
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>04</span></div>
+</section>
+
+<!-- 3. QUESTIONARIO (parte 2) -->
+<section class="page">
+  <div class="header-band"><span>Coleta de Dados — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+
+  <h2 style="margin-top:0;">3.5. Frequência</h2>
+  <div class="q"><b>12. Hoje é feito algum controle de presença dos alunos nas oficinas? Como?</b></div>
+  <div class="q"><b>13. Faltas recorrentes de um aluno geram algum tipo de ação da equipe (contato com a família, por exemplo)?</b></div>
+
+  <h2>3.6. Quem vai usar o sistema</h2>
+  <div class="q"><b>14. Quais pessoas da equipe usariam o sistema no dia a dia (ex.: direção, secretaria, pedagogas, terapeutas, educadores)?</b></div>
+  <div class="q"><b>15. Quantas pessoas, aproximadamente, usariam o sistema regularmente?</b></div>
+
+  <h2>3.7. Relatórios e prestação de contas</h2>
+  <div class="q"><b>16. Quais informações vocês precisam relatar periodicamente para a prefeitura, editais ou outros financiadores (ex.: número de atendidos, frequência, horas de atividade)?</b></div>
+  <div class="q"><b>17. Como esse relatório é montado hoje?</b></div>
+
+  <h2>3.8. Priorização das funcionalidades</h2>
+  <p><b>18.</b> Com base em tudo que conversamos até agora, marquem o quanto cada item abaixo é importante para vocês (<b>Essencial / Importante / Seria bom ter / Não é necessário</b>). Isso vai nos ajudar a priorizar o que construir primeiro. <span class="obs">— obrigatória</span></p>
+  <table class="prio">
+    <tr>
+      <th style="text-align:left;">Funcionalidade</th>
+      <th>Essencial</th>
+      <th>Importante</th>
+      <th>Seria bom ter</th>
+      <th>Não é necessário</th>
+    </tr>
+    <tr><td>Cadastro completo dos alunos</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+    <tr><td>Organização por turma</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+    <tr><td>Registro das oficinas e atividades realizadas em cada turma</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+    <tr><td>Acompanhamento da evolução/progresso de cada aluno ao longo do tempo</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+    <tr><td>Controle de presença/frequência</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+    <tr><td>Relatórios para prestação de contas (prefeitura, editais, financiadores)</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+    <tr><td>Cadastro e organização da equipe de profissionais</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td><td class="c">☐</td></tr>
+  </table>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>05</span></div>
+</section>
+
+<!-- 4. ANALISE DE DOCUMENTOS -->
+<section class="page">
+  <div class="header-band"><span>Coleta de Dados — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h1>4. Análise de Documentos e Relatórios</h1>
+  <p>Quando disponíveis, serão analisados documentos e relatórios utilizados pela Fundação Toque que possam contribuir para a compreensão do processo atual de gestão dos alunos.</p>
+  <p>Poderão ser considerados documentos relacionados a:</p>
+  <ul>
+    <li>Cadastro e fichas dos alunos/assistidos (incluindo fichas médicas e autorizações de uso de imagem, quando autorizado);</li>
+    <li>Organização das turmas (manhã e tarde) e das oficinas/atividades;</li>
+    <li>Registros de acompanhamento da evolução dos alunos (anotações pedagógicas, relatórios de terapeutas, observações da equipe);</li>
+    <li>Controle de presença/frequência e registros de contato com famílias;</li>
+    <li>Relatórios de prestação de contas enviados à prefeitura, editais e outros financiadores;</li>
+    <li>Modelos ou formulários de avaliação já utilizados pela equipe.</li>
+  </ul>
+  <p>A análise será realizada de acordo com a disponibilidade e a autorização da instituição parceira, com atenção especial à confidencialidade das informações sensíveis (laudos médicos e diagnósticos), em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD – Lei nº 13.709/2018).</p>
+
+  <h2>Organização e Análise dos Dados</h2>
+  <p>Os dados obtidos por meio das entrevistas, questionários e da análise de documentos serão organizados pela equipe para identificar padrões, necessidades e dificuldades relacionadas ao processo atual. As informações coletadas serão utilizadas como base para a definição dos requisitos funcionais e não funcionais do sistema, bem como para orientar a elaboração dos protótipos e das funcionalidades da plataforma.</p>
+
+  <h2>Formulário Online</h2>
+  <p>Acesse o formulário online correspondente através do link abaixo:</p>
+  <p><a href="https://forms.gle/FmVGa4GRoeNpbQQW9" style="color:var(--verde-escuro);font-weight:700;">https://forms.gle/FmVGa4GRoeNpbQQW9</a></p>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>06</span></div>
+</section>
+
+</body>
+</html>

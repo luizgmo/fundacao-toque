@@ -1,0 +1,56 @@
+/* ============================
+   RESET CSS
+   ============================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--fonte-principal);
+  font-size: var(--tamanho-body);
+  color: var(--cor-texto);
+  background-color: var(--cor-fundo);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--cor-info);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+a:hover { color: var(--cor-primaria-escura); }
+
+ul, ol { list-style: none; }
+
+img { max-width: 100%; display: block; }
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--cor-texto);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+h1 { font-size: var(--tamanho-h1); }
+h2 { font-size: var(--tamanho-h2); }
+h3 { font-size: var(--tamanho-h3); }
+
+p { margin-bottom: var(--esp-3); }
+p:last-child { margin-bottom: 0; }
+
+:focus-visible {
+  outline: 3px solid var(--cor-primaria);
+  outline-offset: 2px;
+}

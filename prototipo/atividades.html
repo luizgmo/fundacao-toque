@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Atividades — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item active"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Atividades</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name">Ana Carolina</span><span class="user-role">Pedagoga</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Atividades</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Registro diário de atividades</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Registre as oficinas realizadas por turma</p>
+          </div>
+        </div>
+
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--esp-5);">
+          <div class="card">
+            <h3 style="margin-bottom: var(--esp-3); font-size: var(--tamanho-h3);">📝 Registrar atividade de hoje</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Turma <span class="required">*</span></label>
+                <select class="select">
+                  <option>Turma A — Manhã</option>
+                  <option>Turma B — Tarde</option>
+                  <option>Turma C — Manhã</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Data <span class="required">*</span></label>
+                <input type="date" class="input" value="2026-09-01" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Oficinas realizadas hoje <span class="required">*</span></label>
+              <p class="form-help">Marque as oficinas que aconteceram nesta turma hoje.</p>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--esp-2);">
+                <label class="checkbox"><input type="checkbox" checked /> <span>🎵 Musicalização</span></label>
+                <label class="checkbox"><input type="checkbox" checked /> <span>🌱 Horta/NEMA</span></label>
+                <label class="checkbox"><input type="checkbox" /> <span>🎨 Artes</span></label>
+                <label class="checkbox"><input type="checkbox" /> <span>💃 Dança</span></label>
+                <label class="checkbox"><input type="checkbox" /> <span>📚 Alfabetização</span></label>
+                <label class="checkbox"><input type="checkbox" /> <span>🍳 Culinária</span></label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Profissional responsável pelo registro</label>
+              <select class="select">
+                <option>Ana Carolina Silva</option>
+                <option>Roberto Mendes</option>
+                <option>Carla Souza</option>
+                <option>Marcos Pereira</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Observações gerais</label>
+              <textarea class="textarea" rows="3" placeholder="Descreva como foi a atividade, destaques, ocorrências...">Os alunos da Turma A participaram ativamente da musicalização. Na horta, o Lucas regou as mudas com entusiasmo. Júlia estava um pouco indisposta, mas participou da atividade artística.</textarea>
+            </div>
+
+            <div class="form-group">
+              <label>📎 Anexar fotos</label>
+              <div class="upload-zone" onclick="handleUpload(this,'uploadAtividade')">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p><strong>Clique para anexar</strong> ou arraste fotos aqui</p>
+                <p style="font-size: var(--tamanho-pequeno); margin-top: 4px;">JPG, PNG — até 5MB cada</p>
+              </div>
+              <div id="uploadAtividade" class="upload-list"></div>
+            </div>
+
+            <button class="btn btn-primary btn-block btn-lg" onclick="showToast('Atividade registrada com sucesso!', 'success');">
+              <i class="fa-solid fa-save"></i> Salvar registro
+            </button>
+          </div>
+
+          <div>
+            <h3 style="margin-bottom: var(--esp-3);">Histórico recente</h3>
+            <div class="timeline">
+              <div class="timeline-item">
+                <div class="timeline-date">Hoje — 01/09/2026</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <h4 style="margin-bottom: var(--esp-1);">Turma A — Manhã</h4>
+                  <div style="display:flex; flex-wrap:wrap; gap: 4px; margin-bottom: var(--esp-2);">
+                    <span class="badge primary">🎵 Musicalização</span>
+                    <span class="badge primary">🌱 Horta/NEMA</span>
+                  </div>
+                  <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                    <i class="fa-solid fa-user-tie"></i> Ana Carolina — <i class="fa-solid fa-camera"></i> 3 fotos
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-date">Ontem — 31/08/2026</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <h4 style="margin-bottom: var(--esp-1);">Turma B — Tarde</h4>
+                  <div style="display:flex; flex-wrap:wrap; gap: 4px; margin-bottom: var(--esp-2);">
+                    <span class="badge primary">💃 Dança</span>
+                    <span class="badge primary">🍳 Culinária</span>
+                  </div>
+                  <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                    <i class="fa-solid fa-user-tie"></i> Roberto Mendes — <i class="fa-solid fa-camera"></i> 5 fotos
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-date">31/08/2026</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <h4 style="margin-bottom: var(--esp-1);">Turma C — Manhã</h4>
+                  <div style="display:flex; flex-wrap:wrap; gap: 4px; margin-bottom: var(--esp-2);">
+                    <span class="badge primary">📚 Alfabetização</span>
+                    <span class="badge primary">🖥️ Informática</span>
+                  </div>
+                  <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                    <i class="fa-solid fa-user-tie"></i> Ana Carolina — <i class="fa-solid fa-camera"></i> 2 fotos
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-date">30/08/2026</div>
+                <div class="card" style="background: var(--cor-fundo);">
+                  <h4 style="margin-bottom: var(--esp-1);">Turma A — Manhã</h4>
+                  <div style="display:flex; flex-wrap:wrap; gap: 4px; margin-bottom: var(--esp-2);">
+                    <span class="badge primary">🎨 Artes</span>
+                    <span class="badge primary">🎵 Musicalização</span>
+                  </div>
+                  <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+                    <i class="fa-solid fa-user-tie"></i> Carla Souza — <i class="fa-solid fa-camera"></i> 4 fotos
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script src="assets/js/interacoes.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>

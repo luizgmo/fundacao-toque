@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apresentação da Proposta — Sistema Web de Gestão da Fundação Toque</title>
+<style>
+  :root{
+    --verde:#2E8B57; --verde-escuro:#1F5E3D; --laranja:#F39C12;
+    --cinza:#5a6b60; --fundo:#f4f8f5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#22302a;background:#dfe7e1;}
+  .slide{width:210mm;min-height:297mm;background:#fff;margin:10px auto;padding:22mm 18mm;
+         display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.15);}
+  @page{size:A4;margin:0;}
+  @media print{
+    body{background:#fff;}
+    .slide{margin:0;box-shadow:none;page-break-after:always;}
+    .hint{display:none;}
+  }
+  .hint{position:fixed;top:8px;right:8px;background:#1F5E3D;color:#fff;padding:8px 14px;
+        border-radius:6px;font-size:12px;z-index:99;}
+  h2{color:var(--verde-escuro);font-size:26px;border-left:6px solid var(--laranja);
+     padding-left:12px;margin-bottom:18px;}
+  h3{color:var(--verde);font-size:17px;margin:12px 0 6px;}
+  p,li{font-size:14px;line-height:1.55;color:var(--cinza);}
+  ul{padding-left:20px;margin:6px 0;}
+  b,strong{color:#2b3a32;}
+  .header-band{display:flex;justify-content:space-between;align-items:center;
+               border-bottom:2px solid var(--fundo);padding-bottom:8px;margin-bottom:20px;
+               font-size:11px;color:#8aa193;text-transform:uppercase;letter-spacing:.08em;}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;}
+  .cards.tres{grid-template-columns:1fr 1fr 1fr;}
+  .card{background:var(--fundo);border-radius:10px;padding:14px 16px;border-top:4px solid var(--verde);}
+  .card h3{margin-top:0;}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
+       border-radius:50%;background:var(--verde);color:#fff;font-weight:700;font-size:14px;
+       margin-right:10px;flex-shrink:0;}
+  .step{display:flex;align-items:flex-start;margin-bottom:12px;}
+  .step p{margin-top:4px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+  th{background:var(--verde);color:#fff;text-align:left;padding:9px 10px;}
+  td{padding:9px 10px;border-bottom:1px solid #e3ece6;color:var(--cinza);vertical-align:top;}
+  tr:nth-child(even) td{background:#fafcfa;}
+  .foot{margin-top:auto;border-top:2px solid var(--fundo);padding-top:10px;
+        font-size:11px;color:#8aa193;display:flex;justify-content:space-between;}
+  .cover{background:linear-gradient(160deg,var(--verde-escuro) 0%,var(--verde) 70%);
+         color:#fff;align-items:flex-start;justify-content:center;}
+  .cover p, .cover li{color:#fff;}
+  .cover h1{font-size:44px;line-height:1.15;margin-bottom:14px;}
+  .cover h1 span{color:var(--laranja);}
+  .cover .sub{font-size:18px;opacity:.95;margin-bottom:40px;}
+  .cover .tag{display:inline-block;background:var(--laranja);color:#fff;font-size:12px;
+              font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+              padding:7px 14px;border-radius:20px;margin-bottom:26px;}
+  .team{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:13px;opacity:.92;}
+  .team b{color:#fff;}
+  .cover .inst{margin-top:40px;font-size:13px;opacity:.75;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hint">Exportar PDF: Ctrl+P → Layout "Retrato" → Sem margens → Ativar "Gráficos de plano de fundo"</div>
+
+<!-- 1. CAPA -->
+<section class="slide cover">
+  <div>
+    <span class="tag">Proposta de Projeto de Extensão</span>
+    <h1>Sistema Web de Gestão da <span>Fundação Toque</span></h1>
+    <p class="sub">Cadastro de alunos, turmas e oficinas, acompanhamento da evolução, frequência e relatórios de prestação de contas.</p>
+    <div class="team">
+      <div><b>Luiz Gustavo Monico</b> — Product Owner</div>
+      <div><b>Cauan Cunha Mendes</b> — Scrum Master</div>
+      <div><b>João Henrique Correa Reis</b> — Developer</div>
+      <div><b>Tiago Setti Mendes</b> — Developer</div>
+      <div><b>Victor Rodrigues Herculini</b> — Developer</div>
+      <div><b>Mateus Costa da Silva</b> — Developer</div>
+    </div>
+    <p class="inst">Equipe RootTech — Instituto Federal de Educação, Ciência e Tecnologia de São Paulo, Câmpus Araraquara<br>Araraquara/SP — 2026</p>
+  </div>
+</section>
+
+<!-- 2. INSTITUICAO PARCEIRA -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Instituição Parceira</h2>
+  <div class="cards tres">
+    <div class="card"><h3>Quem é</h3><p><b>Fundação Toque</b> (FUNBESCO), instituição araraquarense dedicada ao atendimento de pessoas com deficiência.</p></div>
+    <div class="card"><h3>Área de Atuação</h3><p>Educação e terapias para alunos/assistidos, por meio de turmas e oficinas (musicalização, dança, culinária, horta/NEMA, entre outras).</p></div>
+    <div class="card"><h3>Localização</h3><p>Araraquara / SP.</p></div>
+  </div>
+  <h3>Justificativa da Escolha</h3>
+  <ul>
+    <li>A Fundação Toque desempenha um papel social fundamental no município, atendendo pessoas com deficiência e suas famílias.</li>
+    <li>Gestão de alunos, turmas, oficinas e documentos hoje dependente de <b>pasta física e documentos de texto (Word)</b> — alta oportunidade de transformação digital.</li>
+    <li>Parceria aceita e <b>em andamento</b>, com levantamento de requisitos já realizado (entrevista e formulário).</li>
+  </ul>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>02</span></div>
+</section>
+
+<!-- 3. CONTEXTO E PROBLEMA -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Contexto e Problema</h2>
+  <h3>Gargalo Atual</h3>
+  <p>Cadastros, controle de frequência, registro de atividades e acompanhamento dos alunos são feitos manualmente, em <b>pasta física e documentos de texto</b>, dispersos entre os profissionais.</p>
+  <h3>Dificuldades Identificadas (levantamento de requisitos)</h3>
+  <div class="cards">
+    <div class="card"><h3>Informações dispersas</h3><p>Cadastro de alunos, fichas médicas e autorizações sem centralização, com dados sensíveis exigindo cuidado (LGPD).</p></div>
+    <div class="card"><h3>Acompanhamento fragmentado</h3><p>Observações de evolução registradas separadamente por pedagogas e terapeutas, sem visão compartilhada pela equipe.</p></div>
+    <div class="card"><h3>Frequência manual</h3><p>Controle de presença das turmas de manhã e tarde feito sem sistema, dificultando detectar faltas recorrentes.</p></div>
+    <div class="card"><h3>Prestação de contas trabalhosa</h3><p>Relatórios para prefeitura, editais e financiadores montados manualmente a partir dos registros.</p></div>
+  </div>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>03</span></div>
+</section>
+
+<!-- 4. PROPOSTA DE SOLUCAO -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Proposta de Solução</h2>
+  <h3>O Software</h3>
+  <p>Plataforma web simples, acessível e responsiva que centraliza a gestão pedagógica e administrativa da Fundação Toque.</p>
+  <h3>Como Resolve</h3>
+  <div class="step"><span class="num">1</span><p><b>Centralização —</b> cadastro completo dos alunos (dados, responsáveis, ficha médica, autorização de imagem) em um só lugar, com conformidade com a LGPD.</p></div>
+  <div class="step"><span class="num">2</span><p><b>Organização —</b> turmas (manhã e tarde) e oficinas estruturadas, com registro diário das atividades realizadas em cada turma.</p></div>
+  <div class="step"><span class="num">3</span><p><b>Acompanhamento —</b> evolução de cada aluno registrada ao longo do tempo e visível a toda a equipe, além do controle diário de presença com alerta de faltas recorrentes.</p></div>
+  <div class="step"><span class="num">4</span><p><b>Prestação de contas —</b> relatórios com atividades, frequência e fotos, filtráveis por período e exportáveis em PDF para prefeitura, editais e financiadores.</p></div>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>04</span></div>
+</section>
+
+<!-- 5. OBJETIVOS -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Objetivos</h2>
+  <h3>Objetivo Geral</h3>
+  <p>Desenvolver e implantar um sistema web de gestão que centralize o cadastro dos alunos assistidos, a organização de turmas e oficinas, o acompanhamento da evolução pedagógica, o controle de frequência e a geração de relatórios de prestação de contas, substituindo os controles em pasta física e documentos de texto.</p>
+  <h3>Objetivos Específicos</h3>
+  <div class="cards">
+    <div class="card"><h3><span class="num">01</span>Cadastrar</h3><p>Centralizar o cadastro dos alunos com dados do responsável, ficha médica e autorizações, protegendo informações sensíveis (LGPD).</p></div>
+    <div class="card"><h3><span class="num">02</span>Organizar</h3><p>Estruturar turmas e oficinas, com registro diário das atividades realizadas em cada turma.</p></div>
+    <div class="card"><h3><span class="num">03</span>Acompanhar</h3><p>Registrar a evolução de cada aluno ao longo do tempo, acessível a toda a equipe, e controlar a frequência diária.</p></div>
+    <div class="card"><h3><span class="num">04</span>Prestar contas</h3><p>Gerar relatórios de atividades, frequência e fotos para prefeitura, editais e financiadores.</p></div>
+  </div>
+  <h3>ODS Atendidos</h3>
+  <div class="cards tres">
+    <div class="card"><h3>ODS 3 — Saúde e Bem-Estar</h3><p>Apoio ao acompanhamento terapêutico e pedagógico dos assistidos.</p></div>
+    <div class="card"><h3>ODS 4 — Educação de Qualidade</h3><p>Educação inclusiva e equitativa, com acompanhamento individualizado.</p></div>
+    <div class="card"><h3>ODS 10 — Redução das Desigualdades</h3><p>Inclusão de pessoas com deficiência e fortalecimento da instituição.</p></div>
+  </div>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>05</span></div>
+</section>
+
+<!-- 6. PUBLICO ALVO -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Público-Alvo e Beneficiados</h2>
+  <div class="cards">
+    <div class="card"><h3>Usuários do Sistema</h3>
+      <ul>
+        <li><b>Direção</b> — acesso completo, incluindo relatórios de prestação de contas e gestão de perfis.</li>
+        <li><b>Pedagogas</b> — cadastro e acompanhamento pedagógico, registro de atividades e evolução.</li>
+        <li><b>Auxiliar administrativo</b> — cadastro de alunos, frequência e documentação.</li>
+        <li>Cerca de <b>5 profissionais</b> no uso regular (a confirmar participação de terapeutas e educadores).</li>
+      </ul>
+    </div>
+    <div class="card"><h3>Beneficiados Diretos</h3>
+      <ul>
+        <li><b>Equipe da Fundação</b> — menos burocracia, informação centralizada e segura.</li>
+        <li><b>Alunos/assistidos</b> — acompanhamento mais consistente da evolução.</li>
+        <li><b>Famílias</b> — atenção mais rápida em casos de faltas recorrentes.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Beneficiados Indiretos</h3>
+  <ul>
+    <li>Prefeitura, editais e financiadores, com relatórios de prestação de contas confiáveis e ágeis.</li>
+    <li>Sociedade local e o IFSP, fortalecendo a integração entre instituição pública de ensino e terceiro setor.</li>
+  </ul>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>06</span></div>
+</section>
+
+<!-- 7. FUNCIONALIDADES -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Principais Funcionalidades</h2>
+  <div class="cards">
+    <div class="card"><h3>Cadastro de Alunos</h3><p>Nome, data de nascimento, responsável e contato, tipo de deficiência e CID, ficha médica (anexo digitalizado), ficha de matrícula e autorização de uso de imagem (LGPD).</p></div>
+    <div class="card"><h3>Turmas e Oficinas</h3><p>Organização por turma (manhã/tarde) e cadastro de oficinas (musicalização, dança, culinária, horta/NEMA etc.), com vínculo de alunos a oficinas e registro diário de atividades por turma.</p></div>
+    <div class="card"><h3>Acompanhamento de Evolução</h3><p>Registro de observações/evolução por aluno, visível a toda a equipe, com relatórios de acompanhamento (diário, semestral e anual) e base no formulário de avaliação já usado pela equipe.</p></div>
+    <div class="card"><h3>Frequência</h3><p>Chamada diária com registro de presença/ausência e registro de contato com a família em faltas recorrentes, com alerta à equipe.</p></div>
+    <div class="card"><h3>Relatórios de Prestação de Contas</h3><p>Relatórios com atividades realizadas, frequência e fotos, filtráveis por período e exportáveis em PDF, para prefeitura, editais e financiadores.</p></div>
+    <div class="card"><h3>Controle de Acesso</h3><p>Perfis de acesso definidos: Direção, Pedagogas e Administrativo, garantindo proteção dos dados sensíveis.</p></div>
+  </div>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>07</span></div>
+</section>
+
+<!-- 8. IMPACTO -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Impacto Esperado</h2>
+  <div class="cards">
+    <div class="card"><h3>Para a Instituição</h3><p>Redução do esforço manual na gestão de alunos e documentos, dados organizados e seguros (LGPD), e mais tempo da equipe dedicado ao atendimento.</p></div>
+    <div class="card"><h3>Para os Alunos e Famílias</h3><p>Acompanhamento mais consistente da evolução de cada aluno, comunicação mais ágil com as famílias em casos de faltas e continuidade do cuidado entre os profissionais.</p></div>
+    <div class="card"><h3>Para Financiadores</h3><p>Relatórios de prestação de contas rápidos e confiáveis, fortalecendo a capacidade da Fundação de captar e manter recursos.</p></div>
+    <div class="card"><h3>Para Nós Alunos</h3><p>Aplicação prática de engenharia de software em um problema de grande relevância social, com contato direto com uma instituição real e seus usuários.</p></div>
+  </div>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>08</span></div>
+</section>
+
+<!-- 9. TECNOLOGIAS -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Tecnologias Pretendidas</h2>
+  <div class="cards">
+    <div class="card"><h3>Plataforma</h3><p>Aplicação web responsiva (acessível por computador e tablet), sem necessidade de instalação local.</p></div>
+    <div class="card"><h3>Front-end</h3><p>HTML5, CSS3, JavaScript / TypeScript (React ou HTML/CSS/JS puro).</p></div>
+    <div class="card"><h3>Back-end</h3><p>Node.js ou Java Spring Boot.</p></div>
+    <div class="card"><h3>Banco de Dados</h3><p>MySQL ou Firestore.</p></div>
+    <div class="card"><h3>Dev &amp; Deploy</h3><p>Git/GitHub, VS Code e provedores em nuvem gratuitos (Vercel/Firebase).</p></div>
+  </div>
+  <h3>Requisitos Não Funcionais-Chave</h3>
+  <ul>
+    <li>Acesso via navegador web, sem instalação local (RNF01).</li>
+    <li>Interface simples e intuitiva: cadastros em poucas etapas, linguagem sem termos técnicos, botões e ícones grandes, compatível com computador e tablet (RNF02) — adequada a usuários sem conhecimento técnico avançado.</li>
+  </ul>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>09</span></div>
+</section>
+
+<!-- 10. CRONOGRAMA -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Cronograma Resumido</h2>
+  <table>
+    <tr><th>Etapa / Marco do Projeto</th><th>Prazo Previsto</th><th>Entregas / Validações</th></tr>
+    <tr><td>1. Contato Inicial &amp; Apresentação da Proposta</td><td>12/08</td><td>Formalização da parceria com a Fundação Toque</td></tr>
+    <tr><td>2. Levantamento &amp; Documentação de Requisitos</td><td>14/08 a 26/08</td><td>Reuniões, entrevista, formulário e DP 2 (19/08) e AT 3 (26/08)</td></tr>
+    <tr><td>3. Prototipação UI/UX &amp; Validação com Parceiro</td><td>27/08 a 09/09</td><td>AT 4 (02/09) e Avaliação de Protótipos DP 5 (09/09)</td></tr>
+    <tr><td>4. Modelagem UML, Arquitetura &amp; Banco de Dados</td><td>10/09 a 26/09</td><td>AT 6 (16/09), AT 7 (23/09) e Documentação DP 8 (26/09)</td></tr>
+    <tr><td>5. Desenvolvimento do Sistema (Sprints)</td><td>27/09 a 31/10</td><td>Construção das funcionalidades Web (Front + Back)</td></tr>
+    <tr><td>6. Testes Internos, Pôster &amp; Avaliação</td><td>01/11 a 18/11</td><td>Pôster AT 9 (11/11) e Avaliação com Usuário AT/DP 10 (18/11)</td></tr>
+    <tr><td>7. Ajustes Finais, Implantação &amp; Apresentação Final</td><td>19/11 a 02/12</td><td>Sistema Funcional DP 11 (25/11) e Apresentação Final (02/12)</td></tr>
+  </table>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>10</span></div>
+</section>
+
+<!-- 11. ORGANIZACAO DOS TRABALHOS -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Organização dos Trabalhos</h2>
+  <div class="cards">
+    <div class="card"><h3>Metodologia</h3><p>Ágil (Scrum/Kanban adaptado).</p></div>
+    <div class="card"><h3>Gestão de Tarefas</h3><p>Trello.</p></div>
+    <div class="card"><h3>Comunicação</h3><p>Grupo no WhatsApp para alinhamentos diários e reuniões semanais com a Fundação.</p></div>
+    <div class="card"><h3>Rituais</h3><p>Reuniões rápidas de Sprint Planning e Review ao final de cada ciclo.</p></div>
+  </div>
+  <div class="foot"><span>Sistema Web de Gestão da Fundação Toque</span><span>11</span></div>
+</section>
+
+<!-- 12. CONSIDERACOES FINAIS -->
+<section class="slide">
+  <div class="header-band"><span>Proposta — Fundação Toque</span><span>Equipe RootTech · IFSP Araraquara</span></div>
+  <h2>Considerações Finais</h2>
+  <div class="cards">
+    <div class="card"><h3>Relevância</h3><p>União da tecnologia com o impacto social direto em Araraquara, apoiando uma instituição que atende pessoas com deficiência e suas famílias.</p></div>
+    <div class="card"><h3>Viabilidade</h3><p>Escopo enxuto, tecnologias dominadas pela equipe e prazo compatível com o semestre letivo.</p></div>
+    <div class="card"><h3>Parceria</h3><p>Parceria aceita e em andamento: requisitos já elicitados por entrevista e formulário aplicados à equipe da Fundação Toque.</p></div>
+  </div>
+  <h3>Próximos Passos</h3>
+  <div class="step"><span class="num">1</span><p>Consolidar com a direção os pontos pendentes do levantamento (perfis de acesso, ficha médica, modelo de avaliação e estrutura turma/oficina).</p></div>
+  <div class="step"><span class="num">2</span><p>Validar o protótipo das telas com a equipe da Fundação.</p></div>
+  <div class="step"><span class="num">3</span><p>Iniciar o desenvolvimento das funcionalidades priorizadas como essenciais (cadastro de alunos, turmas, frequência e relatórios).</p></div>
+  <div class="foot"><span>Obrigado! — Equipe RootTech · IFSP Câmpus Araraquara</span><span>12</span></div>
+</section>
+
+</body>
+</html>

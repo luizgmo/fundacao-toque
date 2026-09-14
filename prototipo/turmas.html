@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Turmas — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item active"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Turmas</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name">Ana Carolina</span><span class="user-role">Pedagoga</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Turmas</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Turmas</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Organize os alunos em turmas por período</p>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modalTurma')"><i class="fa-solid fa-plus"></i> Nova turma</button>
+        </div>
+
+        <div class="grid cols-3">
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon"><i class="fa-solid fa-sun"></i></div>
+              <div style="flex:1">
+                <h3>Turma A — Manhã</h3>
+                <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 4px 0;">
+                  <i class="fa-regular fa-clock"></i> 8h às 12h &nbsp;·&nbsp; <i class="fa-solid fa-user-tie"></i> Carla Souza
+                </p>
+              </div>
+            </div>
+            <div class="entity-tags">
+              <span class="badge primary">12 alunos</span>
+              <span class="badge info">Musicalização</span>
+              <span class="badge info">Horta</span>
+              <span class="badge info">Artes</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Ver alunos</button>
+              <button class="btn-icon" onclick="openModal('modalTurma')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon"><i class="fa-solid fa-cloud-sun"></i></div>
+              <div style="flex:1">
+                <h3>Turma B — Tarde</h3>
+                <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 4px 0;">
+                  <i class="fa-regular fa-clock"></i> 13h às 17h &nbsp;·&nbsp; <i class="fa-solid fa-user-tie"></i> Roberto Mendes
+                </p>
+              </div>
+            </div>
+            <div class="entity-tags">
+              <span class="badge primary">10 alunos</span>
+              <span class="badge info">Dança</span>
+              <span class="badge info">Culinária</span>
+              <span class="badge info">Esporte</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Ver alunos</button>
+              <button class="btn-icon" onclick="openModal('modalTurma')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon"><i class="fa-solid fa-sun"></i></div>
+              <div style="flex:1">
+                <h3>Turma C — Manhã</h3>
+                <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 4px 0;">
+                  <i class="fa-regular fa-clock"></i> 8h às 12h &nbsp;·&nbsp; <i class="fa-solid fa-user-tie"></i> Ana Carolina
+                </p>
+              </div>
+            </div>
+            <div class="entity-tags">
+              <span class="badge primary">8 alunos</span>
+              <span class="badge info">Alfabetização</span>
+              <span class="badge info">Informática</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Ver alunos</button>
+              <button class="btn-icon" onclick="openModal('modalTurma')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon"><i class="fa-solid fa-cloud"></i></div>
+              <div style="flex:1">
+                <h3>Turma D — Integral</h3>
+                <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 4px 0;">
+                  <i class="fa-regular fa-clock"></i> 8h às 17h &nbsp;·&nbsp; <i class="fa-solid fa-user-tie"></i> Marcos Pereira
+                </p>
+              </div>
+            </div>
+            <div class="entity-tags">
+              <span class="badge primary">6 alunos</span>
+              <span class="badge info">Todas</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Ver alunos</button>
+              <button class="btn-icon" onclick="openModal('modalTurma')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon"><i class="fa-solid fa-moon"></i></div>
+              <div style="flex:1">
+                <h3>Turma E — Vespertino</h3>
+                <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 4px 0;">
+                  <i class="fa-regular fa-clock"></i> 14h às 18h &nbsp;·&nbsp; <i class="fa-solid fa-user-tie"></i> Sandra Lima
+                </p>
+              </div>
+            </div>
+            <div class="entity-tags">
+              <span class="badge primary">7 alunos</span>
+              <span class="badge info">Artes</span>
+              <span class="badge info">Música</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Ver alunos</button>
+              <button class="btn-icon" onclick="openModal('modalTurma')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA TURMA -->
+  <div class="modal-overlay" id="modalTurma">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Nova turma</h2>
+        <button class="modal-close" onclick="closeModal('modalTurma')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Identificação da turma <span class="required">*</span></label>
+          <input type="text" class="input" placeholder="Ex: Turma F — Manhã" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Período <span class="required">*</span></label>
+            <select class="select">
+              <option>Manhã</option>
+              <option>Tarde</option>
+              <option>Vespertino</option>
+              <option>Integral</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Horário <span class="required">*</span></label>
+            <input type="text" class="input" placeholder="Ex: 8h às 12h" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Profissional responsável <span class="required">*</span></label>
+          <select class="select">
+            <option>Selecione</option>
+            <option>Ana Carolina Silva</option>
+            <option>Roberto Mendes</option>
+            <option>Carla Souza</option>
+            <option>Marcos Pereira</option>
+            <option>Sandra Lima</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Oficinas vinculadas</label>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--esp-2);">
+            <label class="checkbox"><input type="checkbox" /> <span>🎵 Musicalização</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>💃 Dança</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>🍳 Culinária</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>🌱 Horta/NEMA</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>🎨 Artes</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>⚽ Esporte</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>📚 Alfabetização</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>🖥️ Informática</span></label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea class="textarea" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalTurma')">Cancelar</button>
+        <button class="btn btn-primary" onclick="closeModal('modalTurma'); showToast('Turma cadastrada com sucesso!', 'success');">Cadastrar</button>
+      </div>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oficinas — Fundação Toque</title>
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/variables.css" />
+  <link rel="stylesheet" href="assets/css/reset.css" />
+  <link rel="stylesheet" href="assets/css/layout.css" />
+  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/css/pages.css" />
+</head>
+<body>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo-area"><img src="assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="menu-section">
+        <div class="menu-section-title">Principal</div>
+        <a href="dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="alunos/listar.html" class="menu-item"><i class="fa-solid fa-users"></i> Alunos</a>
+        <a href="turmas.html" class="menu-item"><i class="fa-solid fa-chalkboard"></i> Turmas</a>
+        <a href="oficinas.html" class="menu-item active"><i class="fa-solid fa-palette"></i> Oficinas</a>
+        <a href="frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
+        <a href="atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-title">Pedagógico</div>
+        <a href="evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
+        <a href="relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
+      </div>
+      <div class="menu-section" id="adminMenu" style="display:none">
+        <div class="menu-section-title">Administração</div>
+        <a href="usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
+      </div>
+      <a href="index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
+    </aside>
+
+    <div>
+      <header class="header">
+        <div style="display:flex; align-items:center; gap: var(--esp-3);">
+          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h1 class="page-title">Oficinas</h1>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar"><img src="assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="user-info"><span class="user-name">Ana Carolina</span><span class="user-role">Pedagoga</span></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <nav class="breadcrumb">
+          <a href="dashboard.html">Home</a>
+          <span class="separator">›</span>
+          <span class="current">Oficinas</span>
+        </nav>
+
+        <div class="page-header">
+          <div>
+            <h1>Oficinas e atividades</h1>
+            <p style="color: var(--cor-texto-secundario); margin: 4px 0 0;">Gerencie as oficinas oferecidas aos alunos</p>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modalOficina')"><i class="fa-solid fa-plus"></i> Nova oficina</button>
+        </div>
+
+        <div class="filter-bar">
+          <div class="form-group">
+            <label>Buscar</label>
+            <input type="text" class="input" placeholder="Nome da oficina..." />
+          </div>
+          <div class="form-group">
+            <label>Categoria</label>
+            <select class="select">
+              <option>Todas</option>
+              <option>Música</option>
+              <option>Movimento</option>
+              <option>Culinária</option>
+              <option>Meio ambiente</option>
+              <option>Artes</option>
+              <option>Educação</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Turma</label>
+            <select class="select">
+              <option>Todas</option>
+              <option>Turma A</option>
+              <option>Turma B</option>
+              <option>Turma C</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid cols-3">
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">🎵</div>
+              <div style="flex:1">
+                <h3>Musicalização</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Música</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Carla Souza<br>
+              <i class="fa-regular fa-calendar"></i> Ter/Qui — 9h às 10h
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma A</span>
+              <span class="badge info">Turma D</span>
+              <span class="badge neutral">18 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">💃</div>
+              <div style="flex:1">
+                <h3>Dança</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Movimento</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Sandra Lima<br>
+              <i class="fa-regular fa-calendar"></i> Seg/Qua — 14h às 15h
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma B</span>
+              <span class="badge neutral">12 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">🍳</div>
+              <div style="flex:1">
+                <h3>Culinária</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Culinária</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Roberto Mendes<br>
+              <i class="fa-regular fa-calendar"></i> Sex — 10h às 11h30
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma B</span>
+              <span class="badge neutral">10 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">🌱</div>
+              <div style="flex:1">
+                <h3>Horta / NEMA</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Meio ambiente</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Marcos Pereira<br>
+              <i class="fa-regular fa-calendar"></i> Seg/Sex — 10h às 11h
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma A</span>
+              <span class="badge info">Turma D</span>
+              <span class="badge neutral">15 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">🎨</div>
+              <div style="flex:1">
+                <h3>Artes</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Artes</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Sandra Lima<br>
+              <i class="fa-regular fa-calendar"></i> Qua — 14h às 15h30
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma A</span>
+              <span class="badge info">Turma C</span>
+              <span class="badge neutral">14 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">⚽</div>
+              <div style="flex:1">
+                <h3>Esporte</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Movimento</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Marcos Pereira<br>
+              <i class="fa-regular fa-calendar"></i> Ter/Qui — 15h às 16h
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma B</span>
+              <span class="badge neutral">10 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">📚</div>
+              <div style="flex:1">
+                <h3>Alfabetização</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Educação</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Ana Carolina<br>
+              <i class="fa-regular fa-calendar"></i> Seg/Qua — 9h às 10h
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma C</span>
+              <span class="badge neutral">8 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <div style="display:flex; gap: var(--esp-3); align-items:flex-start;">
+              <div class="entity-icon">🖥️</div>
+              <div style="flex:1">
+                <h3>Informática</h3>
+                <span class="badge primary" style="font-size: var(--tamanho-pequeno);">Educação</span>
+              </div>
+            </div>
+            <p style="font-size: var(--tamanho-label); color: var(--cor-texto-secundario); margin: 0;">
+              <i class="fa-solid fa-user-tie"></i> Roberto Mendes<br>
+              <i class="fa-regular fa-calendar"></i> Qui — 10h às 11h30
+            </p>
+            <div class="entity-tags">
+              <span class="badge info">Turma C</span>
+              <span class="badge neutral">8 alunos</span>
+            </div>
+            <div class="entity-actions">
+              <button class="btn btn-outline btn-sm"><i class="fa-solid fa-eye"></i> Detalhes</button>
+              <button class="btn-icon" onclick="openModal('modalOficina')"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn-icon danger"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA OFICINA -->
+  <div class="modal-overlay" id="modalOficina">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Nova oficina</h2>
+        <button class="modal-close" onclick="closeModal('modalOficina')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nome da oficina <span class="required">*</span></label>
+          <input type="text" class="input" placeholder="Ex: Teatro" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Categoria <span class="required">*</span></label>
+            <select class="select">
+              <option>Música</option>
+              <option>Movimento</option>
+              <option>Culinária</option>
+              <option>Meio ambiente</option>
+              <option>Artes</option>
+              <option>Educação</option>
+              <option>Outra</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Profissional responsável <span class="required">*</span></label>
+            <select class="select">
+              <option>Selecione</option>
+              <option>Ana Carolina Silva</option>
+              <option>Roberto Mendes</option>
+              <option>Carla Souza</option>
+              <option>Marcos Pereira</option>
+              <option>Sandra Lima</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Dias da semana <span class="required">*</span></label>
+          <div style="display:flex; gap: var(--esp-2); flex-wrap: wrap;">
+            <label class="checkbox"><input type="checkbox" /> <span>Seg</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Ter</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Qua</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Qui</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Sex</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Sáb</span></label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Horário início</label>
+            <input type="time" class="input" />
+          </div>
+          <div class="form-group">
+            <label>Horário fim</label>
+            <input type="time" class="input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Turmas vinculadas</label>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--esp-2);">
+            <label class="checkbox"><input type="checkbox" /> <span>Turma A — Manhã</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Turma B — Tarde</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Turma C — Manhã</span></label>
+            <label class="checkbox"><input type="checkbox" /> <span>Turma D — Integral</span></label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Descrição / objetivos</label>
+          <textarea class="textarea" rows="3" placeholder="Descreva os objetivos da oficina..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalOficina')">Cancelar</button>
+        <button class="btn btn-primary" onclick="closeModal('modalOficina'); showToast('Oficina cadastrada!', 'success');">Cadastrar</button>
+      </div>
+    </div>
+  </div>
+
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <div id="toast" class="toast"></div>
+  <script src="assets/js/menu.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script src="assets/js/modals.js"></script>
+  <script>
+    const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
+    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+  </script>
+</body>
+</html>
