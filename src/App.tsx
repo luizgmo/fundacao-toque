@@ -16,7 +16,6 @@ import {
   FileBarChart,
   FileText,
   GraduationCap,
-  HeartHandshake,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -32,9 +31,14 @@ import {
   Users,
   X,
 } from 'lucide-react'
+import { CadastrarAluno } from './CadastrarAluno'
+import { ListarAlunos } from './ListarAlunos'
+import { DetalheAluno } from './DetalheAluno'
+import { findStudent } from './students-data'
+import logoUrl from './assets/logo.png'
 import './App.css'
 
-type Screen = 'home' | 'reports'
+type Screen = 'home' | 'reports' | 'register' | 'students' | 'student-detail'
 
 type NavItem = {
   label: string
@@ -44,7 +48,7 @@ type NavItem = {
 
 const mainNavigation: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, screen: 'home' },
-  { label: 'Alunos', icon: Users },
+  { label: 'Alunos', icon: Users, screen: 'students' },
   { label: 'Turmas', icon: GraduationCap },
   { label: 'Oficinas', icon: Palette },
   { label: 'Frequência', icon: ClipboardCheck },
@@ -60,7 +64,7 @@ function Brand() {
   return (
     <div className="brand">
       <span className="brand-mark" aria-hidden="true">
-        <HeartHandshake size={23} strokeWidth={2.2} />
+        <img alt="" src={logoUrl} />
       </span>
       <span className="brand-copy">
         <strong>Fundação</strong>
@@ -83,7 +87,9 @@ function Sidebar({
 }) {
   const renderItem = (item: NavItem) => {
     const Icon = item.icon
-    const active = item.screen === currentScreen
+    const active =
+      item.screen === currentScreen ||
+      (item.screen === 'students' && (currentScreen === 'register' || currentScreen === 'student-detail'))
 
     return (
       <button
@@ -144,11 +150,21 @@ function Sidebar({
 
 function Topbar({
   screen,
+  studentName,
   onOpenMenu,
 }: {
   screen: Screen
+  studentName?: string
   onOpenMenu: () => void
 }) {
+  const titles: Record<Screen, string> = {
+    home: 'Dashboard',
+    reports: 'Relatório pedagógico',
+    register: 'Cadastrar aluno',
+    students: 'Alunos',
+    'student-detail': studentName ?? 'Perfil do aluno',
+  }
+
   return (
     <header className="topbar">
       <div className="topbar-title">
@@ -160,7 +176,7 @@ function Topbar({
         >
           <Menu size={22} />
         </button>
-        <h1>{screen === 'home' ? 'Dashboard' : 'Relatório pedagógico'}</h1>
+        <h1>{titles[screen]}</h1>
       </div>
 
       <div className="topbar-actions">
@@ -237,7 +253,7 @@ function Dashboard({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
   }, [])
 
   const shortcuts = [
-    { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound },
+    { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen },
     { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck },
     { label: 'Registrar atividade', description: 'Atividades por turma', icon: BookOpenCheck },
     {
@@ -722,22 +738,38 @@ function PedagogicalReport() {
 }
 
 function App() {
-  const [screen, setScreen] = useState<Screen>(() =>
-    new URLSearchParams(window.location.search).get('screen') === 'reports'
-      ? 'reports'
-      : 'home',
+  const [screen, setScreen] = useState<Screen>(() => {
+    const param = new URLSearchParams(window.location.search).get('screen')
+    return param === 'reports' || param === 'register' || param === 'students' || param === 'student-detail'
+      ? param
+      : 'home'
+  })
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('aluno'),
   )
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const navigate = (nextScreen: Screen) => {
     const url = new URL(window.location.href)
-    if (nextScreen === 'reports') {
-      url.searchParams.set('screen', 'reports')
-    } else {
+    if (nextScreen === 'home') {
       url.searchParams.delete('screen')
+    } else {
+      url.searchParams.set('screen', nextScreen)
+    }
+    if (nextScreen !== 'student-detail') {
+      url.searchParams.delete('aluno')
     }
     window.history.replaceState({}, '', url)
     setScreen(nextScreen)
+  }
+
+  const viewStudent = (id: string) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('screen', 'student-detail')
+    url.searchParams.set('aluno', id)
+    window.history.replaceState({}, '', url)
+    setSelectedStudentId(id)
+    setScreen('student-detail')
   }
 
   return (
@@ -749,9 +781,25 @@ function App() {
         onNavigate={navigate}
       />
       <div className="app-main">
-        <Topbar onOpenMenu={() => setSidebarOpen(true)} screen={screen} />
+        <Topbar
+          onOpenMenu={() => setSidebarOpen(true)}
+          screen={screen}
+          studentName={selectedStudentId ? findStudent(selectedStudentId)?.name : undefined}
+        />
         <main>
-          {screen === 'home' ? <Dashboard onNavigate={navigate} /> : <PedagogicalReport />}
+          {screen === 'home' && <Dashboard onNavigate={navigate} />}
+          {screen === 'register' && <CadastrarAluno onCancel={() => navigate('students')} />}
+          {screen === 'students' && (
+            <ListarAlunos onCadastrar={() => navigate('register')} onViewStudent={viewStudent} />
+          )}
+          {screen === 'student-detail' && selectedStudentId && (
+            <DetalheAluno
+              onBack={() => navigate('students')}
+              onNovoRelatorio={() => navigate('reports')}
+              studentId={selectedStudentId}
+            />
+          )}
+          {screen === 'reports' && <PedagogicalReport />}
         </main>
       </div>
       <button aria-label="Contato pelo WhatsApp" className="whatsapp-button" type="button">
