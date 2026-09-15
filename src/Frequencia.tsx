@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertTriangle,
@@ -20,7 +20,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { AttendanceStatus, ContactEntry, Student } from './students-data'
-import { addContactToStudent, saveAttendanceSession, students } from './students-data'
+import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students } from './students-data'
 import './Frequencia.css'
 
 type Props = {
@@ -43,7 +43,21 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // Attendance values per student for current selected parameters
   const [attendanceRecords, setAttendanceRecords] = useState<
     Record<string, { status: AttendanceStatus; observation: string }>
-  >({})
+  >(() => {
+    const defaultSession = getAttendanceSession('2026-09-15_Turma A_geral')
+    return defaultSession ? { ...defaultSession.records } : {}
+  })
+
+  // Synchronize with existing session when filters change
+  useEffect(() => {
+    const sessionId = `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`
+    const existing = getAttendanceSession(sessionId)
+    if (existing) {
+      setAttendanceRecords({ ...existing.records })
+    } else {
+      setAttendanceRecords({})
+    }
+  }, [dateStr, selectedTurma, scope, selectedOficina])
 
   // Threshold X for alerts
   const [absenceThreshold, setAbsenceThreshold] = useState<number>(3)
@@ -51,11 +65,13 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // Feedback states
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
 
-  // Modal contact state
+  // Modal contact / occurrence state
   const [selectedStudentForContact, setSelectedStudentForContact] = useState<Student | null>(null)
   const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
-  const [contactType, setContactType] = useState<string>('Ligação telefônica')
+  const [contactType, setContactType] = useState<string>('WhatsApp')
   const [contactResponsible, setContactResponsible] = useState<string>('Ana Carolina Silva')
+  const [contactReason, setContactReason] = useState<string>('Faltas consecutivas recorrentes (Alerta institucional)')
+  const [contactStatus, setContactStatus] = useState<string>('Aberta / Em acompanhamento')
   const [contactNote, setContactNote] = useState<string>('')
   const [familyContactSuccess, setFamilyContactSuccess] = useState<string | null>(null)
 
@@ -178,17 +194,28 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setTimeout(() => setSaveSuccessMessage(null), 4000)
   }
 
-  // Handle open contact modal
-  const handleOpenContactModal = (student: Student, defaultFaltaDate?: string) => {
+  // Handle open contact / occurrence modal
+  const handleOpenContactModal = (
+    student: Student,
+    defaultFaltaDate?: string,
+    defaultReason?: string
+  ) => {
     setSelectedStudentForContact(student)
     setContactFaltaDate(defaultFaltaDate || dateStr)
     setContactType('WhatsApp')
     setContactResponsible('Ana Carolina Silva')
+    setContactReason(
+      defaultReason ||
+        (student.faltasConsecutivas >= absenceThreshold
+          ? `Alerta institucional: ${student.faltasConsecutivas} faltas consecutivas`
+          : 'Ausência sem justificativa prévia')
+    )
+    setContactStatus('Aberta / Em acompanhamento')
     setContactNote('')
     setFamilyContactSuccess(null)
   }
 
-  // Handle submit contact log
+  // Handle submit contact log / occurrence
   const handleSubmitContact = (e: FormEvent) => {
     e.preventDefault()
     if (!selectedStudentForContact) return
@@ -200,11 +227,13 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       contactDate: todayStr,
       type: contactType,
       responsible: contactResponsible,
+      reason: contactReason,
+      status: contactStatus,
       note: contactNote,
     }
 
     addContactToStudent(selectedStudentForContact.id, newContact)
-    setFamilyContactSuccess('Contato com a família registrado com sucesso!')
+    setFamilyContactSuccess('Ocorrência e contato com a família salvos com sucesso!')
 
     setTimeout(() => {
       setFamilyContactSuccess(null)
@@ -455,24 +484,46 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                         </td>
 
                         <td style={{ textAlign: 'right' }}>
-                          {isHighAbsence ? (
-                            <button
-                              className="button secondary sm-button alert-action-btn"
-                              onClick={() => handleOpenContactModal(student, dateStr)}
-                              title="Registrar contato com a família devido às faltas recorrentes"
-                              type="button"
-                            >
-                              <Phone size={13} /> Contato
-                            </button>
-                          ) : onViewStudentProfile ? (
-                            <button
-                              className="text-button-sm"
-                              onClick={() => onViewStudentProfile(student.id)}
-                              type="button"
-                            >
-                              Ver perfil
-                            </button>
-                          ) : null}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                            {isHighAbsence ? (
+                              <button
+                                className="button secondary sm-button alert-action-btn"
+                                onClick={() => handleOpenContactModal(student, dateStr)}
+                                title="Abrir ocorrência e registrar contato com a família devido às faltas recorrentes"
+                                type="button"
+                              >
+                                <Phone size={13} /> Ocorrência
+                              </button>
+                            ) : (
+                              <>
+                                {currentStatus === 'ausente' && (
+                                  <button
+                                    className="button secondary sm-button"
+                                    onClick={() =>
+                                      handleOpenContactModal(
+                                        student,
+                                        dateStr,
+                                        'Falta registrada no dia (sem justificativa prévia)'
+                                      )
+                                    }
+                                    title="Abrir ocorrência ou registrar contato com a família"
+                                    type="button"
+                                  >
+                                    <Phone size={13} /> Ocorrência
+                                  </button>
+                                )}
+                                {onViewStudentProfile && (
+                                  <button
+                                    className="text-button-sm"
+                                    onClick={() => onViewStudentProfile(student.id)}
+                                    type="button"
+                                  >
+                                    Ver perfil
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -605,7 +656,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         </aside>
       </div>
 
-      {/* Modal: Registrar Contato com a Família */}
+      {/* Modal: Registrar Contato com a Família / Abrir Ocorrência */}
       {selectedStudentForContact && (
         <div className="modal-backdrop" onClick={() => setSelectedStudentForContact(null)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
@@ -613,7 +664,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               <div className="modal-title-group">
                 <Phone className="modal-icon" size={22} />
                 <div>
-                  <h3>Registrar Contato com a Família</h3>
+                  <h3>Abrir Ocorrência & Registrar Contato com a Família</h3>
                   <p>Aluno: <strong>{selectedStudentForContact.name}</strong> ({selectedStudentForContact.turma})</p>
                 </div>
               </div>
@@ -635,6 +686,30 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               )}
 
               <div className="modal-grid">
+                <label className="field field-wide">
+                  <span>Motivo da Ocorrência / Assunto</span>
+                  <select
+                    onChange={(e) => setContactReason(e.target.value)}
+                    value={contactReason}
+                  >
+                    <option value="Faltas consecutivas recorrentes (Alerta institucional)">
+                      Alerta institucional: Faltas consecutivas recorrentes
+                    </option>
+                    <option value="Ausência do dia sem justificativa prévia">
+                      Ausência do dia sem justificativa prévia
+                    </option>
+                    <option value="Busca ativa / Prevenção de evasão escolar">
+                      Busca ativa / Prevenção de evasão escolar
+                    </option>
+                    <option value="Justificativa médica ou atestado apresentado">
+                      Justificativa médica ou atestado apresentado
+                    </option>
+                    <option value="Outro alinhamento pedagógico ou familiar">
+                      Outro alinhamento pedagógico ou familiar
+                    </option>
+                  </select>
+                </label>
+
                 <label className="field">
                   <span>Data da Falta Relacionada</span>
                   <input
@@ -653,13 +728,14 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                   >
                     <option value="WhatsApp">WhatsApp</option>
                     <option value="Ligação telefônica">Ligação Telefônica</option>
-                    <option value="E-mail">E-mail</option>
                     <option value="Atendimento Presencial">Atendimento Presencial</option>
+                    <option value="Visita Domiciliar">Visita Domiciliar</option>
+                    <option value="E-mail">E-mail</option>
                     <option value="Outro">Outro</option>
                   </select>
                 </label>
 
-                <label className="field field-wide">
+                <label className="field">
                   <span>Responsável pelo Contato (Profissional)</span>
                   <input
                     onChange={(e) => setContactResponsible(e.target.value)}
@@ -667,6 +743,19 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                     type="text"
                     value={contactResponsible}
                   />
+                </label>
+
+                <label className="field">
+                  <span>Status da Ocorrência</span>
+                  <select
+                    onChange={(e) => setContactStatus(e.target.value)}
+                    value={contactStatus}
+                  >
+                    <option value="Aberta / Em acompanhamento">Aberta / Em acompanhamento</option>
+                    <option value="Resolvida / Família justificou ausência">Resolvida / Família justificou ausência</option>
+                    <option value="Encaminhada para Serviço Social / CRAS">Encaminhada para Serviço Social / CRAS</option>
+                    <option value="Encaminhada para Direção Pedagógica">Encaminhada para Direção Pedagógica</option>
+                  </select>
                 </label>
 
                 <div className="family-info-box field-wide">
@@ -712,7 +801,13 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                         <div className="history-item-meta">
                           <strong>{c.contactDate}</strong> — <small>{c.type}</small> por{' '}
                           <em>{c.responsible}</em> (Falta de {c.faltaDate})
+                          {c.status && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', opacity: 0.85 }}>[{c.status}]</span>}
                         </div>
+                        {c.reason && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-sub, #4b5563)', margin: '0.2rem 0' }}>
+                            <strong>Motivo:</strong> {c.reason}
+                          </div>
+                        )}
                         <p className="history-item-note">"{c.note}"</p>
                       </div>
                     ))}
@@ -729,7 +824,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                   Cancelar
                 </button>
                 <button className="button primary" type="submit">
-                  <Save size={18} /> Salvar Registro de Contato
+                  <Save size={18} /> Salvar Ocorrência e Contato
                 </button>
               </footer>
             </form>

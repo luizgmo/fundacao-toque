@@ -231,13 +231,25 @@ export function DetalheAluno({
 
         {activeTab === 'contato' && (
           <div className="student-tab-panel">
-            <h3>Contato por faltas</h3>
+            <h3>Contato por faltas & Ocorrências</h3>
             <div className="timeline">
-              {student.contacts.map((contact) => (
-                <article key={contact.contactDate}>
+              {student.contacts.map((contact, index) => (
+                <article key={contact.contactDate + index}>
                   <span className="timeline-dot"><Phone size={15} /></span>
                   <div>
-                    <small>Falta em {contact.faltaDate} — contato em {contact.contactDate} ({contact.type})</small>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <small>Falta em {contact.faltaDate} — contato em {contact.contactDate} ({contact.type})</small>
+                      {contact.status && (
+                        <span className="status-pill warning" style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}>
+                          {contact.status}
+                        </span>
+                      )}
+                    </div>
+                    {contact.reason && (
+                      <p style={{ margin: '0.2rem 0', fontWeight: 600, color: 'var(--color-primary-dark, #1e3a8a)' }}>
+                        {contact.reason}
+                      </p>
+                    )}
                     <p>{contact.note} <em>— {contact.responsible}</em></p>
                   </div>
                 </article>
