@@ -1,0 +1,741 @@
+import { useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
+import {
+  AlertTriangle,
+  Calendar,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  Clock,
+  History,
+  Info,
+  Phone,
+  Save,
+  Search,
+  User,
+  Users,
+  X,
+  XCircle,
+} from 'lucide-react'
+import type { AttendanceStatus, ContactEntry, Student } from './students-data'
+import { addContactToStudent, saveAttendanceSession, students } from './students-data'
+import './Frequencia.css'
+
+type Props = {
+  onViewStudentProfile?: (studentId: string) => void
+}
+
+const TURMAS_DISPONIVEIS = ['Turma A', 'Turma B', 'Turma C']
+const OFICINAS_DISPONIVEIS = ['Todas / Geral', 'Musicalização', 'Dança', 'Artes', 'Horta/NEMA', 'Culinária', 'Esporte']
+
+export function Frequencia({ onViewStudentProfile }: Props) {
+  // Chamada states
+  const [selectedTurma, setSelectedTurma] = useState<string>('Turma A')
+  const [selectedOficina, setSelectedOficina] = useState<string>('Todas / Geral')
+  const [dateStr, setDateStr] = useState<string>(() => {
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  })
+  const [scope, setScope] = useState<'turma' | 'oficina'>('turma')
+
+  // Attendance values per student for current selected parameters
+  const [attendanceRecords, setAttendanceRecords] = useState<
+    Record<string, { status: AttendanceStatus; observation: string }>
+  >({})
+
+  // Threshold X for alerts
+  const [absenceThreshold, setAbsenceThreshold] = useState<number>(3)
+
+  // Feedback states
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
+
+  // Modal contact state
+  const [selectedStudentForContact, setSelectedStudentForContact] = useState<Student | null>(null)
+  const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
+  const [contactType, setContactType] = useState<string>('Ligação telefônica')
+  const [contactResponsible, setContactResponsible] = useState<string>('Ana Carolina Silva')
+  const [contactNote, setContactNote] = useState<string>('')
+  const [familyContactSuccess, setFamilyContactSuccess] = useState<string | null>(null)
+
+  // Search filter for attendance list
+  const [studentSearch, setStudentSearch] = useState<string>('')
+
+  // Filter students by selected Turma
+  const turmaStudents = useMemo(() => {
+    return students.filter((s) => {
+      const matchTurma = s.turma === selectedTurma
+      const matchSearch = studentSearch
+        ? s.name.toLowerCase().includes(studentSearch.toLowerCase())
+        : true
+      return matchTurma && matchSearch
+    })
+  }, [selectedTurma, studentSearch])
+
+  // Get current status for a student in local form state
+  const getStudentStatus = (studentId: string): AttendanceStatus => {
+    return attendanceRecords[studentId]?.status ?? 'presente'
+  }
+
+  const getStudentObservation = (studentId: string): string => {
+    return attendanceRecords[studentId]?.observation ?? ''
+  }
+
+  // Update status or observation for a student
+  const updateStudentAttendance = (
+    studentId: string,
+    status: AttendanceStatus,
+    observation?: string
+  ) => {
+    setAttendanceRecords((prev) => ({
+      ...prev,
+      [studentId]: {
+        status,
+        observation: observation !== undefined ? observation : prev[studentId]?.observation ?? '',
+      },
+    }))
+  }
+
+  // Bulk actions
+  const markAllAs = (status: AttendanceStatus) => {
+    const next: Record<string, { status: AttendanceStatus; observation: string }> = { ...attendanceRecords }
+    turmaStudents.forEach((student) => {
+      next[student.id] = {
+        status,
+        observation: next[student.id]?.observation ?? '',
+      }
+    })
+    setAttendanceRecords(next)
+  }
+
+  // Attendance metrics for current turma & local state
+  const stats = useMemo(() => {
+    let presentes = 0
+    let ausentes = 0
+    let justificados = 0
+
+    turmaStudents.forEach((st) => {
+      const status = attendanceRecords[st.id]?.status ?? 'presente'
+      if (status === 'presente') presentes++
+      else if (status === 'ausente') ausentes++
+      else if (status === 'justificado') justificados++
+    })
+
+    const total = turmaStudents.length
+    const pctPresente = total > 0 ? Math.round(((presentes + justificados) / total) * 100) : 0
+
+    return { total, presentes, ausentes, justificados, pctPresente }
+  }, [turmaStudents, attendanceRecords])
+
+  // Students with consecutive absences >= threshold
+  const recurrentAbsenceStudents = useMemo(() => {
+    return students.filter((s) => s.faltasConsecutivas >= absenceThreshold)
+  }, [absenceThreshold])
+
+  // Date navigation handlers
+  const changeDateByDays = (days: number) => {
+    const current = new Date(dateStr + 'T12:00:00')
+    current.setDate(current.getDate() + days)
+    setDateStr(current.toISOString().split('T')[0])
+  }
+
+  const formattedDisplayDate = useMemo(() => {
+    if (!dateStr) return ''
+    const parts = dateStr.split('-')
+    if (parts.length !== 3) return dateStr
+    const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+    return new Intl.DateTimeFormat('pt-BR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(dateObj)
+  }, [dateStr])
+
+  // Save attendance handler
+  const handleSaveAttendance = () => {
+    const recordsMap: Record<string, { status: AttendanceStatus; observation: string }> = {}
+    turmaStudents.forEach((st) => {
+      recordsMap[st.id] = {
+        status: getStudentStatus(st.id),
+        observation: getStudentObservation(st.id),
+      }
+    })
+
+    saveAttendanceSession({
+      id: `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`,
+      date: dateStr,
+      turmaId: selectedTurma,
+      scope,
+      oficinaName: scope === 'oficina' ? selectedOficina : undefined,
+      registeredBy: 'Ana Carolina Silva',
+      registeredAt: new Date().toISOString(),
+      records: recordsMap,
+    })
+
+    setSaveSuccessMessage('Chamada salva com sucesso! O histórico foi atualizado.')
+    setTimeout(() => setSaveSuccessMessage(null), 4000)
+  }
+
+  // Handle open contact modal
+  const handleOpenContactModal = (student: Student, defaultFaltaDate?: string) => {
+    setSelectedStudentForContact(student)
+    setContactFaltaDate(defaultFaltaDate || dateStr)
+    setContactType('WhatsApp')
+    setContactResponsible('Ana Carolina Silva')
+    setContactNote('')
+    setFamilyContactSuccess(null)
+  }
+
+  // Handle submit contact log
+  const handleSubmitContact = (e: FormEvent) => {
+    e.preventDefault()
+    if (!selectedStudentForContact) return
+
+    const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
+
+    const newContact: ContactEntry = {
+      faltaDate: contactFaltaDate,
+      contactDate: todayStr,
+      type: contactType,
+      responsible: contactResponsible,
+      note: contactNote,
+    }
+
+    addContactToStudent(selectedStudentForContact.id, newContact)
+    setFamilyContactSuccess('Contato com a família registrado com sucesso!')
+
+    setTimeout(() => {
+      setFamilyContactSuccess(null)
+      setSelectedStudentForContact(null)
+    }, 1800)
+  }
+
+  return (
+    <div className="frequencia-page page-container">
+      {/* Top Banner / Introduction */}
+      <header className="frequencia-header">
+        <div>
+          <span className="eyebrow">Gestão de Presença & Ocorrências</span>
+          <h2>Chamada Diária e Acompanhamento de Faltas</h2>
+          <p>
+            Realize o registro de presença da turma ou oficina e gerencie contatos com responsáveis
+            em casos de ausências recorrentes.
+          </p>
+        </div>
+        <div className="threshold-setting">
+          <label htmlFor="absence-threshold-select">
+            <AlertTriangle className="alert-icon-warning" size={17} />
+            <span>Alerta de faltas recorrentes (X):</span>
+          </label>
+          <select
+            id="absence-threshold-select"
+            onChange={(e) => setAbsenceThreshold(Number(e.target.value))}
+            value={absenceThreshold}
+          >
+            <option value={2}>2+ faltas consecutivas</option>
+            <option value={3}>3+ faltas consecutivas (Recomendado)</option>
+            <option value={5}>5+ faltas consecutivas</option>
+          </select>
+        </div>
+      </header>
+
+      {/* Main Grid: Call Table & Recurrent Absences Side Panel */}
+      <div className="frequencia-grid">
+        {/* Left / Main Section: Attendance Register */}
+        <section className="frequencia-main-card">
+          {/* Controls Bar: Turma, Scope, Date & Bulk Actions */}
+          <div className="controls-bar">
+            <div className="control-group">
+              <label>
+                <span>Turma</span>
+                <select onChange={(e) => setSelectedTurma(e.target.value)} value={selectedTurma}>
+                  {TURMAS_DISPONIVEIS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Escopo da Chamada</span>
+                <select
+                  onChange={(e) => {
+                    const sc = e.target.value as 'turma' | 'oficina'
+                    setScope(sc)
+                  }}
+                  value={scope}
+                >
+                  <option value="turma">Diária por Turma</option>
+                  <option value="oficina">Por Oficina</option>
+                </select>
+              </label>
+
+              {scope === 'oficina' && (
+                <label>
+                  <span>Oficina</span>
+                  <select
+                    onChange={(e) => setSelectedOficina(e.target.value)}
+                    value={selectedOficina}
+                  >
+                    {OFICINAS_DISPONIVEIS.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+
+            {/* Date Selection */}
+            <div className="date-picker-group">
+              <button
+                aria-label="Dia anterior"
+                className="icon-button date-nav-button"
+                onClick={() => changeDateByDays(-1)}
+                type="button"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="date-input-wrapper">
+                <Calendar className="date-calendar-icon" size={17} />
+                <input
+                  onChange={(e) => setDateStr(e.target.value)}
+                  type="date"
+                  value={dateStr}
+                />
+              </div>
+              <button
+                aria-label="Próximo dia"
+                className="icon-button date-nav-button"
+                onClick={() => changeDateByDays(1)}
+                type="button"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="sub-controls-bar">
+            <span className="formatted-date-label">
+              <Clock size={15} />
+              {formattedDisplayDate}
+            </span>
+
+            {/* Search Input */}
+            <div className="student-search-box">
+              <Search size={16} />
+              <input
+                onChange={(e) => setStudentSearch(e.target.value)}
+                placeholder="Buscar aluno na turma..."
+                type="text"
+                value={studentSearch}
+              />
+            </div>
+
+            {/* Bulk actions */}
+            <div className="bulk-actions">
+              <span className="bulk-label">Marcar todos:</span>
+              <button
+                className="bulk-btn present"
+                onClick={() => markAllAs('presente')}
+                type="button"
+              >
+                <Check size={14} /> Presentes
+              </button>
+              <button className="bulk-btn absent" onClick={() => markAllAs('ausente')} type="button">
+                <X size={14} /> Ausentes
+              </button>
+            </div>
+          </div>
+
+          {/* Table of Students */}
+          <div className="attendance-table-container">
+            <table className="attendance-table">
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th style={{ width: '260px' }}>Status da Chamada</th>
+                  <th>Observações / Justificativa</th>
+                  <th style={{ width: '130px', textAlign: 'right' }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {turmaStudents.length === 0 ? (
+                  <tr>
+                    <td className="empty-table" colSpan={4}>
+                      Nenhum aluno encontrado para os filtros selecionados.
+                    </td>
+                  </tr>
+                ) : (
+                  turmaStudents.map((student) => {
+                    const currentStatus = getStudentStatus(student.id)
+                    const obs = getStudentObservation(student.id)
+                    const isHighAbsence = student.faltasConsecutivas >= absenceThreshold
+
+                    return (
+                      <tr className={isHighAbsence ? 'row-alert' : ''} key={student.id}>
+                        <td>
+                          <div className="student-cell">
+                            <span className="student-avatar-badge">
+                              {student.name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .slice(0, 2)
+                                .join('')}
+                            </span>
+                            <div className="student-info">
+                              <div className="student-name-row">
+                                <strong>{student.name}</strong>
+                                {isHighAbsence && (
+                                  <span
+                                    className="absence-warning-badge"
+                                    title={`${student.faltasConsecutivas} faltas consecutivas`}
+                                  >
+                                    <AlertTriangle size={12} /> {student.faltasConsecutivas} faltas
+                                  </span>
+                                )}
+                              </div>
+                              <span className="student-sub">
+                                CID {student.cid} · {student.responsavelNome} ({student.telefone})
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="status-toggle-group">
+                            <button
+                              className={`status-toggle-btn present ${
+                                currentStatus === 'presente' ? 'active' : ''
+                              }`}
+                              onClick={() => updateStudentAttendance(student.id, 'presente')}
+                              type="button"
+                            >
+                              <Check size={14} /> Presente
+                            </button>
+                            <button
+                              className={`status-toggle-btn absent ${
+                                currentStatus === 'ausente' ? 'active' : ''
+                              }`}
+                              onClick={() => updateStudentAttendance(student.id, 'ausente')}
+                              type="button"
+                            >
+                              <X size={14} /> Ausente
+                            </button>
+                            <button
+                              className={`status-toggle-btn justified ${
+                                currentStatus === 'justificado' ? 'active' : ''
+                              }`}
+                              onClick={() => updateStudentAttendance(student.id, 'justificado')}
+                              type="button"
+                            >
+                              Justificado
+                            </button>
+                          </div>
+                        </td>
+
+                        <td>
+                          <input
+                            className="observation-input"
+                            onChange={(e) =>
+                              updateStudentAttendance(student.id, currentStatus, e.target.value)
+                            }
+                            placeholder={
+                              currentStatus === 'ausente'
+                                ? 'Informe a justificativa se houver...'
+                                : 'Observações adicionais...'
+                            }
+                            type="text"
+                            value={obs}
+                          />
+                        </td>
+
+                        <td style={{ textAlign: 'right' }}>
+                          {isHighAbsence ? (
+                            <button
+                              className="button secondary sm-button alert-action-btn"
+                              onClick={() => handleOpenContactModal(student, dateStr)}
+                              title="Registrar contato com a família devido às faltas recorrentes"
+                              type="button"
+                            >
+                              <Phone size={13} /> Contato
+                            </button>
+                          ) : onViewStudentProfile ? (
+                            <button
+                              className="text-button-sm"
+                              onClick={() => onViewStudentProfile(student.id)}
+                              type="button"
+                            >
+                              Ver perfil
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer Bar: Metrics & Save Button */}
+          <div className="attendance-footer">
+            <div className="stats-summary">
+              <span className="stat-item total">
+                <Users size={16} /> Total: <strong>{stats.total}</strong>
+              </span>
+              <span className="stat-item present">
+                <CheckCircle2 size={16} /> Presentes: <strong>{stats.presentes}</strong>
+              </span>
+              <span className="stat-item absent">
+                <XCircle size={16} /> Ausentes: <strong>{stats.ausentes}</strong>
+              </span>
+              <span className="stat-item justified">
+                <Info size={16} /> Justificados: <strong>{stats.justificados}</strong>
+              </span>
+              <span className="stat-pill-pct">
+                Presença: <strong>{stats.pctPresente}%</strong>
+              </span>
+            </div>
+
+            <div className="save-action-group">
+              {saveSuccessMessage && (
+                <span className="save-toast-msg">
+                  <CheckCircle2 size={16} /> {saveSuccessMessage}
+                </span>
+              )}
+              <button className="button primary" onClick={handleSaveAttendance} type="button">
+                <Save size={18} /> Salvar Chamada
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Right Section: Recurrent Absences Alert & Family Contact Register */}
+        <aside className="frequencia-aside">
+          {/* Card: High Absences List */}
+          <section className="aside-card alert-card">
+            <div className="aside-card-header">
+              <div className="header-with-icon">
+                <AlertTriangle className="text-warning-icon" size={20} />
+                <h3>Alerta de Faltas Recorrentes</h3>
+              </div>
+              <span className="badge-count warning">{recurrentAbsenceStudents.length}</span>
+            </div>
+
+            <p className="aside-description">
+              Alunos com <strong>{absenceThreshold} ou mais faltas consecutivas</strong> que
+              requerem contato com a família e acompanhamento da equipe.
+            </p>
+
+            <div className="recurrent-students-list">
+              {recurrentAbsenceStudents.length === 0 ? (
+                <div className="empty-alert-box">
+                  <CheckCircle2 size={24} style={{ color: 'var(--color-success, #10b981)' }} />
+                  <p>Nenhum aluno atingiu o limite de faltas consecutivas no momento.</p>
+                </div>
+              ) : (
+                recurrentAbsenceStudents.map((st) => (
+                  <article className="recurrent-item" key={st.id}>
+                    <div className="recurrent-main-info">
+                      <span className="recurrent-avatar">
+                        {st.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join('')}
+                      </span>
+                      <div className="recurrent-text">
+                        <strong>{st.name}</strong>
+                        <span>
+                          {st.turma} · {st.faltasConsecutivas} faltas consecutivas
+                        </span>
+                      </div>
+                    </div>
+
+                    {st.contacts.length > 0 && (
+                      <div className="last-contact-mini">
+                        <History size={12} />
+                        <span>
+                          Último contato em {st.contacts[0].contactDate}: {st.contacts[0].type}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="recurrent-actions">
+                      <button
+                        className="button secondary sm-button full-width-btn"
+                        onClick={() => handleOpenContactModal(st)}
+                        type="button"
+                      >
+                        <Phone size={14} /> Registrar Contato Família
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* Quick Guidance Card */}
+          <section className="aside-card guide-card">
+            <h3>
+              <ClipboardCheck size={18} /> Orientações da Instituição
+            </h3>
+            <ul className="guide-list">
+              <li>
+                <strong>Chamada Diária:</strong> Realize a chamada no início de cada período ou
+                oficina.
+              </li>
+              <li>
+                <strong>Faltas Consecutivas:</strong> Ao atingir o limite configurado (ex: 3
+                faltas), o sistema gera um alerta à equipe.
+              </li>
+              <li>
+                <strong>Contato com Família:</strong> Registre todas as tentativas e retornos de
+                contato telefônico, presencial ou por WhatsApp para garantir o histórico
+                pedagógico.
+              </li>
+            </ul>
+          </section>
+        </aside>
+      </div>
+
+      {/* Modal: Registrar Contato com a Família */}
+      {selectedStudentForContact && (
+        <div className="modal-backdrop" onClick={() => setSelectedStudentForContact(null)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <header className="modal-header">
+              <div className="modal-title-group">
+                <Phone className="modal-icon" size={22} />
+                <div>
+                  <h3>Registrar Contato com a Família</h3>
+                  <p>Aluno: <strong>{selectedStudentForContact.name}</strong> ({selectedStudentForContact.turma})</p>
+                </div>
+              </div>
+              <button
+                aria-label="Fechar"
+                className="icon-button modal-close"
+                onClick={() => setSelectedStudentForContact(null)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <form className="modal-form" onSubmit={handleSubmitContact}>
+              {familyContactSuccess && (
+                <div className="modal-success-banner">
+                  <CheckCircle2 size={18} /> {familyContactSuccess}
+                </div>
+              )}
+
+              <div className="modal-grid">
+                <label className="field">
+                  <span>Data da Falta Relacionada</span>
+                  <input
+                    onChange={(e) => setContactFaltaDate(e.target.value)}
+                    required
+                    type="date"
+                    value={contactFaltaDate}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Meio de Contato</span>
+                  <select
+                    onChange={(e) => setContactType(e.target.value)}
+                    value={contactType}
+                  >
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Ligação telefônica">Ligação Telefônica</option>
+                    <option value="E-mail">E-mail</option>
+                    <option value="Atendimento Presencial">Atendimento Presencial</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </label>
+
+                <label className="field field-wide">
+                  <span>Responsável pelo Contato (Profissional)</span>
+                  <input
+                    onChange={(e) => setContactResponsible(e.target.value)}
+                    required
+                    type="text"
+                    value={contactResponsible}
+                  />
+                </label>
+
+                <div className="family-info-box field-wide">
+                  <div className="family-info-row">
+                    <span>
+                      <User size={14} /> Responsável Cadastrado:
+                    </span>
+                    <strong>
+                      {selectedStudentForContact.responsavelNome} (
+                      {selectedStudentForContact.parentesco})
+                    </strong>
+                  </div>
+                  <div className="family-info-row">
+                    <span>
+                      <Phone size={14} /> Telefone:
+                    </span>
+                    <strong>{selectedStudentForContact.telefone}</strong>
+                  </div>
+                </div>
+
+                <label className="field field-wide">
+                  <span>Observações e Retorno da Família *</span>
+                  <textarea
+                    onChange={(e) => setContactNote(e.target.value)}
+                    placeholder="Descreva o motivo da ausência relatado pela família, acordos feitos ou próximos passos..."
+                    required
+                    rows={4}
+                    value={contactNote}
+                  />
+                </label>
+              </div>
+
+              {/* History of Previous Contacts */}
+              {selectedStudentForContact.contacts.length > 0 && (
+                <div className="contact-history-section">
+                  <h4>
+                    <History size={16} /> Histórico de Contatos Anteriores (
+                    {selectedStudentForContact.contacts.length})
+                  </h4>
+                  <div className="contact-history-list">
+                    {selectedStudentForContact.contacts.map((c, index) => (
+                      <div className="history-item-row" key={index}>
+                        <div className="history-item-meta">
+                          <strong>{c.contactDate}</strong> — <small>{c.type}</small> por{' '}
+                          <em>{c.responsible}</em> (Falta de {c.faltaDate})
+                        </div>
+                        <p className="history-item-note">"{c.note}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <footer className="modal-footer">
+                <button
+                  className="button secondary"
+                  onClick={() => setSelectedStudentForContact(null)}
+                  type="button"
+                >
+                  Cancelar
+                </button>
+                <button className="button primary" type="submit">
+                  <Save size={18} /> Salvar Registro de Contato
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
