@@ -273,6 +273,79 @@ export const students: Student[] = [
   },
 ]
 
+export type AttendanceStatus = 'presente' | 'ausente' | 'justificado'
+
+export type DailyAttendanceRecord = {
+  studentId: string
+  date: string
+  status: AttendanceStatus
+  observation: string
+  turmaId: string
+  oficina?: string
+}
+
+export type AttendanceSession = {
+  id: string
+  date: string
+  turmaId: string
+  scope: 'turma' | 'oficina'
+  oficinaName?: string
+  registeredBy: string
+  registeredAt: string
+  records: Record<string, { status: AttendanceStatus; observation: string }>
+}
+
 export function findStudent(id: string): Student | undefined {
   return students.find((student) => student.id === id)
 }
+
+// Memory store for dynamic interactions during session
+export const initialAttendanceSessions: Record<string, AttendanceSession> = {
+  '2026-09-15_Turma A': {
+    id: '2026-09-15_Turma A',
+    date: '2026-09-15',
+    turmaId: 'Turma A',
+    scope: 'turma',
+    registeredBy: 'Ana Carolina Silva',
+    registeredAt: '2026-09-15T09:30:00Z',
+    records: {
+      'lucas-oliveira-santos': { status: 'ausente', observation: 'Sem aviso prévio' },
+      'fernanda-lima-costa': { status: 'presente', observation: '' },
+      'julia-mendes-rocha': { status: 'presente', observation: '' },
+    },
+  },
+}
+
+export function saveAttendanceSession(session: AttendanceSession) {
+  initialAttendanceSessions[session.id] = session
+
+  // Update student streak & average status dynamically
+  Object.entries(session.records).forEach(([studentId, record]) => {
+    const student = findStudent(studentId)
+    if (student) {
+      if (record.status === 'ausente') {
+        student.faltasConsecutivas += 1
+      } else if (record.status === 'presente') {
+        student.faltasConsecutivas = 0
+      }
+    }
+  })
+}
+
+export function addContactToStudent(
+  studentId: string,
+  contact: {
+    faltaDate: string
+    contactDate: string
+    type: string
+    responsible: string
+    note: string
+  }
+) {
+  const student = findStudent(studentId)
+  if (student) {
+    student.contacts.unshift(contact)
+    // Decrement or mark handled if necessary
+  }
+}
+

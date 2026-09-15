@@ -34,11 +34,12 @@ import {
 import { CadastrarAluno } from './CadastrarAluno'
 import { ListarAlunos } from './ListarAlunos'
 import { DetalheAluno } from './DetalheAluno'
+import { Frequencia } from './Frequencia'
 import { findStudent } from './students-data'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
-type Screen = 'home' | 'reports' | 'register' | 'students' | 'student-detail'
+type Screen = 'home' | 'reports' | 'register' | 'students' | 'student-detail' | 'frequencia'
 
 type NavItem = {
   label: string
@@ -51,7 +52,7 @@ const mainNavigation: NavItem[] = [
   { label: 'Alunos', icon: Users, screen: 'students' },
   { label: 'Turmas', icon: GraduationCap },
   { label: 'Oficinas', icon: Palette },
-  { label: 'Frequência', icon: ClipboardCheck },
+  { label: 'Frequência', icon: ClipboardCheck, screen: 'frequencia' },
   { label: 'Atividades', icon: ListChecks },
 ]
 
@@ -163,6 +164,7 @@ function Topbar({
     register: 'Cadastrar aluno',
     students: 'Alunos',
     'student-detail': studentName ?? 'Perfil do aluno',
+    frequencia: 'Frequência e Registro de Chamada',
   }
 
   return (
@@ -254,7 +256,7 @@ function Dashboard({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
 
   const shortcuts = [
     { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen },
-    { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck },
+    { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen },
     { label: 'Registrar atividade', description: 'Atividades por turma', icon: BookOpenCheck },
     {
       label: 'Gerar relatório',
@@ -356,7 +358,7 @@ function Dashboard({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
                   <strong>{student}</strong>
                   <span>Turma {String.fromCharCode(65 + index)} · {3 + index} faltas consecutivas</span>
                 </div>
-                <button type="button">Ver aluno</button>
+                <button onClick={() => onNavigate('frequencia')} type="button">Ver chamadas</button>
               </div>
             ))}
           </div>
@@ -740,7 +742,7 @@ function PedagogicalReport() {
 function App() {
   const [screen, setScreen] = useState<Screen>(() => {
     const param = new URLSearchParams(window.location.search).get('screen')
-    return param === 'reports' || param === 'register' || param === 'students' || param === 'student-detail'
+    return param === 'reports' || param === 'register' || param === 'students' || param === 'student-detail' || param === 'frequencia'
       ? param
       : 'home'
   })
@@ -800,6 +802,7 @@ function App() {
             />
           )}
           {screen === 'reports' && <PedagogicalReport />}
+          {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
         </main>
       </div>
       <button aria-label="Contato pelo WhatsApp" className="whatsapp-button" type="button">
