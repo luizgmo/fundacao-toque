@@ -18,6 +18,8 @@ export type ContactEntry = {
   type: string
   responsible: string
   note: string
+  reason?: string
+  status?: string
 }
 
 export type DocumentEntry = {
@@ -301,8 +303,8 @@ export function findStudent(id: string): Student | undefined {
 
 // Memory store for dynamic interactions during session
 export const initialAttendanceSessions: Record<string, AttendanceSession> = {
-  '2026-09-15_Turma A': {
-    id: '2026-09-15_Turma A',
+  '2026-09-15_Turma A_geral': {
+    id: '2026-09-15_Turma A_geral',
     date: '2026-09-15',
     turmaId: 'Turma A',
     scope: 'turma',
@@ -314,6 +316,10 @@ export const initialAttendanceSessions: Record<string, AttendanceSession> = {
       'julia-mendes-rocha': { status: 'presente', observation: '' },
     },
   },
+}
+
+export function getAttendanceSession(id: string): AttendanceSession | undefined {
+  return initialAttendanceSessions[id] || initialAttendanceSessions[id.replace('_geral', '')] || initialAttendanceSessions[`${id}_geral`]
 }
 
 export function saveAttendanceSession(session: AttendanceSession) {
@@ -334,18 +340,11 @@ export function saveAttendanceSession(session: AttendanceSession) {
 
 export function addContactToStudent(
   studentId: string,
-  contact: {
-    faltaDate: string
-    contactDate: string
-    type: string
-    responsible: string
-    note: string
-  }
+  contact: ContactEntry
 ) {
   const student = findStudent(studentId)
   if (student) {
     student.contacts.unshift(contact)
-    // Decrement or mark handled if necessary
   }
 }
 
