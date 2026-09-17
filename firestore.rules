@@ -40,22 +40,24 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, delete: if isDirection() || isAdministrative();
       allow update: if isSignedIn();
-    }
 
-    // fichas_medicas — dados sensíveis (LGPD); ajustar com a Fundação.
-    match /fichas_medicas/{studentId} {
-      allow read: if isDirection() || isPedagogue();
-      allow create, update, delete: if isDirection();
-    }
+      // Subcoleção do aluno: ficha médica 1:1 — dados sensíveis (LGPD); ajustar com a Fundação.
+      match /ficha_medica/{fichaId} {
+        allow read: if isDirection() || isPedagogue();
+        allow create, update, delete: if isDirection();
+      }
 
-    match /responsaveis/{guardianId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isDirection() || isAdministrative();
-    }
+      // Subcoleção: responsáveis do aluno
+      match /responsaveis/{guardianId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isDirection() || isAdministrative();
+      }
 
-    match /documentos_aluno/{documentId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isDirection() || isAdministrative();
+      // Subcoleção: documentos do aluno (ficha médica, matrícula, autorização de imagem)
+      match /documentos/{documentId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isDirection() || isAdministrative();
+      }
     }
 
     match /turmas/{classId} {
@@ -69,11 +71,6 @@ service cloud.firestore {
     }
 
     match /turma_oficinas/{classWorkshopId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
-    }
-
-    match /horarios_oficinas/{scheduleId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
@@ -92,12 +89,13 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if isDirection();
-    }
 
-    match /anexos/{attachmentId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isDirection();
+      // Subcoleção: anexos do registro de atividade (fotos e documentos)
+      match /anexos/{attachmentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isDirection();
+      }
     }
 
     match /registros_evolucao/{progressId} {
@@ -115,15 +113,18 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isDirection() || isPedagogue();
       allow delete: if isDirection();
+
+      // Subcoleção: anexos do relatório pedagógico
+      match /anexos/{attachmentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isDirection();
+      }
     }
 
+    // Presenças ficam embutidas no map `presencas` da própria sessão —
+    // um documento por chamada, sem coleção auxiliar.
     match /sessoes_chamada/{sessionId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
-    }
-
-    // ID determinístico ({sessao_id}_{aluno_id}) impede presença duplicada
-    match /registros_presenca/{recordId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }

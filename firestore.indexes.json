@@ -3,7 +3,7 @@
     {
       "collectionGroup": "alunos",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "nome_busca", "order": "ASCENDING" }
       ]
@@ -11,7 +11,7 @@
     {
       "collectionGroup": "matriculas",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "aluno_id", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
@@ -19,7 +19,7 @@
     {
       "collectionGroup": "matriculas",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "turma_id", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
@@ -27,24 +27,15 @@
     {
       "collectionGroup": "turma_oficinas",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "turma_id", "order": "ASCENDING" },
         { "fieldPath": "ativo", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "horarios_oficinas",
-      "queryScope": "COLLECTION",
-      "campos": [
-        { "fieldPath": "turma_oficina_id", "order": "ASCENDING" },
-        { "fieldPath": "ativo", "order": "ASCENDING" },
-        { "fieldPath": "dia_semana", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "registros_atividade",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "turma_id", "order": "ASCENDING" },
         { "fieldPath": "data_atividade", "order": "DESCENDING" }
       ]
@@ -52,7 +43,7 @@
     {
       "collectionGroup": "registros_evolucao",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "aluno_id", "order": "ASCENDING" },
         { "fieldPath": "data_registro", "order": "DESCENDING" }
       ]
@@ -60,7 +51,7 @@
     {
       "collectionGroup": "relatorios_pedagogicos",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "aluno_id", "order": "ASCENDING" },
         { "fieldPath": "tipo_relatorio", "order": "ASCENDING" },
         { "fieldPath": "periodo_fim", "order": "DESCENDING" }
@@ -69,7 +60,7 @@
     {
       "collectionGroup": "sessoes_chamada",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "turma_id", "order": "ASCENDING" },
         { "fieldPath": "data_chamada", "order": "DESCENDING" }
       ]
@@ -77,56 +68,23 @@
     {
       "collectionGroup": "sessoes_chamada",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "turma_oficina_id", "order": "ASCENDING" },
-        { "fieldPath": "data_chamada", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "registros_presenca",
-      "queryScope": "COLLECTION",
-      "campos": [
-        { "fieldPath": "aluno_id", "order": "ASCENDING" },
         { "fieldPath": "data_chamada", "order": "DESCENDING" }
       ]
     },
     {
       "collectionGroup": "contatos_familia",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "aluno_id", "order": "ASCENDING" },
         { "fieldPath": "contatado_em", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "anexos",
-      "queryScope": "COLLECTION",
-      "campos": [
-        { "fieldPath": "tipo_proprietario", "order": "ASCENDING" },
-        { "fieldPath": "id_proprietario", "order": "ASCENDING" },
-        { "fieldPath": "enviado_em", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "responsaveis",
-      "queryScope": "COLLECTION",
-      "campos": [
-        { "fieldPath": "aluno_id", "order": "ASCENDING" },
-        { "fieldPath": "principal", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "documentos_aluno",
-      "queryScope": "COLLECTION",
-      "campos": [
-        { "fieldPath": "aluno_id", "order": "ASCENDING" },
-        { "fieldPath": "enviado_em", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "aluno_oficinas",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "aluno_id", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
@@ -134,7 +92,7 @@
     {
       "collectionGroup": "aluno_oficinas",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "turma_oficina_id", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
@@ -142,7 +100,7 @@
     {
       "collectionGroup": "modelos_formulario",
       "queryScope": "COLLECTION",
-      "campos": [
+      "fields": [
         { "fieldPath": "tipo_modelo", "order": "ASCENDING" },
         { "fieldPath": "versao", "order": "DESCENDING" }
       ]
@@ -150,3 +108,4 @@
   ],
   "fieldOverrides": []
 }
+

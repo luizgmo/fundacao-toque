@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "seed": "node scripts/seed-firestore.mjs seed",
-    "seed:reset": "node scripts/seed-firestore.mjs reset"
+    "seed:reset": "node scripts/seed-firestore.mjs reset",
+    "seed:cleanup": "node scripts/seed-firestore.mjs cleanup"
   },
   "dependencies": {
     "firebase": "^12.19.0",

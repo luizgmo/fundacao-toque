@@ -18,7 +18,7 @@ Por ser NoSQL, o Firestore utilizará coleções e documentos, não tabelas rela
   - `criado_por: string`
   - `atualizado_em: Timestamp`
   - `atualizado_por: string`
-  - Exceção: `usuarios` (gerenciado pela Direção via Firebase Authentication) e `fichas_medicas` (1:1 com o aluno, mantém apenas `atualizado_em`/`atualizado_por`).
+  - Exceção: `usuarios` (gerenciado pela Direção via Firebase Authentication) e a subcoleção `alunos/{aluno_id}/ficha_medica` (1:1 com o aluno, mantém apenas `atualizado_em`/`atualizado_por`).
 - IDs relacionados serão armazenados como `string`.
 - Datas utilizadas frequentemente em consultas poderão ser duplicadas de forma controlada.
 - **Convenção de datas:** campos que representam data pura, sem horário (`data_nascimento`, `data_chamada`, `data_atividade`, `data_registro`), serão armazenados como `string` no formato `YYYY-MM-DD`, evitando problemas de fuso horário do `Timestamp` (UTC). Campos com data e hora relevantes (`criado_em`, `contatado_em`, `enviado_em` etc.) permanecem como `Timestamp`.
@@ -30,26 +30,22 @@ Por ser NoSQL, o Firestore utilizará coleções e documentos, não tabelas rela
 | Coleção | Finalidade |
 |---|---|
 | `usuarios` | Usuários e perfis de acesso |
-| `alunos` | Dados cadastrais dos alunos |
-| `fichas_medicas` | Dados médicos e sensíveis |
-| `responsaveis` | Responsáveis pelos alunos |
-| `documentos_aluno` | Fichas médicas, matrículas e autorizações |
+| `alunos` | Dados cadastrais dos alunos (com subcoleções: ficha médica, responsáveis e documentos) |
 | `turmas` | Turmas da instituição |
 | `oficinas` | Oficinas e atividades oferecidas |
-| `turma_oficinas` | Associação entre turmas e oficinas |
-| `horarios_oficinas` | Dias e horários das oficinas |
+| `turma_oficinas` | Associação entre turmas e oficinas (com horários embutidos) |
 | `matriculas` | Histórico de vínculo entre alunos e turmas |
 | `aluno_oficinas` | Oficinas atribuídas individualmente aos alunos |
-| `registros_atividade` | Atividades realizadas diariamente |
-| `anexos` | Fotos anexadas a atividades e relatórios |
+| `registros_atividade` | Atividades realizadas diariamente (com subcoleção de anexos) |
 | `registros_evolucao` | Observações e evolução dos alunos |
 | `modelos_formulario` | Modelos versionados de avaliação |
-| `relatorios_pedagogicos` | Relatórios pedagógicos |
-| `sessoes_chamada` | Chamadas realizadas por dia ou oficina |
-| `registros_presenca` | Presença individual dos alunos |
+| `relatorios_pedagogicos` | Relatórios pedagógicos (com subcoleção de anexos) |
+| `sessoes_chamada` | Chamadas realizadas por dia ou oficina, com presenças embutidas |
 | `contatos_familia` | Contatos feitos em razão de faltas |
 | `relatorios_gerados` | Relatórios exportados para prestação de contas |
 | `configuracoes_sistema` | Configurações gerais do sistema |
+
+**Princípio de modelagem:** dados que só fazem sentido dentro de um pai não ganham coleção própria no topo — viram subcoleção (quando são listas independentes) ou campo embutido (quando são poucos itens). Isso evita fragmentação excessiva e facilita a leitura no Console e no app.
 
 ## Atributos
 
@@ -89,12 +85,13 @@ atualizado_em: Timestamp                     obrigatório
 
 `nome_busca` deve armazenar o nome normalizado, sem acentos e em letras minúsculas, para auxiliar pesquisas.
 
-### `fichas_medicas/{aluno_id}`
+**Subcoleções do aluno** (descritas a seguir): `ficha_medica` (1:1, sensível), `responsaveis` (1:N) e `documentos` (1:N).
 
-Documento com o mesmo ID do aluno, formando uma relação 1:1.
+### `alunos/{aluno_id}/ficha_medica/{ficha_id}`
+
+Documento único por aluno (ID fixo `ficha`), formando uma relação 1:1.
 
 ```text
-aluno_id: string                        obrigatório
 tipos_deficiencia: array<string>           obrigatório
 codigos_cid: array<string>                  opcional
 formato_ficha_medica: string             opcional
@@ -104,12 +101,11 @@ atualizado_por: string                        obrigatório
 atualizado_em: Timestamp                     obrigatório
 ```
 
-Essa coleção deverá possuir regras de acesso mais restritivas por conter dados sensíveis.
+Essa subcoleção deverá possuir regras de acesso mais restritivas por conter dados sensíveis (LGPD).
 
-### `responsaveis/{responsavel_id}`
+### `alunos/{aluno_id}/responsaveis/{responsavel_id}`
 
 ```text
-aluno_id: string                        obrigatório
 nome_completo: string                         obrigatório
 parentesco: string                     obrigatório
 telefone: string                             obrigatório
@@ -117,20 +113,19 @@ telefone_alternativo: string                opcional
 email: string                             opcional
 principal: boolean                       obrigatório
 criado_em: Timestamp                     obrigatório
-atualizado_em: Timestamp                     obrigatório
 criado_por: string                        obrigatório
+atualizado_em: Timestamp                     obrigatório
 atualizado_por: string                        obrigatório
 ```
 
-Um aluno poderá possuir mais de um responsável.
+Um aluno poderá possuir mais de um responsável. O `aluno_id` é implícito no caminho da subcoleção.
 
-### `documentos_aluno/{documento_id}`
+### `alunos/{aluno_id}/documentos/{documento_id}`
 
 ```text
-aluno_id: string                        obrigatório
 tipo_documento: string                     obrigatório
   valores: ficha_medica | ficha_matricula |
-           autorizacao_imagem | outra
+           autorizacao_imagem | outro
 caminho_storage: string                      obrigatório
 nome_arquivo_original: string                obrigatório
 tipo_conteudo: string                      obrigatório
@@ -139,7 +134,7 @@ enviado_por: string                       obrigatório
 enviado_em: Timestamp                    obrigatório
 ```
 
-O conteúdo do arquivo ficará no Firebase Storage.
+O conteúdo do arquivo ficará no Firebase Storage; o Firestore guarda apenas metadados.
 
 ### `turmas/{turma_id}`
 
@@ -160,7 +155,7 @@ atualizado_em: Timestamp                     obrigatório
 
 ```text
 nome: string                              obrigatório
-category: string                          obrigatório
+categoria: string                          obrigatório
 descricao: string                       opcional
 ids_usuarios_responsaveis: array<string>       obrigatório
 ativo: boolean                           obrigatório
@@ -177,16 +172,17 @@ turma_id: string                          obrigatório
 oficina_id: string                       obrigatório
 ids_usuarios_responsaveis: array<string>       obrigatório
 ativo: boolean                           obrigatório
+horarios: array<map>                     obrigatório
+  horários semanais desta oficina nesta turma
 criado_em: Timestamp                     obrigatório
 atualizado_em: Timestamp                     obrigatório
 ```
 
 Representa o relacionamento entre uma turma e uma oficina.
 
-### `horarios_oficinas/{horario_id}`
+Estrutura de cada item de `horarios`:
 
 ```text
-turma_oficina_id: string                 obrigatório
 dia_semana: number                           obrigatório
   valores: 1 a 7
 hora_inicio: string                        obrigatório
@@ -197,12 +193,9 @@ valido_de: string                        opcional
   formato: YYYY-MM-DD
 valido_ate: string                       opcional
   formato: YYYY-MM-DD
-ativo: boolean                           obrigatório
-criado_em: Timestamp                     obrigatório
-criado_por: string                        obrigatório
-atualizado_em: Timestamp                     obrigatório
-atualizado_por: string                        obrigatório
 ```
+
+Os horários ficam embutidos (1 a 3 itens por vínculo) em vez de coleção própria — evita fragmentação e consultas extras.
 
 ### `matriculas/{matricula_id}`
 
@@ -258,12 +251,11 @@ atualizado_em: Timestamp                     obrigatório
 
 Um registro diário poderá conter mais de uma oficina realizada pela turma.
 
-### `anexos/{anexo_id}`
+### `registros_atividade/{registro_id}/anexos/{anexo_id}` e `relatorios_pedagogicos/{relatorio_id}/anexos/{anexo_id}`
+
+Anexos (fotos e documentos) vivem como subcoleção do registro de atividade ou do relatório pedagógico — o caminho já indica o dono, sem necessidade de campos de referência.
 
 ```text
-tipo_proprietario: string                        obrigatório
-  valores: registro_atividade | relatorio_pedagogico
-id_proprietario: string                          obrigatório
 tipo_anexo: string                   obrigatório
   valores: imagem | documento
 caminho_storage: string                      obrigatório
@@ -294,7 +286,7 @@ atualizado_em: Timestamp                     obrigatório
 ```text
 nome: string                              obrigatório
 tipo_modelo: string                     obrigatório
-  valores: pedagogical_evaluation
+  valores: avaliacao_pedagogica
 versao: number                           obrigatório
 campos: array<map>                        obrigatório
 ativo: boolean                           obrigatório
@@ -307,8 +299,8 @@ Estrutura de cada item de `campos`:
 ```text
 chave: string
 rotulo: string
-type: string
-  valores: text | long_text | number | boolean | select | date
+tipo: string
+  valores: texto | texto_longo | numero | booleano | selecao | data
 obrigatorio: boolean
 opcoes: array<string>                    opcional
 ```
@@ -351,32 +343,18 @@ escopo: string                             obrigatório
   valores: turma | oficina
 turma_oficina_id: string                 opcional
 registro_atividade_id: string                opcional
+presencas: map                             obrigatório
+  chave: aluno_id; valores: presente | ausente | justificado
+observacoes: map                           opcional
+  chave: aluno_id; observação individual na chamada
 registrado_por: string                       obrigatório
+atualizado_em: Timestamp                     obrigatório
 criado_em: Timestamp                     obrigatório
 ```
 
 Quando `escopo` for `oficina`, o campo `turma_oficina_id` será obrigatório.
 
-### `registros_presenca/{sessao_id}_{aluno_id}`
-
-Utilizar um ID determinístico evita duas presenças para o mesmo aluno na mesma chamada.
-
-```text
-sessao_id: string                        obrigatório
-aluno_id: string                        obrigatório
-data_chamada: string                   obrigatório
-  formato: YYYY-MM-DD
-turma_id: string                          obrigatório
-turma_oficina_id: string                 opcional
-status: string                            obrigatório
-  valores: presente | ausente | justificado
-observacoes: string                             opcional
-registrado_por: string                       obrigatório
-criado_em: Timestamp                     obrigatório
-atualizado_em: Timestamp                     obrigatório
-```
-
-A data e os IDs são repetidos propositalmente para permitir consultas sem `JOIN`.
+**As presenças ficam EMBUTIDAS nesta sessão** — um documento por chamada (dia/turma ou dia/oficina). Uma única leitura monta a tela de chamada inteira, sem coleção auxiliar. O histórico de faltas de um aluno é obtido lendo as sessões da(s) turma(s) dele e extraindo `presencas[aluno_id]`.
 
 ### `contatos_familia/{contato_id}`
 
@@ -387,7 +365,7 @@ datas_faltas_relacionadas: array<string>      obrigatório
   datas das faltas, formato YYYY-MM-DD
 contatado_em: Timestamp                   obrigatório
 meio_contato: string                    obrigatório
-  valores: telefone | whatsapp | email | presencial | outra
+  valores: telefone | whatsapp | email | presencial | outro
 observacoes: string                             obrigatório
 usuario_responsavel_id: string               obrigatório
 criado_em: Timestamp                     obrigatório
@@ -424,20 +402,19 @@ atualizado_em: Timestamp                     obrigatório
 
 | Origem | Relacionamento | Destino |
 |---|---:|---|
-| Aluno | 1:N | Responsáveis |
-| Aluno | 1:1 | Dados médicos |
-| Aluno | 1:N | Documentos |
+| Aluno | 1:N | Responsáveis, por meio de `alunos/{id}/responsaveis` |
+| Aluno | 1:1 | Dados médicos, por meio de `alunos/{id}/ficha_medica` |
+| Aluno | 1:N | Documentos, por meio de `alunos/{id}/documentos` |
 | Aluno | N:N | Turmas, por meio de `matriculas` |
-| Turma | N:N | Oficinas, por meio de `turma_oficinas` |
+| Turma | N:N | Oficinas, por meio de `turma_oficinas` (horários embutidos) |
 | Aluno | N:N | Oficinas, por meio de `aluno_oficinas` |
 | Turma | 1:N | Registros de atividades |
+| Registro de atividade | 1:N | Anexos, por meio de subcoleção `anexos` |
+| Relatório pedagógico | 1:N | Anexos, por meio de subcoleção `anexos` |
 | Aluno | 1:N | Registros de evolução |
 | Aluno | 1:N | Relatórios pedagógicos |
-| Chamada | 1:N | Registros de presença |
+| Sessão de chamada | embutido | Presenças no map `presencas` da própria sessão |
 | Aluno | 1:N | Contatos com a família |
-| Oficina | 1:N | Horários, por meio de `turma_oficinas` |
-| Registro de atividade | 1:N | Anexos, por meio de `anexos` (polimórfico) |
-| Relatório pedagógico | 1:N | Anexos, por meio de `anexos` (polimórfico) |
 
 ## Índices previstos
 
@@ -447,20 +424,17 @@ atualizado_em: Timestamp                     obrigatório
 | `matriculas` | `aluno_id`, `status` |
 | `matriculas` | `turma_id`, `status` |
 | `turma_oficinas` | `turma_id`, `ativo` |
-| `horarios_oficinas` | `turma_oficina_id`, `ativo`, `dia_semana` |
 | `registros_atividade` | `turma_id`, `data_atividade DESC` |
 | `registros_evolucao` | `aluno_id`, `data_registro DESC` |
 | `relatorios_pedagogicos` | `aluno_id`, `tipo_relatorio`, `periodo_fim DESC` |
 | `sessoes_chamada` | `turma_id`, `data_chamada DESC` |
-| `registros_presenca` | `aluno_id`, `data_chamada DESC` |
 | `contatos_familia` | `aluno_id`, `contatado_em DESC` |
-| `anexos` | `tipo_proprietario`, `id_proprietario`, `enviado_em DESC` |
-| `responsaveis` | `aluno_id`, `principal` |
-| `documentos_aluno` | `aluno_id`, `enviado_em DESC` |
 | `aluno_oficinas` | `aluno_id`, `status` |
 | `aluno_oficinas` | `turma_oficina_id`, `status` |
 | `sessoes_chamada` | `turma_oficina_id`, `data_chamada DESC` |
 | `modelos_formulario` | `tipo_modelo`, `versao DESC` |
+
+Índices de subcoleções herdam as consultas do pai e em geral não precisam de índices compostos extras nesta escala.
 
 ## Critérios de aceite
 
