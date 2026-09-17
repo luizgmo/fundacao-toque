@@ -214,60 +214,65 @@ const alunos = {
 
 const healthRecords = {
   [STUDENT_1]: {
-    aluno_id: STUDENT_1, tipos_deficiencia: ['TEA'], codigos_cid: ['F84.0'],
+    tipos_deficiencia: ['TEA'], codigos_cid: ['F84.0'],
     formato_ficha_medica: 'digital',
     dados_ficha_medica: { allergies: 'Nenhuma relatada', medications: 'Não informado' },
     atualizado_por: DIRECTION_UID, atualizado_em: now(),
   },
   [STUDENT_2]: {
-    aluno_id: STUDENT_2, tipos_deficiencia: ['Deficiência intelectual'], codigos_cid: ['F70'],
+    tipos_deficiencia: ['Deficiência intelectual'], codigos_cid: ['F70'],
     formato_ficha_medica: 'anexo', dados_ficha_medica: null,
     atualizado_por: DIRECTION_UID, atualizado_em: now(),
   },
 }
+// Subcoleções do aluno: paths completos dos documentos (aluno_id é implícito no caminho)
+const fichasMedicasPaths = {
+  [STUDENT_1]: `alunos/${STUDENT_1}/ficha_medica`,
+  [STUDENT_2]: `alunos/${STUDENT_2}/ficha_medica`,
+}
 // ==== PARTE 3: responsáveis, turmas, oficinas e vínculos ====
 const responsaveis = {
   [GUARDIAN_1]: {
-    aluno_id: STUDENT_1, nome_completo: 'Fernanda Souza Pereira', parentesco: 'mae',
+    nome_completo: 'Fernanda Souza Pereira', parentesco: 'mae',
     telefone: '+5516999990001', telefone_alternativo: null, email: 'fernanda@exemplo.com',
     principal: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [GUARDIAN_2]: {
-    aluno_id: STUDENT_2, nome_completo: 'Marcos Alves', parentesco: 'pai',
+    nome_completo: 'Marcos Alves', parentesco: 'pai',
     telefone: '+5516999990002', telefone_alternativo: null, email: null,
     principal: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
 }
+// Subcoleções de responsáveis: paths completos dos documentos
+const responsaveisPaths = {
+  [GUARDIAN_1]: `alunos/${STUDENT_1}/responsaveis`,
+  [GUARDIAN_2]: `alunos/${STUDENT_2}/responsaveis`,
+}
 
 const turmas = {
   [CLASS_A]: {
-    codigo: 'TUR-M1', nome: 'Manhã — Grupo 1', period: 'manha',
+    codigo: 'TUR-M1', nome: 'Manhã — Grupo 1', periodo: 'manha',
     ids_usuarios_responsaveis: [PEDAGOGUE_UID], data_inicio: '2026-02-01', data_fim: null,
     ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [CLASS_B]: {
-    codigo: 'TUR-T1', nome: 'Tarde — Grupo 1', period: 'tarde',
+    codigo: 'TUR-T1', nome: 'Tarde — Grupo 1', periodo: 'tarde',
     ids_usuarios_responsaveis: [USER_1], data_inicio: '2026-02-01', data_fim: null,
     ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
 }
 
 const oficinas = {
-  [WORKSHOP_MUSIC]: { nome: 'Musicalização', category: 'musicalizacao', descricao: 'Oficina de música e ritmo', ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-  [WORKSHOP_DANCE]: { nome: 'Dança', category: 'danca', descricao: 'Oficina de dança e movimento', ids_usuarios_responsaveis: [USER_1], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-  [WORKSHOP_GARDEN]: { nome: 'Horta (NEMA)', category: 'horta', descricao: 'Cuidado com a horta', ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
+  [WORKSHOP_MUSIC]: { nome: 'Musicalização', categoria: 'musicalizacao', descricao: 'Oficina de música e ritmo', ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
+  [WORKSHOP_DANCE]: { nome: 'Dança', categoria: 'danca', descricao: 'Oficina de dança e movimento', ids_usuarios_responsaveis: [USER_1], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
+  [WORKSHOP_GARDEN]: { nome: 'Horta (NEMA)', categoria: 'horta', descricao: 'Cuidado com a horta', ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
 }
 
+// Horários ficam EMBUTIDOS em turma_oficinas (sem coleção própria)
 const classWorkshops = {
-  [CW_MUSIC_A]: { turma_id: CLASS_A, oficina_id: WORKSHOP_MUSIC, ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-  [CW_GARDEN_A]: { turma_id: CLASS_A, oficina_id: WORKSHOP_GARDEN, ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-  [CW_DANCE_B]: { turma_id: CLASS_B, oficina_id: WORKSHOP_DANCE, ids_usuarios_responsaveis: [USER_1], ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-}
-
-const workshopSchedules = {
-  'seed-schedule-music-ter': { turma_oficina_id: CW_MUSIC_A, dia_semana: 2, hora_inicio: '08:00', hora_fim: '09:00', valido_de: '2026-02-01', valido_ate: null, ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-  'seed-schedule-garden-qui': { turma_oficina_id: CW_GARDEN_A, dia_semana: 4, hora_inicio: '09:00', hora_fim: '10:00', valido_de: '2026-02-01', valido_ate: null, ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
-  'seed-schedule-dance-qua': { turma_oficina_id: CW_DANCE_B, dia_semana: 3, hora_inicio: '14:00', hora_fim: '15:00', valido_de: '2026-02-01', valido_ate: null, ativo: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
+  [CW_MUSIC_A]: { turma_id: CLASS_A, oficina_id: WORKSHOP_MUSIC, ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, horarios: [{ dia_semana: 2, hora_inicio: '08:00', hora_fim: '09:00', valido_de: '2026-02-01', valido_ate: null }], criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
+  [CW_GARDEN_A]: { turma_id: CLASS_A, oficina_id: WORKSHOP_GARDEN, ids_usuarios_responsaveis: [PEDAGOGUE_UID], ativo: true, horarios: [{ dia_semana: 4, hora_inicio: '09:00', hora_fim: '10:00', valido_de: '2026-02-01', valido_ate: null }], criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
+  [CW_DANCE_B]: { turma_id: CLASS_B, oficina_id: WORKSHOP_DANCE, ids_usuarios_responsaveis: [USER_1], ativo: true, horarios: [{ dia_semana: 3, hora_inicio: '14:00', hora_fim: '15:00', valido_de: '2026-02-01', valido_ate: null }], criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now() },
 }
 
 const matriculas = {
@@ -291,16 +296,27 @@ const activityRecords = {
   },
 }
 
+// Presenças EMBUTIDAS na sessão: map presencas[aluno_id] — impossível duplicar presença
 const attendanceSessions = {
-  [SESSION_1]: { data_chamada: '2026-09-14', turma_id: CLASS_A, escopo: 'turma', turma_oficina_id: null, registro_atividade_id: null, registrado_por: ADMIN_UID, criado_em: now() },
-  [SESSION_2]: { data_chamada: '2026-09-14', turma_id: CLASS_A, escopo: 'oficina', turma_oficina_id: CW_GARDEN_A, registro_atividade_id: null, registrado_por: ADMIN_UID, criado_em: now() },
-}
-
-// IDs determinísticos ({sessao_id}_{aluno_id}) — impede presença duplicada
-const attendanceRecords = {
-  [`${SESSION_1}_${STUDENT_1}`]: { sessao_id: SESSION_1, aluno_id: STUDENT_1, data_chamada: '2026-09-14', turma_id: CLASS_A, turma_oficina_id: null, status: 'presente', observacoes: null, registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now() },
-  [`${SESSION_1}_${STUDENT_3}`]: { sessao_id: SESSION_1, aluno_id: STUDENT_3, data_chamada: '2026-09-14', turma_id: CLASS_A, turma_oficina_id: null, status: 'ausente', observacoes: null, registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now() },
-  [`${SESSION_2}_${STUDENT_1}`]: { sessao_id: SESSION_2, aluno_id: STUDENT_1, data_chamada: '2026-09-14', turma_id: CLASS_A, turma_oficina_id: CW_GARDEN_A, status: 'presente', observacoes: null, registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now() },
+  [SESSION_1]: {
+    data_chamada: '2026-09-14', turma_id: CLASS_A, escopo: 'turma',
+    turma_oficina_id: null, registro_atividade_id: null,
+    presencas: {
+      [STUDENT_1]: 'presente',
+      [STUDENT_3]: 'ausente',
+    },
+    observacoes: {},
+    registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now(),
+  },
+  [SESSION_2]: {
+    data_chamada: '2026-09-14', turma_id: CLASS_A, escopo: 'oficina',
+    turma_oficina_id: CW_GARDEN_A, registro_atividade_id: null,
+    presencas: {
+      [STUDENT_1]: 'presente',
+    },
+    observacoes: {},
+    registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now(),
+  },
 }
 
 const familyContacts = {
@@ -322,11 +338,11 @@ const formTemplates = {
     nome: 'Avaliação Pedagógica (modelo provisório)', tipo_modelo: 'avaliacao_pedagogica',
     versao: 1, ativo: true,
     campos: [
-      { chave: 'cognitiva', rotulo: 'Desenvolvimento cognitivo', type: 'texto_longo', obrigatorio: true, opcoes: null },
-      { chave: 'motora', rotulo: 'Desenvolvimento motora', type: 'texto_longo', obrigatorio: true, opcoes: null },
-      { chave: 'social', rotulo: 'Desenvolvimento social', type: 'texto_longo', obrigatorio: true, opcoes: null },
-      { chave: 'comunicacao', rotulo: 'Comunicação', type: 'texto_longo', obrigatorio: true, opcoes: null },
-      { chave: 'autonomia', rotulo: 'Autonomia', type: 'texto_longo', obrigatorio: false, opcoes: null },
+      { chave: 'cognitiva', rotulo: 'Desenvolvimento cognitivo', tipo: 'texto_longo', obrigatorio: true, opcoes: null },
+      { chave: 'motora', rotulo: 'Desenvolvimento motor', tipo: 'texto_longo', obrigatorio: true, opcoes: null },
+      { chave: 'social', rotulo: 'Desenvolvimento social', tipo: 'texto_longo', obrigatorio: true, opcoes: null },
+      { chave: 'comunicacao', rotulo: 'Comunicação', tipo: 'texto_longo', obrigatorio: true, opcoes: null },
+      { chave: 'autonomia', rotulo: 'Autonomia', tipo: 'texto_longo', obrigatorio: false, opcoes: null },
     ],
     criado_por: DIRECTION_UID, criado_em: now(),
   },
@@ -349,26 +365,89 @@ const systemSettings = {
   geral: { modo_chamada: 'diaria', limite_faltas_consecutivas: 3, atualizado_por: DIRECTION_UID, atualizado_em: now() },
 }
 // ==== PARTE 5: execução ====
+// Cada entrada: [caminho da coleção (pode ser subcoleção), {id: dados}]
 const TARGETS = [
   ['usuarios', usuarios],
   ['alunos', alunos],
-  ['fichas_medicas', healthRecords],
-  ['responsaveis', responsaveis],
+  [fichasMedicasPaths[STUDENT_1], { ficha: healthRecords[STUDENT_1] }],
+  [fichasMedicasPaths[STUDENT_2], { ficha: healthRecords[STUDENT_2] }],
+  [responsaveisPaths[GUARDIAN_1], { [GUARDIAN_1]: responsaveis[GUARDIAN_1] }],
+  [responsaveisPaths[GUARDIAN_2], { [GUARDIAN_2]: responsaveis[GUARDIAN_2] }],
   ['turmas', turmas],
   ['oficinas', oficinas],
   ['turma_oficinas', classWorkshops],
-  ['horarios_oficinas', workshopSchedules],
   ['matriculas', matriculas],
   ['aluno_oficinas', assignments],
   ['registros_atividade', activityRecords],
   ['sessoes_chamada', attendanceSessions],
-  ['registros_presenca', attendanceRecords],
   ['contatos_familia', familyContacts],
   ['registros_evolucao', progressEntries],
   ['modelos_formulario', formTemplates],
   ['relatorios_pedagogicos', pedagogicalReports],
   ['configuracoes_sistema', systemSettings],
 ]
+
+async function restListDocs(collectionPath) {
+  const token = await getAccessToken()
+  const url = `${FIRESTORE_BASE}/${collectionPath}?pageSize=300`
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+  if (!res.ok) return []
+  const json = await res.json()
+  return (json.documents ?? []).map((d) => d.name.split('/documents/')[1])
+}
+
+// Coleções legadas (inglês) e nomes que deixaram de existir no topo
+const LEGACY_COLLECTIONS = [
+  'users', 'students', 'student_health_records', 'guardians', 'student_documents',
+  'classes', 'workshops', 'class_workshops', 'workshop_schedules', 'enrollments',
+  'student_workshop_assignments', 'activity_records', 'attachments',
+  'progress_entries', 'form_templates', 'pedagogical_reports',
+  'attendance_sessions', 'attendance_records', 'family_contacts',
+  'generated_reports', 'system_settings',
+  'fichas_medicas', 'documentos_aluno', 'horarios_oficinas', 'registros_presenca',
+]
+
+// Coleções atuais (dados de seed antigos têm campos desatualizados — limpar tudo)
+const CURRENT_COLLECTIONS = [
+  'usuarios', 'alunos', 'turmas', 'oficinas', 'turma_oficinas', 'matriculas',
+  'aluno_oficinas', 'registros_atividade', 'sessoes_chamada',
+  'contatos_familia', 'registros_evolucao', 'modelos_formulario',
+  'relatorios_pedagogicos', 'configuracoes_sistema',
+]
+
+async function wipeCollection(path) {
+  const docs = await restListDocs(path)
+  for (const docPath of docs) {
+    const token = await getAccessToken()
+    const res = await fetch(`${FIRESTORE_BASE}/${docPath}`, {
+      method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` },
+    })
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`REST DELETE ${res.status} em ${docPath}`)
+    }
+    console.log(`🗑 ${docPath}`)
+  }
+  return docs.length
+}
+
+async function cleanup() {
+  let total = 0
+  for (const c of LEGACY_COLLECTIONS) {
+    total += await wipeCollection(c)
+  }
+  for (const c of CURRENT_COLLECTIONS) {
+    total += await wipeCollection(c)
+  }
+  // Subcoleções dos alunos não são apagadas em cascata — tratar explicitamente
+  const alunos = await restListDocs('alunos')
+  for (const docPath of alunos) {
+    const alunoId = docPath.split('/')[1]
+    total += await wipeCollection(`alunos/${alunoId}/ficha_medica`)
+    total += await wipeCollection(`alunos/${alunoId}/responsaveis`)
+    total += await wipeCollection(`alunos/${alunoId}/documentos`)
+  }
+  console.log(`✅ Cleanup concluído (${total} documentos apagados).`)
+}
 
 async function main() {
   const mode = process.argv[2] ?? 'seed'
@@ -382,6 +461,16 @@ async function main() {
   if (!useEmulator && !useRest) {
     console.warn('⚠️ Sem autenticação, o SDK cliente respeitará as security rules (deny-all) e falhará com PERMISSION_DENIED.')
     console.warn('   Use SEED_TARGET=emulator (local) ou SEED_TARGET=rest (acesso admin ao projeto real).')
+  }
+
+  if (mode === 'cleanup') {
+    if (!useRest) {
+      console.error('❌ O modo cleanup usa acesso admin via REST. Rode com SEED_TARGET=rest (ou use o emulador: SEED_TARGET=emulator).')
+      process.exit(1)
+    }
+    console.log('🧹 Cleanup: apagando TODOS os dados (coleções legadas, atuais e subcoleções dos alunos)...')
+    await cleanup()
+    return
   }
 
   if (mode === 'reset') {
