@@ -24,6 +24,7 @@ import {
   Palette,
   Paperclip,
   Save,
+  ShieldCheck,
   Sparkles,
   TrendingUp,
   Upload,
@@ -35,11 +36,17 @@ import { CadastrarAluno } from './features/alunos/CadastrarAluno'
 import { ListarAlunos } from './features/alunos/ListarAlunos'
 import { DetalheAluno } from './features/alunos/DetalheAluno'
 import { Frequencia } from './features/frequencia/Frequencia'
+import { GerenciarUsuarios } from './features/usuarios/GerenciarUsuarios'
+import { LoginScreen } from './features/auth/LoginScreen'
+import { useAuth } from './features/auth/AuthContext'
+import type { UserProfile, UserRole } from './types/auth'
+import { ROLE_LABELS } from './types/auth'
+import type { Student } from './features/alunos/students-data'
 import { findStudent } from './features/alunos/students-data'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
-type Screen = 'home' | 'reports' | 'register' | 'students' | 'student-detail' | 'frequencia'
+type Screen = 'home' | 'reports' | 'register' | 'students' | 'student-detail' | 'frequencia' | 'usuarios'
 
 type NavItem = {
   label: string
@@ -61,6 +68,10 @@ const pedagogicalNavigation: NavItem[] = [
   { label: 'Relatórios', icon: FileText, screen: 'reports' },
 ]
 
+const adminNavigation: NavItem[] = [
+  { label: 'Equipe / Autores', icon: ShieldCheck, screen: 'usuarios' },
+]
+
 function Brand() {
   return (
     <div className="brand">
@@ -78,13 +89,17 @@ function Brand() {
 function Sidebar({
   currentScreen,
   isOpen,
+  userRole,
   onClose,
   onNavigate,
+  onLogout,
 }: {
   currentScreen: Screen
   isOpen: boolean
+  userRole?: UserRole
   onClose: () => void
   onNavigate: (screen: Screen) => void
+  onLogout: () => void
 }) {
   const renderItem = (item: NavItem) => {
     const Icon = item.icon
@@ -130,9 +145,15 @@ function Sidebar({
           {mainNavigation.map(renderItem)}
           <p className="nav-label nav-label-spaced">Pedagógico</p>
           {pedagogicalNavigation.map(renderItem)}
+          {userRole === 'direcao' && (
+            <>
+              <p className="nav-label nav-label-spaced">Administração</p>
+              {adminNavigation.map(renderItem)}
+            </>
+          )}
         </nav>
 
-        <button className="logout-button" type="button">
+        <button className="logout-button" onClick={onLogout} title="Sair da conta" type="button">
           <LogOut size={19} />
           <span>Sair</span>
         </button>
@@ -152,10 +173,12 @@ function Sidebar({
 function Topbar({
   screen,
   studentName,
+  userProfile,
   onOpenMenu,
 }: {
   screen: Screen
   studentName?: string
+  userProfile?: UserProfile | null
   onOpenMenu: () => void
 }) {
   const titles: Record<Screen, string> = {
@@ -165,7 +188,21 @@ function Topbar({
     students: 'Alunos',
     'student-detail': studentName ?? 'Perfil do aluno',
     frequencia: 'Frequência e Registro de Chamada',
+    usuarios: 'Equipe e Autores do Sistema',
   }
+
+  const initials = userProfile
+    ? userProfile.nome_completo
+        .split(' ')
+        .filter(Boolean)
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'AS'
+
+  const displayName = userProfile?.nome_completo || 'Ana Carolina Silva'
+  const displayRole = userProfile ? ROLE_LABELS[userProfile.papel] : 'Pedagoga'
 
   return (
     <header className="topbar">
@@ -186,10 +223,10 @@ function Topbar({
           <Bell size={19} />
           <span className="notification-dot" />
         </button>
-        <span className="profile-avatar" aria-hidden="true">AS</span>
+        <span className="profile-avatar" aria-hidden="true">{initials}</span>
         <div className="profile-copy">
-          <strong>Ana Carolina Silva</strong>
-          <span>Pedagoga</span>
+          <strong>{displayName}</strong>
+          <span>{displayRole}</span>
         </div>
         <ChevronDown className="profile-chevron" size={18} />
       </div>
@@ -243,7 +280,13 @@ function SectionCard({
   )
 }
 
-function Dashboard({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
+function Dashboard({
+  onNavigate,
+  userName,
+}: {
+  onNavigate: (screen: Screen) => void
+  userName?: string
+}) {
   const formattedDate = useMemo(() => {
     const text = new Intl.DateTimeFormat('pt-BR', {
       weekday: 'long',
@@ -270,7 +313,7 @@ function Dashboard({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
     <div className="dashboard-page page-container">
       <section className="welcome-banner">
         <div>
-          <h2>Olá, Ana! <span aria-hidden="true">👋</span></h2>
+          <h2>Olá, {userName || 'Colaborador'}! <span aria-hidden="true">👋</span></h2>
           <p>{formattedDate} — Tenha um ótimo dia de trabalho.</p>
         </div>
         <Sparkles aria-hidden="true" size={60} strokeWidth={1.5} />
@@ -740,16 +783,49 @@ function PedagogicalReport() {
 }
 
 function App() {
+  const { currentUser, userProfile, loading, logout } = useAuth()
+
   const [screen, setScreen] = useState<Screen>(() => {
     const param = new URLSearchParams(window.location.search).get('screen')
-    return param === 'reports' || param === 'register' || param === 'students' || param === 'student-detail' || param === 'frequencia'
-      ? param
+    return param === 'reports' ||
+      param === 'register' ||
+      param === 'students' ||
+      param === 'student-detail' ||
+      param === 'frequencia' ||
+      param === 'usuarios'
+      ? (param as Screen)
       : 'home'
   })
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('aluno'),
   )
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f0fdf4',
+          color: '#1b4332',
+          gap: '1rem',
+          fontFamily: 'inherit',
+        }}
+      >
+        <div style={{ fontSize: '2.5rem' }}>🌱</div>
+        <p style={{ fontWeight: 600, fontSize: '1.15rem' }}>Carregando Fundação Toque...</p>
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return <LoginScreen />
+  }
 
   const navigate = (nextScreen: Screen) => {
     const url = new URL(window.location.href)
@@ -774,35 +850,87 @@ function App() {
     setScreen('student-detail')
   }
 
+  const handleEditStudent = (student: Student) => {
+    setEditingStudent(student)
+    navigate('register')
+  }
+
+  const handleNewStudent = () => {
+    setEditingStudent(null)
+    navigate('register')
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
         currentScreen={screen}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onLogout={logout}
         onNavigate={navigate}
+        userRole={userProfile?.papel}
       />
       <div className="app-main">
         <Topbar
           onOpenMenu={() => setSidebarOpen(true)}
           screen={screen}
           studentName={selectedStudentId ? findStudent(selectedStudentId)?.name : undefined}
+          userProfile={userProfile}
         />
         <main>
-          {screen === 'home' && <Dashboard onNavigate={navigate} />}
-          {screen === 'register' && <CadastrarAluno onCancel={() => navigate('students')} />}
+          {screen === 'home' && (
+            <Dashboard
+              onNavigate={navigate}
+              userName={userProfile?.nome_completo.split(' ')[0]}
+            />
+          )}
+          {screen === 'register' && (
+            <CadastrarAluno
+              key={editingStudent?.id || 'new'}
+              initialStudent={editingStudent}
+              onCancel={() => {
+                setEditingStudent(null)
+                navigate('students')
+              }}
+              onSaveSuccess={() => {
+                setEditingStudent(null)
+                navigate('students')
+              }}
+            />
+          )}
           {screen === 'students' && (
-            <ListarAlunos onCadastrar={() => navigate('register')} onViewStudent={viewStudent} />
+            <ListarAlunos
+              onCadastrar={handleNewStudent}
+              onEditStudent={handleEditStudent}
+              onViewStudent={viewStudent}
+            />
           )}
           {screen === 'student-detail' && selectedStudentId && (
             <DetalheAluno
               onBack={() => navigate('students')}
+              onEdit={handleEditStudent}
               onNovoRelatorio={() => navigate('reports')}
               studentId={selectedStudentId}
             />
           )}
           {screen === 'reports' && <PedagogicalReport />}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
+          {screen === 'usuarios' &&
+            (userProfile?.papel === 'direcao' ? (
+              <GerenciarUsuarios />
+            ) : (
+              <div className="page-container">
+                <div className="form-card" style={{ textAlign: 'center', padding: '2rem' }}>
+                  <h3 style={{ color: '#991b1b', marginBottom: '0.5rem' }}>Acesso Restrito</h3>
+                  <p style={{ color: '#4b5563', marginBottom: '1rem' }}>
+                    Esta seção é exclusiva para o perfil de Direção.
+                  </p>
+                  <button className="button primary" onClick={() => navigate('home')} type="button">
+                    Voltar ao Dashboard
+                  </button>
+                </div>
+              </div>
+            ))}
         </main>
       </div>
       <button aria-label="Contato pelo WhatsApp" className="whatsapp-button" type="button">

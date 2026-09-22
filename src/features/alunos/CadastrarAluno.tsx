@@ -15,7 +15,12 @@ import {
   UserRound,
   UsersRound,
   X,
+  AlertCircle,
 } from 'lucide-react'
+import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
+import type { Student } from './students-data'
+import { createStudent, updateStudent } from '../../services/studentsService'
+import type { StudentInput } from '../../services/studentsService'
 import './CadastrarAluno.css'
 
 type WizardStep = 1 | 2 | 3 | 4 | 5
@@ -81,7 +86,7 @@ const initialForm: AlunoForm = {
   telefoneSecundario: '',
   email: '',
   endereco: '',
-  turmas: [],
+  turmas: ['turma-a'],
   oficinas: [],
   grauDependencia: '',
 }
@@ -90,16 +95,74 @@ function toggleListValue(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 }
 
-export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
+function studentToForm(st: Student): AlunoForm {
+  let dateFormatted = ''
+  if (st.birthDate) {
+    if (st.birthDate.includes('/')) {
+      const [d, m, y] = st.birthDate.split('/')
+      if (d && m && y) dateFormatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    } else {
+      dateFormatted = st.birthDate
+    }
+  }
+
+  const turmaMatch = turmasOptions.find((opt) =>
+    opt.label.toLowerCase().includes((st.turma || '').toLowerCase())
+  )
+  const turmaId = turmaMatch ? turmaMatch.id : 'turma-a'
+
+  const oficinasIds = (st.oficinas || []).map((o) => {
+    const found = oficinasOptions.find((opt) => opt.label.toLowerCase().includes(o.toLowerCase()))
+    return found ? found.id : o.toLowerCase()
+  })
+
+  return {
+    nome: st.name || '',
+    nascimento: dateFormatted,
+    sexo: st.sexo || '',
+    deficiencia: st.deficiencia || '',
+    cid: st.cid || '',
+    observacoes: st.observacoes || '',
+    responsavelNome: st.responsavelNome || '',
+    parentesco: st.parentesco || 'Mãe',
+    cpf: '',
+    rg: '',
+    telefonePrincipal: maskPhone(st.telefone || ''),
+    telefoneSecundario: '',
+    email: st.email || '',
+    endereco: '',
+    turmas: [turmaId],
+    oficinas: oficinasIds,
+    grauDependencia: '',
+  }
+}
+
+export function CadastrarAluno({
+  onCancel,
+  initialStudent,
+  onSaveSuccess,
+}: {
+  onCancel: () => void
+  initialStudent?: Student | null
+  onSaveSuccess?: (studentId: string) => void
+}) {
+  const isEditing = Boolean(initialStudent)
+
   const [step, setStep] = useState<WizardStep>(1)
-  const [form, setForm] = useState<AlunoForm>(initialForm)
+  const [form, setForm] = useState<AlunoForm>(() =>
+    initialStudent ? studentToForm(initialStudent) : initialForm
+  )
   const [photoName, setPhotoName] = useState('')
   const [fichaMedica, setFichaMedica] = useState('')
   const [fichaMatricula, setFichaMatricula] = useState('')
-  const [lgpdImagem, setLgpdImagem] = useState(false)
-  const [lgpdDados, setLgpdDados] = useState(false)
+  const [lgpdImagem, setLgpdImagem] = useState(true)
+  const [lgpdDados, setLgpdDados] = useState(true)
   const [draftMessage, setDraftMessage] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+
 
   const updateField = <K extends keyof AlunoForm>(field: K, value: AlunoForm[K]) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -115,12 +178,64 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
   const saveDraft = () => {
     setDraftMessage(
       'Rascunho salvo às ' +
-        new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
+        new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date())
     )
   }
 
-  const finishRegistration = () => {
-    setSubmitted(true)
+  const finishRegistration = async () => {
+    setSaving(true)
+    setSaveError(null)
+
+    try {
+      const selectedTurmasLabels = form.turmas.map((t) => {
+        const found = turmasOptions.find((opt) => opt.id === t)
+        return found ? found.label.split(' —')[0] : 'Turma A'
+      })
+
+      const selectedOficinasLabels = form.oficinas.map((o) => {
+        const found = oficinasOptions.find((opt) => opt.id === o)
+        return found ? found.label.replace(/^[^\w\s]+\s*/, '') : o
+      })
+
+      const payload: StudentInput = {
+        nome: form.nome.trim(),
+        nascimento: form.nascimento,
+        sexo: form.sexo,
+        deficiencia: form.deficiencia,
+        cid: form.cid,
+        observacoes: form.observacoes,
+        responsavelNome: form.responsavelNome.trim(),
+        parentesco: form.parentesco,
+        cpf: form.cpf,
+        rg: form.rg,
+        telefonePrincipal: form.telefonePrincipal,
+        telefoneSecundario: form.telefoneSecundario,
+        email: form.email,
+        endereco: form.endereco,
+        turmas: selectedTurmasLabels.length > 0 ? selectedTurmasLabels : ['Turma A'],
+        oficinas: selectedOficinasLabels,
+        grauDependencia: form.grauDependencia,
+        fichaMedica: fichaMedica || undefined,
+        fichaMatricula: fichaMatricula || undefined,
+        lgpdImagem,
+        lgpdDados,
+      }
+
+      if (initialStudent) {
+        await updateStudent(initialStudent.id, payload)
+        setSubmitted(true)
+        if (onSaveSuccess) onSaveSuccess(initialStudent.id)
+      } else {
+        const newId = await createStudent(payload)
+        setSubmitted(true)
+        if (onSaveSuccess) onSaveSuccess(newId)
+      }
+    } catch (err: any) {
+      console.error('Erro ao salvar aluno:', err)
+      setSaveError('Erro ao gravar dados no Firestore: ' + (err.message || 'Tente novamente.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const resetForm = () => {
@@ -128,10 +243,11 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
     setPhotoName('')
     setFichaMedica('')
     setFichaMatricula('')
-    setLgpdImagem(false)
-    setLgpdDados(false)
+    setLgpdImagem(true)
+    setLgpdDados(true)
     setDraftMessage('')
     setSubmitted(false)
+    setSaveError(null)
     setStep(1)
   }
 
@@ -139,18 +255,22 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
     return (
       <div className="page-container register-page">
         <div className="form-card register-success">
-          <span className="upload-icon success"><CheckCircle2 size={28} /></span>
-          <h2>Cadastro concluído</h2>
+          <span className="upload-icon success">
+            <CheckCircle2 size={28} />
+          </span>
+          <h2>{isEditing ? 'Cadastro Atualizado!' : 'Cadastro Concluído!'}</h2>
           <p>
-            Os dados de <strong>{form.nome || 'aluno'}</strong> foram preenchidos com sucesso. Como o
-            backend ainda não está pronto, nada foi enviado de fato — esta é só a confirmação do fluxo.
+            Os dados de <strong>{form.nome || 'aluno'}</strong> foram gravados com sucesso no banco
+            de dados (Firestore).
           </p>
           <div className="mobile-form-actions register-success-actions">
-            <button className="button secondary" onClick={resetForm} type="button">
-              <UserRound size={18} /> Cadastrar outro aluno
-            </button>
+            {!isEditing && (
+              <button className="button secondary" onClick={resetForm} type="button">
+                <UserRound size={18} /> Cadastrar outro aluno
+              </button>
+            )}
             <button className="button primary" onClick={onCancel} type="button">
-              <ChevronLeft size={18} /> Voltar ao dashboard
+              <ChevronLeft size={18} /> Voltar para Lista de Alunos
             </button>
           </div>
         </div>
@@ -163,8 +283,12 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
       <div className="report-page-heading">
         <div>
           <span className="eyebrow">Alunos</span>
-          <h2>Novo cadastro de aluno</h2>
-          <p>Preencha as etapas abaixo com os dados do aluno e do responsável.</p>
+          <h2>{isEditing ? `Editar Aluno: ${initialStudent?.name}` : 'Novo cadastro de aluno'}</h2>
+          <p>
+            {isEditing
+              ? 'Atualize as informações cadastrais do aluno e do responsável.'
+              : 'Preencha as etapas abaixo com os dados do aluno e do responsável.'}
+          </p>
         </div>
         <div className="report-heading-actions">
           <button className="button secondary" onClick={onCancel} type="button">
@@ -172,6 +296,25 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            padding: '0.85rem 1rem',
+            borderRadius: '0.65rem',
+            background: '#fef2f2',
+            color: '#991b1b',
+            border: '1px solid #fecaca',
+            marginBottom: '1rem',
+          }}
+        >
+          <AlertCircle size={20} />
+          <span>{saveError}</span>
+        </div>
+      )}
 
       <div className="form-card register-card">
         <ol className="wizard-stepper">
@@ -191,7 +334,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
         {step === 1 && (
           <div className="wizard-panel">
             <div className="form-card-heading">
-              <span className="form-heading-icon"><UserRound size={21} /></span>
+              <span className="form-heading-icon">
+                <UserRound size={21} />
+              </span>
               <div>
                 <h3>Dados pessoais</h3>
                 <p>Informações básicas de identificação do aluno.</p>
@@ -199,7 +344,7 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
             </div>
 
             <div className="photo-upload-row">
-              <span className="photo-avatar" aria-hidden="true">
+              <span aria-hidden="true" className="photo-avatar">
                 <Camera size={20} />
               </span>
               <label className="button secondary photo-upload-button">
@@ -261,14 +406,16 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
               <label className="field">
                 <span>CID *</span>
                 <input
-                  onChange={(event) => updateField('cid', event.target.value)}
-                  placeholder="Ex: F71"
+                  onChange={(event) => updateField('cid', maskCID(event.target.value))}
+                  placeholder="Ex: F71, F84"
                   required
                   value={form.cid}
                 />
               </label>
               <label className="field field-wide">
-                <span>Observações gerais <em>(opcional)</em></span>
+                <span>
+                  Observações gerais <em>(opcional)</em>
+                </span>
                 <textarea
                   onChange={(event) => updateField('observacoes', event.target.value)}
                   placeholder="Informações adicionais relevantes..."
@@ -283,7 +430,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
         {step === 2 && (
           <div className="wizard-panel">
             <div className="form-card-heading">
-              <span className="form-heading-icon"><UsersRound size={21} /></span>
+              <span className="form-heading-icon">
+                <UsersRound size={21} />
+              </span>
               <div>
                 <h3>Responsável e contato</h3>
                 <p>Dados de quem responde legalmente pelo aluno.</p>
@@ -315,21 +464,34 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
                 </select>
               </label>
               <label className="field">
-                <span>CPF do responsável <em>(opcional)</em></span>
+                <span>
+                  CPF do responsável <em>(com máscara)</em>
+                </span>
                 <input
-                  onChange={(event) => updateField('cpf', event.target.value)}
+                  maxLength={14}
+                  onChange={(event) => updateField('cpf', maskCPF(event.target.value))}
                   placeholder="000.000.000-00"
                   value={form.cpf}
                 />
               </label>
               <label className="field">
-                <span>RG <em>(opcional)</em></span>
-                <input onChange={(event) => updateField('rg', event.target.value)} value={form.rg} />
+                <span>
+                  RG <em>(com máscara)</em>
+                </span>
+                <input
+                  maxLength={12}
+                  onChange={(event) => updateField('rg', maskRG(event.target.value))}
+                  placeholder="00.000.000-0"
+                  value={form.rg}
+                />
               </label>
               <label className="field">
                 <span>Telefone principal *</span>
                 <input
-                  onChange={(event) => updateField('telefonePrincipal', event.target.value)}
+                  maxLength={15}
+                  onChange={(event) =>
+                    updateField('telefonePrincipal', maskPhone(event.target.value))
+                  }
                   placeholder="(16) 99999-9999"
                   required
                   type="tel"
@@ -337,16 +499,23 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
                 />
               </label>
               <label className="field">
-                <span>Telefone secundário <em>(opcional)</em></span>
+                <span>
+                  Telefone secundário <em>(opcional)</em>
+                </span>
                 <input
-                  onChange={(event) => updateField('telefoneSecundario', event.target.value)}
+                  maxLength={15}
+                  onChange={(event) =>
+                    updateField('telefoneSecundario', maskPhone(event.target.value))
+                  }
                   placeholder="(16) 99999-9999"
                   type="tel"
                   value={form.telefoneSecundario}
                 />
               </label>
               <label className="field">
-                <span>E-mail <em>(opcional)</em></span>
+                <span>
+                  E-mail <em>(opcional)</em>
+                </span>
                 <input
                   onChange={(event) => updateField('email', event.target.value)}
                   placeholder="email@exemplo.com"
@@ -355,7 +524,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
                 />
               </label>
               <label className="field field-wide">
-                <span>Endereço completo <em>(opcional)</em></span>
+                <span>
+                  Endereço completo <em>(opcional)</em>
+                </span>
                 <input
                   onChange={(event) => updateField('endereco', event.target.value)}
                   placeholder="Rua, número, bairro, cidade"
@@ -369,7 +540,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
         {step === 3 && (
           <div className="wizard-panel">
             <div className="form-card-heading">
-              <span className="form-heading-icon"><Stethoscope size={21} /></span>
+              <span className="form-heading-icon">
+                <Stethoscope size={21} />
+              </span>
               <div>
                 <h3>Documentos</h3>
                 <p>Anexe os arquivos necessários para o cadastro.</p>
@@ -377,48 +550,61 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
             </div>
 
             <label className="field field-wide">
-              <span>Ficha médica (PDF ou imagem) *</span>
+              <span>Ficha médica (PDF ou imagem)</span>
               <label className="upload-area">
                 <input accept=".pdf,image/*" onChange={pickFile(setFichaMedica)} type="file" />
-                <span className="upload-icon"><Upload size={23} /></span>
+                <span className="upload-icon">
+                  <Upload size={23} />
+                </span>
                 <strong>{fichaMedica || 'Selecione um arquivo para anexar'}</strong>
                 <span>PDF, JPG ou PNG · máximo de 10 MB</span>
               </label>
             </label>
 
             <label className="field field-wide">
-              <span>Ficha de matrícula <em>(opcional)</em></span>
+              <span>
+                Ficha de matrícula <em>(opcional)</em>
+              </span>
               <label className="upload-area">
                 <input accept=".pdf,image/*" onChange={pickFile(setFichaMatricula)} type="file" />
-                <span className="upload-icon"><Upload size={23} /></span>
+                <span className="upload-icon">
+                  <Upload size={23} />
+                </span>
                 <strong>{fichaMatricula || 'Selecione um arquivo para anexar'}</strong>
                 <span>PDF, JPG ou PNG · máximo de 10 MB</span>
               </label>
             </label>
 
             <div className="lgpd-box">
-              <h4><ShieldCheck size={17} /> Autorização LGPD</h4>
+              <h4>
+                <ShieldCheck size={17} /> Autorização LGPD
+              </h4>
               <p>
                 Conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), é necessária a
-                autorização expressa do responsável para tratamento de dados pessoais e imagem do aluno.
+                autorização expressa do responsável para tratamento de dados pessoais e imagem do
+                aluno.
               </p>
               <label className="lgpd-checkbox">
                 <input
                   checked={lgpdImagem}
                   onChange={(event) => setLgpdImagem(event.target.checked)}
-                  required
                   type="checkbox"
                 />
-                <span>Autorizo o uso da imagem do aluno em materiais institucionais e relatórios de prestação de contas.</span>
+                <span>
+                  Autorizo o uso da imagem do aluno em materiais institucionais e relatórios de
+                  prestação de contas.
+                </span>
               </label>
               <label className="lgpd-checkbox">
                 <input
                   checked={lgpdDados}
                   onChange={(event) => setLgpdDados(event.target.checked)}
-                  required
                   type="checkbox"
                 />
-                <span>Autorizo o tratamento dos dados pessoais para fins pedagógicos e administrativos da Fundação Toque.</span>
+                <span>
+                  Autorizo o tratamento dos dados pessoais para fins pedagógicos e administrativos
+                  da Fundação Toque.
+                </span>
               </label>
             </div>
           </div>
@@ -427,7 +613,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
         {step === 4 && (
           <div className="wizard-panel">
             <div className="form-card-heading">
-              <span className="form-heading-icon"><Link2 size={21} /></span>
+              <span className="form-heading-icon">
+                <Link2 size={21} />
+              </span>
               <div>
                 <h3>Vínculos do aluno</h3>
                 <p>Defina turmas e oficinas conforme o plano individual do aluno.</p>
@@ -459,12 +647,16 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
               <div className="chip-checkbox-grid">
                 {oficinasOptions.map((oficina) => (
                   <label
-                    className={'chip-checkbox' + (form.oficinas.includes(oficina.id) ? ' checked' : '')}
+                    className={
+                      'chip-checkbox' + (form.oficinas.includes(oficina.id) ? ' checked' : '')
+                    }
                     key={oficina.id}
                   >
                     <input
                       checked={form.oficinas.includes(oficina.id)}
-                      onChange={() => updateField('oficinas', toggleListValue(form.oficinas, oficina.id))}
+                      onChange={() =>
+                        updateField('oficinas', toggleListValue(form.oficinas, oficina.id))
+                      }
                       type="checkbox"
                     />
                     <span>{oficina.label}</span>
@@ -474,7 +666,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
             </label>
 
             <label className="field">
-              <span>Grau de dependência <em>(opcional)</em></span>
+              <span>
+                Grau de dependência <em>(opcional)</em>
+              </span>
               <select
                 onChange={(event) => updateField('grauDependencia', event.target.value)}
                 value={form.grauDependencia}
@@ -491,7 +685,9 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
         {step === 5 && (
           <div className="wizard-panel">
             <div className="form-card-heading">
-              <span className="form-heading-icon"><ClipboardList size={21} /></span>
+              <span className="form-heading-icon">
+                <ClipboardList size={21} />
+              </span>
               <div>
                 <h3>Revisão dos dados</h3>
                 <p>Confira as informações antes de finalizar o cadastro.</p>
@@ -500,42 +696,97 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
 
             <div className="review-grid">
               <div className="review-card">
-                <h4><UserRound size={16} /> Dados pessoais</h4>
+                <h4>
+                  <UserRound size={16} /> Dados pessoais
+                </h4>
                 <dl>
-                  <div><dt>Nome</dt><dd>{form.nome || '—'}</dd></div>
-                  <div><dt>Nascimento</dt><dd>{form.nascimento || '—'}</dd></div>
-                  <div><dt>Sexo</dt><dd>{form.sexo || '—'}</dd></div>
-                  <div><dt>Deficiência / CID</dt><dd>{[form.deficiencia, form.cid].filter(Boolean).join(' / ') || '—'}</dd></div>
+                  <div>
+                    <dt>Nome</dt>
+                    <dd>{form.nome || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Nascimento</dt>
+                    <dd>{form.nascimento || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Sexo</dt>
+                    <dd>{form.sexo || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Deficiência / CID</dt>
+                    <dd>
+                      {[form.deficiencia, form.cid].filter(Boolean).join(' / ') || '—'}
+                    </dd>
+                  </div>
                 </dl>
               </div>
 
               <div className="review-card">
-                <h4><UsersRound size={16} /> Responsável</h4>
+                <h4>
+                  <UsersRound size={16} /> Responsável
+                </h4>
                 <dl>
-                  <div><dt>Nome</dt><dd>{form.responsavelNome || '—'}</dd></div>
-                  <div><dt>Parentesco</dt><dd>{form.parentesco || '—'}</dd></div>
-                  <div><dt>Telefone</dt><dd>{form.telefonePrincipal || '—'}</dd></div>
+                  <div>
+                    <dt>Nome</dt>
+                    <dd>{form.responsavelNome || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Parentesco</dt>
+                    <dd>{form.parentesco || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Telefone</dt>
+                    <dd>{form.telefonePrincipal || '—'}</dd>
+                  </div>
+                  {form.cpf && (
+                    <div>
+                      <dt>CPF</dt>
+                      <dd>{form.cpf}</dd>
+                    </div>
+                  )}
                 </dl>
               </div>
 
               <div className="review-card">
-                <h4><Stethoscope size={16} /> Documentos</h4>
+                <h4>
+                  <Stethoscope size={16} /> Documentos
+                </h4>
                 <dl>
-                  <div><dt>Ficha médica</dt><dd>{fichaMedica ? 'Anexada' : 'Pendente'}</dd></div>
-                  <div><dt>LGPD</dt><dd>{lgpdImagem && lgpdDados ? 'Autorizado' : 'Pendente'}</dd></div>
+                  <div>
+                    <dt>Ficha médica</dt>
+                    <dd>{fichaMedica ? 'Anexada' : 'Pendente'}</dd>
+                  </div>
+                  <div>
+                    <dt>LGPD</dt>
+                    <dd>{lgpdImagem && lgpdDados ? 'Autorizado' : 'Pendente'}</dd>
+                  </div>
                 </dl>
               </div>
 
               <div className="review-card">
-                <h4><Link2 size={16} /> Vínculos</h4>
+                <h4>
+                  <Link2 size={16} /> Vínculos
+                </h4>
                 <dl>
                   <div>
                     <dt>Turmas</dt>
-                    <dd>{form.turmas.length ? form.turmas.map((id) => turmasOptions.find((t) => t.id === id)?.label.split(' —')[0]).join(', ') : '—'}</dd>
+                    <dd>
+                      {form.turmas.length
+                        ? form.turmas
+                            .map((id) => turmasOptions.find((t) => t.id === id)?.label.split(' —')[0])
+                            .join(', ')
+                        : '—'}
+                    </dd>
                   </div>
                   <div>
                     <dt>Oficinas</dt>
-                    <dd>{form.oficinas.length ? form.oficinas.map((id) => oficinasOptions.find((o) => o.id === id)?.label).join(', ') : '—'}</dd>
+                    <dd>
+                      {form.oficinas.length
+                        ? form.oficinas
+                            .map((id) => oficinasOptions.find((o) => o.id === id)?.label)
+                            .join(', ')
+                        : '—'}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -564,8 +815,18 @@ export function CadastrarAluno({ onCancel }: { onCancel: () => void }) {
                 Próximo <ChevronRight size={18} />
               </button>
             ) : (
-              <button className="button primary" onClick={finishRegistration} type="button">
-                <CheckCircle2 size={18} /> Finalizar cadastro
+              <button
+                className="button primary"
+                disabled={saving}
+                onClick={finishRegistration}
+                type="button"
+              >
+                <CheckCircle2 size={18} />{' '}
+                {saving
+                  ? 'Salvando no Banco...'
+                  : isEditing
+                  ? 'Salvar Alterações'
+                  : 'Finalizar Cadastro'}
               </button>
             )}
           </div>

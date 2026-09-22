@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart3,
   Cake,
@@ -15,6 +15,9 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { calculateAge, findStudent } from './students-data'
+import type { Student, ContactEntry } from './students-data'
+import { getStudentById } from '../../services/studentsService'
+import { subscribeStudentOccurrences } from '../../services/attendanceService'
 import './DetalheAluno.css'
 
 const tabs = [
@@ -32,13 +35,36 @@ export function DetalheAluno({
   studentId,
   onBack,
   onNovoRelatorio,
+  onEdit,
 }: {
   studentId: string
   onBack: () => void
   onNovoRelatorio: () => void
+  onEdit?: (student: Student) => void
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('visao')
-  const student = findStudent(studentId)
+  const [student, setStudent] = useState<Student | null>(() => findStudent(studentId) || null)
+  const [dbContacts, setDbContacts] = useState<ContactEntry[]>([])
+
+  useEffect(() => {
+    let isMounted = true
+    getStudentById(studentId).then((st) => {
+      if (isMounted && st) {
+        setStudent(st)
+      }
+    })
+
+    const unsubOccurrences = subscribeStudentOccurrences(studentId, (contacts) => {
+      if (isMounted && contacts.length > 0) {
+        setDbContacts(contacts)
+      }
+    })
+
+    return () => {
+      isMounted = false
+      unsubOccurrences()
+    }
+  }, [studentId])
 
   if (!student) {
     return (
@@ -53,6 +79,9 @@ export function DetalheAluno({
     )
   }
 
+  // Combina contatos do Firestore com contatos locais sem duplicação
+  const allContacts = dbContacts.length > 0 ? dbContacts : student.contacts
+
   return (
     <div className="page-container student-detail-page">
       <div className="report-page-heading">
@@ -61,12 +90,19 @@ export function DetalheAluno({
           <h2>Perfil do aluno</h2>
         </div>
         <div className="report-heading-actions">
-          <button aria-label="Imprimir" className="button secondary" type="button">
+          <button
+            aria-label="Imprimir"
+            className="button secondary"
+            onClick={() => window.print()}
+            type="button"
+          >
             <Printer size={18} />
           </button>
-          <button className="button secondary" type="button">
-            <Pencil size={18} /> Editar cadastro
-          </button>
+          {onEdit && (
+            <button className="button secondary" onClick={() => onEdit(student)} type="button">
+              <Pencil size={18} /> Editar cadastro
+            </button>
+          )}
           <button className="button secondary" onClick={onBack} type="button">
             <ChevronLeft size={18} /> Voltar
           </button>
@@ -78,18 +114,33 @@ export function DetalheAluno({
         <div className="student-header-info">
           <h2>{student.name}</h2>
           <div className="student-header-meta">
-            <span><Cake size={14} /> {student.birthDate} — {calculateAge(student.birthDate)} anos</span>
-            <span><School size={14} /> {student.turma} — {student.turmaTurno}</span>
-            <span><NotebookPen size={14} /> {student.deficiencia} ({student.cid})</span>
+            <span>
+              <Cake size={14} /> {student.birthDate}
+              {student.birthDate && student.birthDate.includes('/')
+                ? ` — ${calculateAge(student.birthDate)} anos`
+                : ''}
+            </span>
+            <span>
+              <School size={14} /> {student.turma} — {student.turmaTurno}
+            </span>
+            <span>
+              <NotebookPen size={14} /> {student.deficiencia} ({student.cid})
+            </span>
             {student.faltasConsecutivas > 0 && (
-              <span className="status-pill warning">⚠️ {student.faltasConsecutivas} faltas consecutivas</span>
+              <span className="status-pill warning">
+                ⚠️ {student.faltasConsecutivas} faltas consecutivas
+              </span>
             )}
           </div>
         </div>
         <span
           className={
             'status-pill student-header-status ' +
-            (student.status === 'Ativo' ? 'success' : student.status === 'Em acompanhamento' ? 'warning' : 'danger')
+            (student.status === 'Ativo'
+              ? 'success'
+              : student.status === 'Em acompanhamento'
+              ? 'warning'
+              : 'danger')
           }
         >
           {student.status}
@@ -115,34 +166,66 @@ export function DetalheAluno({
             <div className="student-info-grid">
               <div>
                 <h3>Dados pessoais</h3>
-                <p><strong>Nome:</strong> {student.name}</p>
-                <p><strong>Data de nascimento:</strong> {student.birthDate}</p>
-                <p><strong>Sexo:</strong> {student.sexo}</p>
-                <p><strong>Tipo de deficiência:</strong> {student.deficiencia}</p>
-                <p><strong>CID:</strong> {student.cid}</p>
-                <p><strong>Observações:</strong> {student.observacoes}</p>
+                <p>
+                  <strong>Nome:</strong> {student.name}
+                </p>
+                <p>
+                  <strong>Data de nascimento:</strong> {student.birthDate}
+                </p>
+                <p>
+                  <strong>Sexo:</strong> {student.sexo}
+                </p>
+                <p>
+                  <strong>Tipo de deficiência:</strong> {student.deficiencia}
+                </p>
+                <p>
+                  <strong>CID:</strong> {student.cid}
+                </p>
+                <p>
+                  <strong>Observações:</strong> {student.observacoes || 'Nenhuma'}
+                </p>
               </div>
               <div>
                 <h3>Responsável</h3>
-                <p><strong>Nome:</strong> {student.responsavelNome}</p>
-                <p><strong>Parentesco:</strong> {student.parentesco}</p>
-                <p><strong>Telefone:</strong> {student.telefone}</p>
-                <p><strong>E-mail:</strong> {student.email}</p>
+                <p>
+                  <strong>Nome:</strong> {student.responsavelNome}
+                </p>
+                <p>
+                  <strong>Parentesco:</strong> {student.parentesco}
+                </p>
+                <p>
+                  <strong>Telefone:</strong> {student.telefone}
+                </p>
+                <p>
+                  <strong>E-mail:</strong> {student.email || 'Não informado'}
+                </p>
               </div>
             </div>
 
             <h3 className="student-section-title">Vínculos</h3>
             <div className="student-info-grid">
               <div className="review-mini-card">
-                <h4><School size={16} /> Turma</h4>
-                <span className="status-pill success">{student.turma} — {student.turmaTurno}</span>
+                <h4>
+                  <School size={16} /> Turma
+                </h4>
+                <span className="status-pill success">
+                  {student.turma} — {student.turmaTurno}
+                </span>
               </div>
               <div className="review-mini-card">
-                <h4><Palette size={16} /> Oficinas</h4>
+                <h4>
+                  <Palette size={16} /> Oficinas
+                </h4>
                 <div className="student-chip-row">
-                  {student.oficinas.map((oficina) => (
-                    <span className="status-pill success" key={oficina}>{oficina}</span>
-                  ))}
+                  {student.oficinas && student.oficinas.length > 0 ? (
+                    student.oficinas.map((oficina) => (
+                      <span className="status-pill success" key={oficina}>
+                        {oficina}
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>Nenhuma oficina atribuída</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -153,7 +236,9 @@ export function DetalheAluno({
                 <div className="student-document-card" key={doc.name}>
                   {doc.kind === 'lgpd' ? <ShieldCheck size={28} /> : <FileText size={28} />}
                   <p>{doc.name}</p>
-                  <span>{doc.kind === 'lgpd' ? '✅ Autorizado' : 'Anexado em ' + doc.attachedAt}</span>
+                  <span>
+                    {doc.kind === 'lgpd' ? '✅ Autorizado' : 'Anexado em ' + doc.attachedAt}
+                  </span>
                 </div>
               ))}
             </div>
@@ -171,14 +256,20 @@ export function DetalheAluno({
             <div className="timeline">
               {student.reports.map((report) => (
                 <article key={report.date}>
-                  <span className="timeline-dot"><FileText size={15} /></span>
+                  <span className="timeline-dot">
+                    <FileText size={15} />
+                  </span>
                   <div>
-                    <small>{report.date} — {report.title}</small>
+                    <small>
+                      {report.date} — {report.title}
+                    </small>
                     <p>{report.summary}</p>
                   </div>
                 </article>
               ))}
-              {student.reports.length === 0 && <p className="student-empty">Nenhum relatório registrado ainda.</p>}
+              {student.reports.length === 0 && (
+                <p className="student-empty">Nenhum relatório registrado ainda.</p>
+              )}
             </div>
           </div>
         )}
@@ -189,14 +280,20 @@ export function DetalheAluno({
             <div className="timeline">
               {student.evolution.map((entry) => (
                 <article key={entry.date + entry.area}>
-                  <span className="timeline-dot"><BarChart3 size={15} /></span>
+                  <span className="timeline-dot">
+                    <BarChart3 size={15} />
+                  </span>
                   <div>
-                    <small>{entry.date} — {entry.area}</small>
+                    <small>
+                      {entry.date} — {entry.area}
+                    </small>
                     <p>{entry.note}</p>
                   </div>
                 </article>
               ))}
-              {student.evolution.length === 0 && <p className="student-empty">Nenhuma observação registrada ainda.</p>}
+              {student.evolution.length === 0 && (
+                <p className="student-empty">Nenhuma observação registrada ainda.</p>
+              )}
             </div>
           </div>
         )}
@@ -206,12 +303,22 @@ export function DetalheAluno({
             <h3>Frequência</h3>
             <div className="student-frequency-summary">
               <div className="metric-card">
-                <span className="metric-icon mint"><ClipboardCheck size={25} strokeWidth={2.2} /></span>
-                <div><strong>{student.frequenciaMedia}%</strong><span>Frequência média</span></div>
+                <span className="metric-icon mint">
+                  <ClipboardCheck size={25} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <strong>{student.frequenciaMedia}%</strong>
+                  <span>Frequência média</span>
+                </div>
               </div>
               <div className="metric-card">
-                <span className="metric-icon orange"><ListChecks size={25} strokeWidth={2.2} /></span>
-                <div><strong>{student.faltasConsecutivas}</strong><span>Faltas consecutivas</span></div>
+                <span className="metric-icon orange">
+                  <ListChecks size={25} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <strong>{student.faltasConsecutivas}</strong>
+                  <span>Faltas consecutivas</span>
+                </div>
               </div>
             </div>
           </div>
@@ -224,7 +331,9 @@ export function DetalheAluno({
               {student.activities.map((activity) => (
                 <li key={activity}>{activity}</li>
               ))}
-              {student.activities.length === 0 && <li className="student-empty">Nenhuma atividade registrada ainda.</li>}
+              {student.activities.length === 0 && (
+                <li className="student-empty">Nenhuma atividade registrada ainda.</li>
+              )}
             </ul>
           </div>
         )}
@@ -233,28 +342,53 @@ export function DetalheAluno({
           <div className="student-tab-panel">
             <h3>Contato por faltas & Ocorrências</h3>
             <div className="timeline">
-              {student.contacts.map((contact, index) => (
+              {allContacts.map((contact, index) => (
                 <article key={contact.contactDate + index}>
-                  <span className="timeline-dot"><Phone size={15} /></span>
+                  <span className="timeline-dot">
+                    <Phone size={15} />
+                  </span>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <small>Falta em {contact.faltaDate} — contato em {contact.contactDate} ({contact.type})</small>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <small>
+                        Falta em {contact.faltaDate} — contato em {contact.contactDate} (
+                        {contact.type})
+                      </small>
                       {contact.status && (
-                        <span className="status-pill warning" style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}>
+                        <span
+                          className="status-pill warning"
+                          style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}
+                        >
                           {contact.status}
                         </span>
                       )}
                     </div>
                     {contact.reason && (
-                      <p style={{ margin: '0.2rem 0', fontWeight: 600, color: 'var(--color-primary-dark, #1e3a8a)' }}>
+                      <p
+                        style={{
+                          margin: '0.2rem 0',
+                          fontWeight: 600,
+                          color: 'var(--color-primary-dark, #1e3a8a)',
+                        }}
+                      >
                         {contact.reason}
                       </p>
                     )}
-                    <p>{contact.note} <em>— {contact.responsible}</em></p>
+                    <p>
+                      {contact.note} <em>— {contact.responsible}</em>
+                    </p>
                   </div>
                 </article>
               ))}
-              {student.contacts.length === 0 && <p className="student-empty">Nenhum contato registrado.</p>}
+              {allContacts.length === 0 && (
+                <p className="student-empty">Nenhum contato registrado.</p>
+              )}
             </div>
           </div>
         )}

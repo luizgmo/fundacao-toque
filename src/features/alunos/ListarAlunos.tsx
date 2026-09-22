@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  AlertTriangle,
+  CheckCircle2,
   Eye,
   Pencil,
   Search,
@@ -9,42 +11,79 @@ import {
   UserRoundX,
   Users,
   UserX,
+  X,
 } from 'lucide-react'
-import { calculateAge, students } from './students-data'
+import { calculateAge } from './students-data'
+import type { Student } from './students-data'
+import { subscribeToStudents, deleteStudent } from '../../services/studentsService'
 import './ListarAlunos.css'
 
-const turmaOptions = ['Todas as turmas', 'Turma A', 'Turma B', 'Turma C']
+const turmaOptions = ['Todas as turmas', 'Turma A', 'Turma B', 'Turma C', 'Turma D']
 const statusOptions = ['Todos', 'Ativo', 'Em acompanhamento', 'Inativo']
 
 export function ListarAlunos({
   onCadastrar,
   onViewStudent,
+  onEditStudent,
 }: {
   onCadastrar: () => void
   onViewStudent: (id: string) => void
+  onEditStudent: (student: Student) => void
 }) {
+  const [studentsList, setStudentsList] = useState<Student[]>([])
   const [search, setSearch] = useState('')
   const [turma, setTurma] = useState(turmaOptions[0])
   const [status, setStatus] = useState(statusOptions[0])
 
+  // Delete modal states
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null)
+
+  // Escuta dados do Firestore em tempo real
+  useEffect(() => {
+    const unsubscribe = subscribeToStudents((data) => {
+      setStudentsList(data)
+    })
+    return () => unsubscribe()
+  }, [])
+
   const filtered = useMemo(() => {
-    return students.filter((student) => {
+    return studentsList.filter((student) => {
       const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase())
-      const matchesTurma = turma === turmaOptions[0] || student.turma === turma
+      const matchesTurma =
+        turma === turmaOptions[0] ||
+        student.turma.toLowerCase().includes(turma.toLowerCase())
       const matchesStatus = status === statusOptions[0] || student.status === status
       return matchesSearch && matchesTurma && matchesStatus
     })
-  }, [search, turma, status])
+  }, [studentsList, search, turma, status])
 
   const totals = useMemo(
     () => ({
-      total: students.length,
-      ativos: students.filter((s) => s.status === 'Ativo').length,
-      acompanhamento: students.filter((s) => s.status === 'Em acompanhamento').length,
-      inativos: students.filter((s) => s.status === 'Inativo').length,
+      total: studentsList.length,
+      ativos: studentsList.filter((s) => s.status === 'Ativo').length,
+      acompanhamento: studentsList.filter((s) => s.status === 'Em acompanhamento').length,
+      inativos: studentsList.filter((s) => s.status === 'Inativo').length,
     }),
-    [],
+    [studentsList],
   )
+
+  const handleConfirmDelete = async () => {
+    if (!studentToDelete) return
+    setDeleting(true)
+    try {
+      await deleteStudent(studentToDelete.id)
+      setActionFeedback(`Aluno ${studentToDelete.name} excluído com sucesso do Firestore.`)
+      setStudentToDelete(null)
+      setTimeout(() => setActionFeedback(null), 3500)
+    } catch (err: any) {
+      console.error('Erro ao excluir aluno:', err)
+      alert('Erro ao excluir aluno: ' + (err.message || 'Erro desconhecido.'))
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="page-container students-page">
@@ -52,7 +91,7 @@ export function ListarAlunos({
         <div>
           <span className="eyebrow">Alunos</span>
           <h2>Alunos</h2>
-          <p>Gerencie os alunos assistidos pela Fundação.</p>
+          <p>Gerencie os alunos assistidos pela Fundação (Sincronizado com o Firestore).</p>
         </div>
         <div className="report-heading-actions">
           <button className="button primary" onClick={onCadastrar} type="button">
@@ -61,22 +100,63 @@ export function ListarAlunos({
         </div>
       </div>
 
+      {actionFeedback && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            padding: '0.85rem 1.2rem',
+            borderRadius: '0.65rem',
+            background: '#ecfdf5',
+            color: '#065f46',
+            border: '1px solid #a7f3d0',
+            marginBottom: '1rem',
+            fontSize: '0.9rem',
+            fontWeight: 500,
+          }}
+        >
+          <CheckCircle2 size={18} />
+          <span>{actionFeedback}</span>
+        </div>
+      )}
+
       <div className="students-stats">
         <article className="metric-card">
-          <span className="metric-icon green"><Users size={25} strokeWidth={2.2} /></span>
-          <div><strong>{totals.total}</strong><span>Total de alunos</span></div>
+          <span className="metric-icon green">
+            <Users size={25} strokeWidth={2.2} />
+          </span>
+          <div>
+            <strong>{totals.total}</strong>
+            <span>Total de alunos</span>
+          </div>
         </article>
         <article className="metric-card">
-          <span className="metric-icon mint"><UserCheck size={25} strokeWidth={2.2} /></span>
-          <div><strong>{totals.ativos}</strong><span>Ativos</span></div>
+          <span className="metric-icon mint">
+            <UserCheck size={25} strokeWidth={2.2} />
+          </span>
+          <div>
+            <strong>{totals.ativos}</strong>
+            <span>Ativos</span>
+          </div>
         </article>
         <article className="metric-card">
-          <span className="metric-icon orange"><UserRoundX size={25} strokeWidth={2.2} /></span>
-          <div><strong>{totals.acompanhamento}</strong><span>Em acompanhamento</span></div>
+          <span className="metric-icon orange">
+            <UserRoundX size={25} strokeWidth={2.2} />
+          </span>
+          <div>
+            <strong>{totals.acompanhamento}</strong>
+            <span>Em acompanhamento</span>
+          </div>
         </article>
         <article className="metric-card">
-          <span className="metric-icon blue"><UserX size={25} strokeWidth={2.2} /></span>
-          <div><strong>{totals.inativos}</strong><span>Inativos</span></div>
+          <span className="metric-icon blue">
+            <UserX size={25} strokeWidth={2.2} />
+          </span>
+          <div>
+            <strong>{totals.inativos}</strong>
+            <span>Inativos</span>
+          </div>
         </article>
       </div>
 
@@ -138,10 +218,16 @@ export function ListarAlunos({
                       </div>
                     </div>
                   </td>
-                  <td>{student.birthDate}</td>
-                  <td>{calculateAge(student.birthDate)} anos</td>
+                  <td>{student.birthDate || '—'}</td>
+                  <td>
+                    {student.birthDate && student.birthDate.includes('/')
+                      ? `${calculateAge(student.birthDate)} anos`
+                      : '—'}
+                  </td>
                   <td>{student.turma}</td>
-                  <td>{student.deficiencia} / {student.cid}</td>
+                  <td>
+                    {student.deficiencia} / {student.cid}
+                  </td>
                   <td>
                     <span
                       className={
@@ -159,16 +245,28 @@ export function ListarAlunos({
                   <td>
                     <div className="students-table-actions">
                       <button
-                        aria-label={'Ver ' + student.name}
+                        aria-label={'Ver perfil de ' + student.name}
                         onClick={() => onViewStudent(student.id)}
+                        title="Ver perfil completo"
                         type="button"
                       >
                         <Eye size={16} />
                       </button>
-                      <button aria-label={'Editar ' + student.name} type="button">
+                      <button
+                        aria-label={'Editar ' + student.name}
+                        onClick={() => onEditStudent(student)}
+                        title="Editar cadastro"
+                        type="button"
+                      >
                         <Pencil size={16} />
                       </button>
-                      <button aria-label={'Excluir ' + student.name} className="danger" type="button">
+                      <button
+                        aria-label={'Excluir ' + student.name}
+                        className="danger"
+                        onClick={() => setStudentToDelete(student)}
+                        title="Excluir cadastro"
+                        type="button"
+                      >
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -186,9 +284,80 @@ export function ListarAlunos({
           </table>
         </div>
         <div className="students-table-footer">
-          <span>Mostrando {filtered.length} de {students.length} resultados</span>
+          <span>
+            Mostrando {filtered.length} de {studentsList.length} resultados
+          </span>
         </div>
       </div>
+
+      {/* Modal Confirmação de Exclusão */}
+      {studentToDelete && (
+        <div className="modal-backdrop" onClick={() => setStudentToDelete(null)}>
+          <div
+            className="modal-container"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px' }}
+          >
+            <header className="modal-header">
+              <div className="modal-title-group">
+                <AlertTriangle className="modal-icon" size={22} style={{ color: '#dc2626' }} />
+                <div>
+                  <h3 style={{ color: '#991b1b' }}>Excluir Aluno</h3>
+                  <p>Ação irreversível no banco de dados</p>
+                </div>
+              </div>
+              <button
+                aria-label="Fechar"
+                className="icon-button modal-close"
+                onClick={() => setStudentToDelete(null)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div style={{ padding: '1.25rem', fontSize: '0.92rem', color: '#374151', lineHeight: '1.5' }}>
+              <p>
+                Tem certeza que deseja excluir o cadastro do aluno{' '}
+                <strong>{studentToDelete.name}</strong>?
+              </p>
+              <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6b7280' }}>
+                O documento deste aluno será permanentemente removido da coleção do Firestore.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.75rem',
+                padding: '1rem 1.25rem',
+                background: '#f9fafb',
+                borderTop: '1px solid #e5e7eb',
+                borderRadius: '0 0 1rem 1rem',
+              }}
+            >
+              <button
+                className="button secondary"
+                onClick={() => setStudentToDelete(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="button primary"
+                disabled={deleting}
+                onClick={handleConfirmDelete}
+                style={{ background: '#dc2626', borderColor: '#dc2626' }}
+                type="button"
+              >
+                <Trash2 size={16} />
+                {deleting ? 'Excluindo...' : 'Sim, Excluir Aluno'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

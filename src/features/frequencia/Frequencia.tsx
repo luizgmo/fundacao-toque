@@ -20,7 +20,15 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { AttendanceStatus, ContactEntry, Student } from '../alunos/students-data'
-import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students } from '../alunos/students-data'
+import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students as defaultStudents } from '../alunos/students-data'
+import { subscribeToStudents } from '../../services/studentsService'
+import {
+  getAttendanceFromFirestore,
+  saveAttendanceToFirestore,
+  saveOccurrenceToFirestore,
+} from '../../services/attendanceService'
+import { maskPhone } from '../../lib/masks'
+import { useAuth } from '../auth/AuthContext'
 import './Frequencia.css'
 
 type Props = {
@@ -31,6 +39,17 @@ const TURMAS_DISPONIVEIS = ['Turma A', 'Turma B', 'Turma C']
 const OFICINAS_DISPONIVEIS = ['Todas / Geral', 'Musicalização', 'Dança', 'Artes', 'Horta/NEMA', 'Culinária', 'Esporte']
 
 export function Frequencia({ onViewStudentProfile }: Props) {
+  const { userProfile } = useAuth()
+  const [allStudents, setAllStudents] = useState<Student[]>(defaultStudents)
+
+  // Inscrição na lista de alunos do Firestore em tempo real
+  useEffect(() => {
+    const unsub = subscribeToStudents((data) => {
+      setAllStudents(data)
+    })
+    return () => unsub()
+  }, [])
+
   // Chamada states
   const [selectedTurma, setSelectedTurma] = useState<string>('Turma A')
   const [selectedOficina, setSelectedOficina] = useState<string>('Todas / Geral')
@@ -48,14 +67,21 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     return defaultSession ? { ...defaultSession.records } : {}
   })
 
-  // Synchronize with existing session when filters change
+  // Sincroniza com a sessão do Firestore quando os filtros mudam
   useEffect(() => {
+    let isMounted = true
     const sessionId = `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`
-    const existing = getAttendanceSession(sessionId)
-    if (existing) {
-      setAttendanceRecords({ ...existing.records })
-    } else {
-      setAttendanceRecords({})
+    getAttendanceFromFirestore(sessionId).then((existing) => {
+      if (isMounted) {
+        if (existing) {
+          setAttendanceRecords({ ...existing.records })
+        } else {
+          setAttendanceRecords({})
+        }
+      }
+    })
+    return () => {
+      isMounted = false
     }
   }, [dateStr, selectedTurma, scope, selectedOficina])
 
@@ -64,30 +90,36 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
   // Feedback states
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
+  const [savingChamada, setSavingChamada] = useState(false)
 
   // Modal contact / occurrence state
   const [selectedStudentForContact, setSelectedStudentForContact] = useState<Student | null>(null)
   const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
   const [contactType, setContactType] = useState<string>('WhatsApp')
-  const [contactResponsible, setContactResponsible] = useState<string>('Ana Carolina Silva')
-  const [contactReason, setContactReason] = useState<string>('Faltas consecutivas recorrentes (Alerta institucional)')
+  const [contactResponsible, setContactResponsible] = useState<string>(
+    userProfile?.nome_completo || 'Ana Carolina Silva'
+  )
+  const [contactReason, setContactReason] = useState<string>(
+    'Faltas consecutivas recorrentes (Alerta institucional)'
+  )
   const [contactStatus, setContactStatus] = useState<string>('Aberta / Em acompanhamento')
   const [contactNote, setContactNote] = useState<string>('')
   const [familyContactSuccess, setFamilyContactSuccess] = useState<string | null>(null)
+  const [savingContact, setSavingContact] = useState(false)
 
   // Search filter for attendance list
   const [studentSearch, setStudentSearch] = useState<string>('')
 
   // Filter students by selected Turma
   const turmaStudents = useMemo(() => {
-    return students.filter((s) => {
-      const matchTurma = s.turma === selectedTurma
+    return allStudents.filter((s) => {
+      const matchTurma = s.turma?.toLowerCase().includes(selectedTurma.toLowerCase())
       const matchSearch = studentSearch
         ? s.name.toLowerCase().includes(studentSearch.toLowerCase())
         : true
       return matchTurma && matchSearch
     })
-  }, [selectedTurma, studentSearch])
+  }, [allStudents, selectedTurma, studentSearch])
 
   // Get current status for a student in local form state
   const getStudentStatus = (studentId: string): AttendanceStatus => {
@@ -146,8 +178,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
   // Students with consecutive absences >= threshold
   const recurrentAbsenceStudents = useMemo(() => {
-    return students.filter((s) => s.faltasConsecutivas >= absenceThreshold)
-  }, [absenceThreshold])
+    return allStudents.filter((s) => s.faltasConsecutivas >= absenceThreshold)
+  }, [allStudents, absenceThreshold])
 
   // Date navigation handlers
   const changeDateByDays = (days: number) => {
@@ -169,8 +201,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     }).format(dateObj)
   }, [dateStr])
 
-  // Save attendance handler
-  const handleSaveAttendance = () => {
+  // Save attendance handler integrado ao Firestore
+  const handleSaveAttendance = async () => {
+    setSavingChamada(true)
     const recordsMap: Record<string, { status: AttendanceStatus; observation: string }> = {}
     turmaStudents.forEach((st) => {
       recordsMap[st.id] = {
@@ -179,19 +212,39 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       }
     })
 
-    saveAttendanceSession({
-      id: `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`,
-      date: dateStr,
-      turmaId: selectedTurma,
-      scope,
-      oficinaName: scope === 'oficina' ? selectedOficina : undefined,
-      registeredBy: 'Ana Carolina Silva',
-      registeredAt: new Date().toISOString(),
-      records: recordsMap,
-    })
+    const professional = userProfile?.nome_completo || 'Ana Carolina Silva'
+    const sessionId = `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`
 
-    setSaveSuccessMessage('Chamada salva com sucesso! O histórico foi atualizado.')
-    setTimeout(() => setSaveSuccessMessage(null), 4000)
+    try {
+      await saveAttendanceToFirestore({
+        id: sessionId,
+        date: dateStr,
+        turmaId: selectedTurma,
+        scope,
+        oficinaName: scope === 'oficina' ? selectedOficina : undefined,
+        registeredBy: professional,
+        records: recordsMap,
+      })
+
+      saveAttendanceSession({
+        id: sessionId,
+        date: dateStr,
+        turmaId: selectedTurma,
+        scope,
+        oficinaName: scope === 'oficina' ? selectedOficina : undefined,
+        registeredBy: professional,
+        registeredAt: new Date().toISOString(),
+        records: recordsMap,
+      })
+
+      setSaveSuccessMessage('Chamada salva no Firestore com sucesso! O histórico foi atualizado.')
+      setTimeout(() => setSaveSuccessMessage(null), 4000)
+    } catch (err: any) {
+      console.error('Erro ao salvar chamada no Firestore:', err)
+      alert('Erro ao salvar chamada: ' + (err.message || 'Erro desconhecido.'))
+    } finally {
+      setSavingChamada(false)
+    }
   }
 
   // Handle open contact / occurrence modal
@@ -203,7 +256,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setSelectedStudentForContact(student)
     setContactFaltaDate(defaultFaltaDate || dateStr)
     setContactType('WhatsApp')
-    setContactResponsible('Ana Carolina Silva')
+    setContactResponsible(userProfile?.nome_completo || 'Ana Carolina Silva')
     setContactReason(
       defaultReason ||
         (student.faltasConsecutivas >= absenceThreshold
@@ -215,30 +268,49 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setFamilyContactSuccess(null)
   }
 
-  // Handle submit contact log / occurrence
-  const handleSubmitContact = (e: FormEvent) => {
+  // Handle submit contact log / occurrence integrado ao Firestore
+  const handleSubmitContact = async (e: FormEvent) => {
     e.preventDefault()
     if (!selectedStudentForContact) return
+    setSavingContact(true)
 
     const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
 
-    const newContact: ContactEntry = {
-      faltaDate: contactFaltaDate,
-      contactDate: todayStr,
-      type: contactType,
-      responsible: contactResponsible,
-      reason: contactReason,
-      status: contactStatus,
-      note: contactNote,
+    try {
+      await saveOccurrenceToFirestore({
+        studentId: selectedStudentForContact.id,
+        studentName: selectedStudentForContact.name,
+        faltaDate: contactFaltaDate,
+        type: contactType,
+        responsible: contactResponsible,
+        reason: contactReason,
+        status: contactStatus,
+        note: contactNote,
+      })
+
+      const newContact: ContactEntry = {
+        faltaDate: contactFaltaDate,
+        contactDate: todayStr,
+        type: contactType,
+        responsible: contactResponsible,
+        reason: contactReason,
+        status: contactStatus,
+        note: contactNote,
+      }
+
+      addContactToStudent(selectedStudentForContact.id, newContact)
+      setFamilyContactSuccess('Ocorrência e contato salvos com sucesso no Firestore!')
+
+      setTimeout(() => {
+        setFamilyContactSuccess(null)
+        setSelectedStudentForContact(null)
+      }, 1800)
+    } catch (err: any) {
+      console.error('Erro ao salvar ocorrência no Firestore:', err)
+      alert('Erro ao salvar ocorrência: ' + (err.message || 'Erro desconhecido.'))
+    } finally {
+      setSavingContact(false)
     }
-
-    addContactToStudent(selectedStudentForContact.id, newContact)
-    setFamilyContactSuccess('Ocorrência e contato com a família salvos com sucesso!')
-
-    setTimeout(() => {
-      setFamilyContactSuccess(null)
-      setSelectedStudentForContact(null)
-    }, 1800)
   }
 
   return (
@@ -559,8 +631,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                   <CheckCircle2 size={16} /> {saveSuccessMessage}
                 </span>
               )}
-              <button className="button primary" onClick={handleSaveAttendance} type="button">
-                <Save size={18} /> Salvar Chamada
+              <button className="button primary" disabled={savingChamada} onClick={handleSaveAttendance} type="button">
+                <Save size={18} /> {savingChamada ? 'Gravando no Banco...' : 'Salvar Chamada'}
               </button>
             </div>
           </div>
@@ -772,7 +844,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                     <span>
                       <Phone size={14} /> Telefone:
                     </span>
-                    <strong>{selectedStudentForContact.telefone}</strong>
+                    <strong>{maskPhone(selectedStudentForContact.telefone)}</strong>
                   </div>
                 </div>
 
@@ -823,8 +895,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                 >
                   Cancelar
                 </button>
-                <button className="button primary" type="submit">
-                  <Save size={18} /> Salvar Ocorrência e Contato
+                <button className="button primary" disabled={savingContact} type="submit">
+                  <Save size={18} /> {savingContact ? 'Gravando Ocorrência...' : 'Salvar Ocorrência e Contato'}
                 </button>
               </footer>
             </form>
