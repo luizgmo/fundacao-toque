@@ -19,8 +19,8 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import type { AttendanceStatus, ContactEntry, Student } from './students-data'
-import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students } from './students-data'
+import type { AttendanceStatus, ContactEntry, Student } from '../alunos/students-data'
+import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students } from '../alunos/students-data'
 import './Frequencia.css'
 
 type Props = {

@@ -31,11 +31,11 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { CadastrarAluno } from './CadastrarAluno'
-import { ListarAlunos } from './ListarAlunos'
-import { DetalheAluno } from './DetalheAluno'
-import { Frequencia } from './Frequencia'
-import { findStudent } from './students-data'
+import { CadastrarAluno } from './features/alunos/CadastrarAluno'
+import { ListarAlunos } from './features/alunos/ListarAlunos'
+import { DetalheAluno } from './features/alunos/DetalheAluno'
+import { Frequencia } from './features/frequencia/Frequencia'
+import { findStudent } from './features/alunos/students-data'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
