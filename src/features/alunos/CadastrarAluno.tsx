@@ -205,8 +205,60 @@ export function CadastrarAluno({
     setter(event.target.files?.[0]?.name ?? '')
   }
 
-  const goNext = () => setStep((current) => (current < 5 ? ((current + 1) as WizardStep) : current))
-  const goBack = () => setStep((current) => (current > 1 ? ((current - 1) as WizardStep) : current))
+  const validateStep = (currentStep: WizardStep): boolean => {
+    setSaveError(null)
+    if (currentStep === 1) {
+      if (!form.nome.trim()) {
+        setSaveError('Por favor, informe o nome completo do aluno.')
+        return false
+      }
+      if (!form.nascimento) {
+        setSaveError('Por favor, informe a data de nascimento.')
+        return false
+      }
+      if (!form.sexo) {
+        setSaveError('Por favor, selecione o sexo do aluno.')
+        return false
+      }
+      if (!form.deficiencia) {
+        setSaveError('Por favor, selecione o tipo de deficiência.')
+        return false
+      }
+      if (!form.cid.trim()) {
+        setSaveError('Por favor, informe o CID.')
+        return false
+      }
+    } else if (currentStep === 2) {
+      if (!form.responsavelNome.trim()) {
+        setSaveError('Por favor, informe o nome do responsável.')
+        return false
+      }
+      if (!form.parentesco) {
+        setSaveError('Por favor, selecione o parentesco do responsável.')
+        return false
+      }
+      if (!form.telefonePrincipal.trim()) {
+        setSaveError('Por favor, informe o telefone principal de contato.')
+        return false
+      }
+    } else if (currentStep === 4) {
+      if (form.turmas.length === 0) {
+        setSaveError('Por favor, selecione ao menos uma turma para o aluno.')
+        return false
+      }
+    }
+    return true
+  }
+
+  const goNext = () => {
+    if (validateStep(step)) {
+      setStep((current) => (current < 5 ? ((current + 1) as WizardStep) : current))
+    }
+  }
+  const goBack = () => {
+    setSaveError(null)
+    setStep((current) => (current > 1 ? ((current - 1) as WizardStep) : current))
+  }
 
   const saveDraft = () => {
     setDraftMessage(
@@ -216,6 +268,9 @@ export function CadastrarAluno({
   }
 
   const finishRegistration = async () => {
+    if (!validateStep(1) || !validateStep(2) || !validateStep(4)) {
+      return
+    }
     setSaving(true)
     setSaveError(null)
 

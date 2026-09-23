@@ -17,7 +17,7 @@ import logoUrl from '../../assets/logo.png'
 import './LoginScreen.css'
 
 export function LoginScreen() {
-  const { login, setupInitialAdmin } = useAuth()
+  const { login, loginAsGuest, setupInitialAdmin, isConfigured } = useAuth()
 
   const [mode, setMode] = useState<'login' | 'setup-admin'>('login')
   const [email, setEmail] = useState('')
@@ -193,11 +193,48 @@ export function LoginScreen() {
               )}
             </button>
 
-            <div className="login-hint-box">
+            <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', margin: '0.75rem 0', gap: '0.5rem' }}>
+                <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+                <span style={{ fontSize: '0.75rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Ou para testes locais
+                </span>
+                <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+              </div>
+
+              <button
+                className="button secondary"
+                onClick={() => loginAsGuest('direcao')}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  background: '#f8fafc',
+                  borderColor: '#cbd5e1',
+                  color: '#334155',
+                  padding: '0.75rem',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                }}
+                type="button"
+              >
+                <Sparkles size={16} style={{ color: '#059669' }} /> Entrar em Modo Demonstração (Direção)
+              </button>
+            </div>
+
+            <div className="login-hint-box" style={{ marginTop: '0.75rem' }}>
               <Sparkles size={16} />
               <span>
-                Se ainda não possui um administrador cadastrado no banco, use a aba{' '}
-                <strong>"Primeiro Acesso (Admin)"</strong> para criar a conta de Direção.
+                {!isConfigured ? (
+                  <>
+                    <strong>Ambiente Local:</strong> Nenhuma chave do Firebase (.env.local) foi detectada.
+                    Você pode usar o botão <strong>"Modo Demonstração"</strong> acima para testar todos os fluxos e telas imediatamente.
+                  </>
+                ) : (
+                  <>
+                    Se ainda não possui um administrador cadastrado no banco, use a aba{' '}
+                    <strong>"Primeiro Acesso (Admin)"</strong> para criar a conta de Direção.
+                  </>
+                )}
               </span>
             </div>
           </form>

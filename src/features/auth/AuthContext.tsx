@@ -10,14 +10,16 @@ import type { User } from 'firebase/auth'
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth as getSecondaryAuth } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '../../lib/firebase'
+import { auth, db, isFirebaseConfigured } from '../../lib/firebase'
 import type { UserProfile, UserRole } from '../../types/auth'
 
 interface AuthContextType {
   currentUser: User | null
   userProfile: UserProfile | null
   loading: boolean
+  isConfigured: boolean
   login: (email: string, pass: string) => Promise<void>
+  loginAsGuest: (papel?: UserRole) => void
   logout: () => Promise<void>
   setupInitialAdmin: (nome: string, email: string, pass: string) => Promise<void>
   createAuthorUser: (
@@ -42,14 +44,37 @@ function getSecondaryAuthInstance() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('ft_guest_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          uid: parsed.uid || 'guest-local-uid',
+          email: parsed.email || '',
+          displayName: parsed.nome_completo || '',
+        } as unknown as User
+      }
+    } catch {
+      // ignore
+    }
+    return null
+  })
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('ft_guest_session')
+      if (saved) return JSON.parse(saved)
+    } catch {
+      // ignore
+    }
+    return null
+  })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user)
       if (user) {
+        setCurrentUser(user)
         try {
           const userDoc = await getDoc(doc(db, 'usuarios', user.uid))
           if (userDoc.exists()) {
@@ -91,7 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
         }
       } else {
-        setUserProfile(null)
+        // Se já havia uma sessão de convidado/local, não limpa
+        const savedGuest = localStorage.getItem('ft_guest_session')
+        if (!savedGuest) {
+          setCurrentUser(null)
+          setUserProfile(null)
+        }
       }
       setLoading(false)
     })
@@ -103,8 +133,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, pass)
   }
 
+  const loginAsGuest = (papel: UserRole = 'direcao') => {
+    const mockUser = {
+      uid: 'guest-local-uid',
+      email: `${papel}@fundacaotoque.org.br`,
+      displayName: papel === 'direcao' ? 'Direção (Modo Teste)' : papel === 'pedagogia' ? 'Pedagoga (Modo Teste)' : 'Administrativo (Modo Teste)',
+    } as unknown as User
+
+    const mockProfile: UserProfile = {
+      uid: 'guest-local-uid',
+      nome_completo: mockUser.displayName || 'Colaborador',
+      email: mockUser.email || '',
+      papel,
+      ativo: true,
+    }
+
+    try {
+      localStorage.setItem('ft_guest_session', JSON.stringify(mockProfile))
+    } catch {
+      // ignore
+    }
+
+    setCurrentUser(mockUser)
+    setUserProfile(mockProfile)
+  }
+
   const logout = async () => {
-    await signOut(auth)
+    try {
+      localStorage.removeItem('ft_guest_session')
+    } catch {
+      // ignore
+    }
+    try {
+      await signOut(auth)
+    } catch {
+      // ignore
+    }
     setCurrentUser(null)
     setUserProfile(null)
   }
@@ -164,7 +228,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentUser,
         userProfile,
         loading,
+        isConfigured: isFirebaseConfigured,
         login,
+        loginAsGuest,
         logout,
         setupInitialAdmin,
         createAuthorUser,
