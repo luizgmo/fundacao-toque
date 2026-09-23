@@ -1359,3 +1359,356 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Componentes compartilhados das telas de cadastro em cards (Turmas, Oficinas, Atividades) */
+.feedback-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.feedback-banner.success {
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.feedback-banner.warning {
+  color: #936b00;
+  background: #fff8e1;
+  border: 1px solid #f5dfa8;
+}
+
+.modal-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.button.danger {
+  color: white;
+  background: var(--danger-600);
+}
+
+.button.danger:hover {
+  background: #b9231c;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.entity-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.entity-filter-card {
+  padding: 20px 25px;
+  margin-bottom: 20px;
+}
+
+.entity-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.entity-filter-bar .field {
+  margin-top: 0;
+}
+
+.entity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 18px;
+}
+
+.entity-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.entity-card:hover {
+  border-color: var(--green-400);
+  box-shadow: 0 10px 24px rgba(25, 113, 68, 0.08);
+}
+
+.entity-card.inactive {
+  background: #fafbfc;
+}
+
+.entity-card.inactive .entity-icon {
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+}
+
+.entity-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.entity-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--green-700);
+  background: var(--green-100);
+  border-radius: 12px;
+  font-size: 22px;
+}
+
+.entity-card-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.entity-card-title h3 {
+  margin: 0;
+  color: var(--navy-800);
+  font-size: 16px;
+}
+
+.entity-code {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.entity-meta {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.entity-meta li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--navy-700);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.entity-meta li svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.entity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.entity-tag {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 0 10px;
+  color: #1d4f7a;
+  background: #e8f1fb;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.entity-tag.primary {
+  color: var(--green-800);
+  background: var(--green-100);
+}
+
+.entity-tag.muted {
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+}
+
+.entity-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 14px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+
+.entity-main-action {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.entity-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.entity-empty strong {
+  color: var(--navy-800);
+  font-size: 15px;
+}
+
+.entity-empty .button {
+  margin-top: 8px;
+}
+
+.entity-student-list {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.entity-student-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.entity-student-list li:last-child {
+  border-bottom: 0;
+}
+
+.entity-student-list li > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.entity-student-list strong {
+  color: var(--navy-800);
+  font-size: 13px;
+}
+
+.entity-student-list span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.entity-modal-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.chip-checkbox-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  margin-top: 2px;
+}
+
+.chip-checkbox-grid.compact .chip-checkbox {
+  padding: 9px 12px;
+}
+
+.toggle-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--navy-700);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.toggle-check input {
+  margin-top: 3px;
+  accent-color: var(--green-600);
+}
+
+.confirm-modal {
+  max-width: 460px;
+}
+
+.modal-icon.danger {
+  color: var(--danger-600);
+}
+
+.danger-text {
+  color: #991b1b !important;
+}
+
+.confirm-modal-body {
+  padding: 20px 24px;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.confirm-modal-body p {
+  margin: 0;
+}
+
+.confirm-modal-hint {
+  margin-top: 8px !important;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.confirm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #f9fafb;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 14px 14px;
+}
+
+@media (max-width: 900px) {
+  .entity-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .entity-filter-bar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-grid {
+    grid-template-columns: 1fr;
+  }
+}

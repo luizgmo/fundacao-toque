@@ -34,6 +34,7 @@ export type Student = {
   birthDate: string
   sexo: string
   turma: string
+  turmaId?: string
   turmaTurno: string
   deficiencia: string
   cid: string
@@ -44,6 +45,7 @@ export type Student = {
   telefone: string
   email: string
   oficinas: string[]
+  grauDependencia?: string
   documentos: DocumentEntry[]
   faltasConsecutivas: number
   frequenciaMedia: number

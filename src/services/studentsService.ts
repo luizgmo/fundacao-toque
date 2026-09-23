@@ -35,6 +35,7 @@ export function docToStudent(id: string, data: any): Student {
     birthDate: formattedBirth,
     sexo: data.sexo || 'Não informado',
     turma: data.turma || 'Turma A',
+    turmaId: data.turma_id || undefined,
     turmaTurno: data.turma_turno || data.turmaTurno || 'Manhã (8h–12h)',
     deficiencia:
       data.deficiencia ||
@@ -47,6 +48,7 @@ export function docToStudent(id: string, data: any): Student {
     telefone: data.responsavel_telefone || data.telefone || '',
     email: data.responsavel_email || data.email || '',
     oficinas: Array.isArray(data.oficinas) ? data.oficinas : [],
+    grauDependencia: data.grau_dependencia || undefined,
     documentos: Array.isArray(data.documentos)
       ? data.documentos
       : [
@@ -127,6 +129,8 @@ export type StudentInput = {
   email?: string
   endereco?: string
   turmas: string[]
+  turmaId?: string
+  turmaTurno?: string
   oficinas: string[]
   grauDependencia?: string
   fichaMedica?: string
@@ -158,7 +162,10 @@ export async function createStudent(input: StudentInput): Promise<string> {
     codigos_cid: input.cid ? [input.cid] : [],
     observacoes: input.observacoes || '',
     turma: input.turmas[0] || 'Turma A',
-    turma_turno: input.turmas[0]?.includes('b') ? 'Tarde (13h–17h)' : 'Manhã (8h–12h)',
+    turma_id: input.turmaId || null,
+    turma_turno:
+      input.turmaTurno ||
+      (input.turmas[0]?.includes('b') ? 'Tarde (13h–17h)' : 'Manhã (8h–12h)'),
     oficinas: input.oficinas,
     responsavel_nome: input.responsavelNome,
     responsavel_parentesco: input.parentesco,
@@ -231,6 +238,8 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
   if (input.turmas && input.turmas.length > 0) {
     updateData.turma = input.turmas[0]
   }
+  if (input.turmaId !== undefined) updateData.turma_id = input.turmaId
+  if (input.turmaTurno !== undefined) updateData.turma_turno = input.turmaTurno
   if (input.oficinas !== undefined) updateData.oficinas = input.oficinas
   if (input.responsavelNome !== undefined) updateData.responsavel_nome = input.responsavelNome
   if (input.parentesco !== undefined) updateData.responsavel_parentesco = input.parentesco

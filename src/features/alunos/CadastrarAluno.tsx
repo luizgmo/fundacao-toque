@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
   Camera,
@@ -21,6 +21,9 @@ import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
 import type { Student } from './students-data'
 import { createStudent, updateStudent } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
+import { subscribeToTurmas } from '../../services/turmasService'
+import type { Turma } from '../../types/turmas'
+import { PERIODO_LABELS } from '../../types/turmas'
 import './CadastrarAluno.css'
 
 type WizardStep = 1 | 2 | 3 | 4 | 5
@@ -33,12 +36,19 @@ const stepConfig: { id: WizardStep; label: string }[] = [
   { id: 5, label: 'Revisão' },
 ]
 
-const turmasOptions = [
+type TurmaOption = { id: string; label: string; nome: string; turno: string }
+
+// Usadas enquanto não houver turmas cadastradas no Firestore
+const fallbackTurmasOptions = [
   { id: 'turma-a', label: 'Turma A — Manhã (8h–12h)' },
   { id: 'turma-b', label: 'Turma B — Tarde (13h–17h)' },
   { id: 'turma-c', label: 'Turma C — Manhã (8h–12h)' },
   { id: 'turma-d', label: 'Turma D — Integral' },
-]
+].map<TurmaOption>((t) => ({
+  ...t,
+  nome: t.label.split(' —')[0],
+  turno: t.label.split('— ')[1] || '',
+}))
 
 const oficinasOptions = [
   { id: 'musicalizacao', label: '🎵 Musicalização' },
@@ -106,10 +116,8 @@ function studentToForm(st: Student): AlunoForm {
     }
   }
 
-  const turmaMatch = turmasOptions.find((opt) =>
-    opt.label.toLowerCase().includes((st.turma || '').toLowerCase())
-  )
-  const turmaId = turmaMatch ? turmaMatch.id : 'turma-a'
+  // Guarda o ID da turma (Firestore) ou o nome legado; resolvido contra as opções na tela
+  const turmaValue = st.turmaId || st.turma || 'turma-a'
 
   const oficinasIds = (st.oficinas || []).map((o) => {
     const found = oficinasOptions.find((opt) => opt.label.toLowerCase().includes(o.toLowerCase()))
@@ -131,7 +139,7 @@ function studentToForm(st: Student): AlunoForm {
     telefoneSecundario: '',
     email: st.email || '',
     endereco: '',
-    turmas: [turmaId],
+    turmas: [turmaValue],
     oficinas: oficinasIds,
     grauDependencia: '',
   }
@@ -161,9 +169,34 @@ export function CadastrarAluno({
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [firestoreTurmas, setFirestoreTurmas] = useState<Turma[]>([])
 
+  useEffect(() => {
+    const unsubscribe = subscribeToTurmas(setFirestoreTurmas)
+    return () => unsubscribe()
+  }, [])
 
+  const turmasOptions = useMemo<TurmaOption[]>(() => {
+    if (firestoreTurmas.length === 0) return fallbackTurmasOptions
+    return firestoreTurmas
+      .filter((t) => t.ativo || form.turmas.includes(t.id))
+      .map((t) => ({
+        id: t.id,
+        label: `${t.nome} — ${PERIODO_LABELS[t.periodo]}`,
+        nome: t.nome,
+        turno: PERIODO_LABELS[t.periodo],
+      }))
+  }, [firestoreTurmas, form.turmas])
 
+  // Resolve valores legados (nome da turma) para o ID da opção correspondente
+  const resolveTurmaId = (value: string) =>
+    turmasOptions.find(
+      (opt) =>
+        opt.id === value ||
+        opt.nome.toLowerCase() === value.toLowerCase() ||
+        opt.label.toLowerCase().includes(value.toLowerCase())
+    )?.id ?? value
+  const selectedTurmas = form.turmas.map(resolveTurmaId)
   const updateField = <K extends keyof AlunoForm>(field: K, value: AlunoForm[K]) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
@@ -187,10 +220,11 @@ export function CadastrarAluno({
     setSaveError(null)
 
     try {
-      const selectedTurmasLabels = form.turmas.map((t) => {
-        const found = turmasOptions.find((opt) => opt.id === t)
-        return found ? found.label.split(' —')[0] : 'Turma A'
-      })
+      const selectedTurmaOptions = selectedTurmas
+        .map((t) => turmasOptions.find((opt) => opt.id === t))
+        .filter((opt): opt is TurmaOption => Boolean(opt))
+      const selectedTurmasLabels = selectedTurmaOptions.map((opt) => opt.nome)
+      const turmaPrincipal = firestoreTurmas.length > 0 ? selectedTurmaOptions[0] : undefined
 
       const selectedOficinasLabels = form.oficinas.map((o) => {
         const found = oficinasOptions.find((opt) => opt.id === o)
@@ -213,6 +247,8 @@ export function CadastrarAluno({
         email: form.email,
         endereco: form.endereco,
         turmas: selectedTurmasLabels.length > 0 ? selectedTurmasLabels : ['Turma A'],
+        turmaId: turmaPrincipal?.id,
+        turmaTurno: turmaPrincipal?.turno,
         oficinas: selectedOficinasLabels,
         grauDependencia: form.grauDependencia,
         fichaMedica: fichaMedica || undefined,
@@ -627,12 +663,12 @@ export function CadastrarAluno({
               <div className="chip-checkbox-grid">
                 {turmasOptions.map((turma) => (
                   <label
-                    className={'chip-checkbox' + (form.turmas.includes(turma.id) ? ' checked' : '')}
+                    className={'chip-checkbox' + (selectedTurmas.includes(turma.id) ? ' checked' : '')}
                     key={turma.id}
                   >
                     <input
-                      checked={form.turmas.includes(turma.id)}
-                      onChange={() => updateField('turmas', toggleListValue(form.turmas, turma.id))}
+                      checked={selectedTurmas.includes(turma.id)}
+                      onChange={() => updateField('turmas', toggleListValue(selectedTurmas, turma.id))}
                       type="checkbox"
                     />
                     <span>{turma.label}</span>
@@ -771,9 +807,9 @@ export function CadastrarAluno({
                   <div>
                     <dt>Turmas</dt>
                     <dd>
-                      {form.turmas.length
-                        ? form.turmas
-                            .map((id) => turmasOptions.find((t) => t.id === id)?.label.split(' —')[0])
+                      {selectedTurmas.length
+                        ? selectedTurmas
+                            .map((id) => turmasOptions.find((t) => t.id === id)?.nome)
                             .join(', ')
                         : '—'}
                     </dd>
