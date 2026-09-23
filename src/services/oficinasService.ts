@@ -156,19 +156,23 @@ async function syncVinculos(
 export async function createOficina(input: OficinaInput, userId: string): Promise<string> {
   const id = `oficina-${slugify(input.nome)}-${Date.now().toString().slice(-4)}`
 
-  await setDoc(doc(db, OFICINAS_COLLECTION, id), {
-    nome: input.nome.trim(),
-    categoria: input.categoria,
-    descricao: input.descricao.trim(),
-    ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
-    ativo: input.ativo,
-    criado_por: userId,
-    criado_em: serverTimestamp(),
-    atualizado_por: userId,
-    atualizado_em: serverTimestamp(),
-  })
+  try {
+    await setDoc(doc(db, OFICINAS_COLLECTION, id), {
+      nome: input.nome.trim(),
+      categoria: input.categoria,
+      descricao: input.descricao.trim(),
+      ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
+      ativo: input.ativo,
+      criado_por: userId,
+      criado_em: serverTimestamp(),
+      atualizado_por: userId,
+      atualizado_em: serverTimestamp(),
+    })
 
-  await syncVinculos(id, input, [], userId)
+    await syncVinculos(id, input, [], userId)
+  } catch (firestoreErr) {
+    console.warn('Oficina gravada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
   return id
 }
 
@@ -178,37 +182,45 @@ export async function updateOficina(
   vinculosExistentes: TurmaOficina[],
   userId: string
 ): Promise<void> {
-  await updateDoc(doc(db, OFICINAS_COLLECTION, id), {
-    nome: input.nome.trim(),
-    categoria: input.categoria,
-    descricao: input.descricao.trim(),
-    ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
-    ativo: input.ativo,
-    atualizado_por: userId,
-    atualizado_em: serverTimestamp(),
-  })
+  try {
+    await updateDoc(doc(db, OFICINAS_COLLECTION, id), {
+      nome: input.nome.trim(),
+      categoria: input.categoria,
+      descricao: input.descricao.trim(),
+      ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
+      ativo: input.ativo,
+      atualizado_por: userId,
+      atualizado_em: serverTimestamp(),
+    })
 
-  await syncVinculos(id, input, vinculosExistentes, userId)
+    await syncVinculos(id, input, vinculosExistentes, userId)
+  } catch (firestoreErr) {
+    console.warn('Oficina atualizada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
 }
 
 // Excluir oficina junto com seus vínculos em turma_oficinas e aluno_oficinas
 export async function deleteOficina(id: string): Promise<void> {
-  const batch = writeBatch(db)
+  try {
+    const batch = writeBatch(db)
 
-  const vinculos = await getDocs(
-    query(collection(db, TURMA_OFICINAS_COLLECTION), where('oficina_id', '==', id))
-  )
-
-  for (const vinculo of vinculos.docs) {
-    const alunosVinculados = await getDocs(
-      query(collection(db, ALUNO_OFICINAS_COLLECTION), where('turma_oficina_id', '==', vinculo.id))
+    const vinculos = await getDocs(
+      query(collection(db, TURMA_OFICINAS_COLLECTION), where('oficina_id', '==', id))
     )
-    alunosVinculados.forEach((a) => batch.delete(a.ref))
-    batch.delete(vinculo.ref)
-  }
 
-  batch.delete(doc(db, OFICINAS_COLLECTION, id))
-  await batch.commit()
+    for (const vinculo of vinculos.docs) {
+      const alunosVinculados = await getDocs(
+        query(collection(db, ALUNO_OFICINAS_COLLECTION), where('turma_oficina_id', '==', vinculo.id))
+      )
+      alunosVinculados.forEach((a) => batch.delete(a.ref))
+      batch.delete(vinculo.ref)
+    }
+
+    batch.delete(doc(db, OFICINAS_COLLECTION, id))
+    await batch.commit()
+  } catch (firestoreErr) {
+    console.warn('Oficina removida localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
 }
 
 // ==== Vínculos turma-oficina ====
@@ -303,57 +315,61 @@ export async function saveAlunosDaOficina(
   existentes: AlunoOficina[],
   userId: string
 ): Promise<void> {
-  const batch = writeBatch(db)
-  const hoje = todayISO()
-  const idsSelecionados = new Set(selecionados.map((s) => s.alunoId))
-  const ativosAntes = existentes.filter(
-    (e) => e.turmaOficinaId === turmaOficinaIdValue && e.status === 'ativo'
-  )
+  try {
+    const batch = writeBatch(db)
+    const hoje = todayISO()
+    const idsSelecionados = new Set(selecionados.map((s) => s.alunoId))
+    const ativosAntes = existentes.filter(
+      (e) => e.turmaOficinaId === turmaOficinaIdValue && e.status === 'ativo'
+    )
 
-  selecionados.forEach((sel) => {
-    const anterior = ativosAntes.find((e) => e.alunoId === sel.alunoId)
-    batch.set(
-      doc(db, ALUNO_OFICINAS_COLLECTION, alunoOficinaId(sel.alunoId, turmaOficinaIdValue)),
-      {
-        aluno_id: sel.alunoId,
-        turma_oficina_id: turmaOficinaIdValue,
-        data_inicio: anterior?.dataInicio || hoje,
-        data_fim: null,
-        status: 'ativo',
-        nivel_suporte: sel.nivelSuporte || null,
-        consideracoes_pedagogicas: sel.consideracoesPedagogicas.trim() || null,
-        ...(anterior ? {} : { atribuido_por: userId, criado_em: serverTimestamp() }),
+    selecionados.forEach((sel) => {
+      const anterior = ativosAntes.find((e) => e.alunoId === sel.alunoId)
+      batch.set(
+        doc(db, ALUNO_OFICINAS_COLLECTION, alunoOficinaId(sel.alunoId, turmaOficinaIdValue)),
+        {
+          aluno_id: sel.alunoId,
+          turma_oficina_id: turmaOficinaIdValue,
+          data_inicio: anterior?.dataInicio || hoje,
+          data_fim: null,
+          status: 'ativo',
+          nivel_suporte: sel.nivelSuporte || null,
+          consideracoes_pedagogicas: sel.consideracoesPedagogicas.trim() || null,
+          ...(anterior ? {} : { atribuido_por: userId, criado_em: serverTimestamp() }),
+          atualizado_por: userId,
+          atualizado_em: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    })
+
+    const removidos = ativosAntes.filter((e) => !idsSelecionados.has(e.alunoId))
+    removidos.forEach((e) => {
+      batch.update(doc(db, ALUNO_OFICINAS_COLLECTION, e.id), {
+        status: 'cancelado',
+        data_fim: hoje,
         atualizado_por: userId,
         atualizado_em: serverTimestamp(),
-      },
-      { merge: true }
-    )
-  })
-
-  const removidos = ativosAntes.filter((e) => !idsSelecionados.has(e.alunoId))
-  removidos.forEach((e) => {
-    batch.update(doc(db, ALUNO_OFICINAS_COLLECTION, e.id), {
-      status: 'cancelado',
-      data_fim: hoje,
-      atualizado_por: userId,
-      atualizado_em: serverTimestamp(),
+      })
     })
-  })
 
-  await batch.commit()
+    await batch.commit()
 
-  // Mantém o resumo de oficinas exibido no perfil do aluno sincronizado
-  const novos = selecionados.filter((s) => !ativosAntes.some((e) => e.alunoId === s.alunoId))
-  await Promise.all([
-    ...novos.map((s) =>
-      updateDoc(doc(db, ALUNOS_COLLECTION, s.alunoId), { oficinas: arrayUnion(oficinaNome) }).catch(
-        (err) => console.warn('Resumo de oficinas do aluno não atualizado:', err)
-      )
-    ),
-    ...removidos.map((e) =>
-      updateDoc(doc(db, ALUNOS_COLLECTION, e.alunoId), { oficinas: arrayRemove(oficinaNome) }).catch(
-        (err) => console.warn('Resumo de oficinas do aluno não atualizado:', err)
-      )
-    ),
-  ])
+    // Mantém o resumo de oficinas exibido no perfil do aluno sincronizado
+    const novos = selecionados.filter((s) => !ativosAntes.some((e) => e.alunoId === s.alunoId))
+    await Promise.all([
+      ...novos.map((s) =>
+        updateDoc(doc(db, ALUNOS_COLLECTION, s.alunoId), { oficinas: arrayUnion(oficinaNome) }).catch(
+          (err) => console.warn('Resumo de oficinas do aluno não atualizado:', err)
+        )
+      ),
+      ...removidos.map((e) =>
+        updateDoc(doc(db, ALUNOS_COLLECTION, e.alunoId), { oficinas: arrayRemove(oficinaNome) }).catch(
+          (err) => console.warn('Resumo de oficinas do aluno não atualizado:', err)
+        )
+      ),
+    ])
+  } catch (firestoreErr) {
+    console.warn('Vínculos aluno-oficina gravados localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
 }

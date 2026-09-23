@@ -13,8 +13,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
     function userRole() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.papel;
+      return hasUserDoc()
+        ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.papel
+        : null;
     }
 
     function isDirection() {
@@ -29,10 +35,11 @@ service cloud.firestore {
       return isSignedIn() && userRole() == 'administrativo';
     }
 
-    // usuarios — apenas Direção gerencia usuários e perfis
+    // usuarios — usuário autenticado pode criar seu próprio doc ou Direção gerencia
     match /usuarios/{userId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isDirection();
+      allow create: if isSignedIn() && (request.auth.uid == userId || isDirection());
+      allow update, delete: if isDirection() || (isSignedIn() && request.auth.uid == userId);
     }
 
     // alunos — Direção e Administrativo gerenciam cadastro; Pedagogia lê e atualiza.

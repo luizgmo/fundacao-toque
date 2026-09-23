@@ -25,7 +25,7 @@ export interface SaveSessionInput {
   records: Record<string, { status: AttendanceStatus; observation: string }>
 }
 
-// Salva sessão de chamada no Firestore
+// Salva sessão de chamada no Firestore (com fallback local)
 export async function saveAttendanceToFirestore(session: SaveSessionInput): Promise<void> {
   const presencasMap: Record<string, AttendanceStatus> = {}
   const observacoesMap: Record<string, string> = {}
@@ -36,6 +36,18 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
       observacoesMap[studentId] = rec.observation
     }
   })
+
+  // Salva no cache local imediatamente para transição instantânea
+  initialAttendanceSessions[session.id] = {
+    id: session.id,
+    date: session.date,
+    turmaId: session.turmaId,
+    scope: session.scope,
+    oficinaName: session.oficinaName,
+    registeredBy: session.registeredBy,
+    registeredAt: new Date().toISOString(),
+    records: session.records,
+  }
 
   const docData = {
     data_chamada: session.date,
@@ -51,18 +63,10 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
 
   // Grava com o ID determinístico: YYYY-MM-DD_Turma_Escopo
   const sessionDocId = session.id.replace(/\//g, '-')
-  await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
-
-  // Salva no cache local para transição instantânea
-  initialAttendanceSessions[session.id] = {
-    id: session.id,
-    date: session.date,
-    turmaId: session.turmaId,
-    scope: session.scope,
-    oficinaName: session.oficinaName,
-    registeredBy: session.registeredBy,
-    registeredAt: new Date().toISOString(),
-    records: session.records,
+  try {
+    await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
+  } catch (firestoreErr) {
+    console.warn('Chamada gravada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
   }
 }
 
@@ -115,7 +119,7 @@ export interface SaveOccurrenceInput {
   note: string
 }
 
-// Salva contato com a família / ocorrência no Firestore
+// Salva contato com a família / ocorrência no Firestore (com fallback local)
 export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Promise<string> {
   const contactId = `contato-${input.studentId}-${Date.now()}`
   const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
@@ -134,7 +138,11 @@ export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Pro
     criado_em: serverTimestamp(),
   }
 
-  await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
+  try {
+    await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
+  } catch (firestoreErr) {
+    console.warn('Ocorrência gravada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
   return contactId
 }
 

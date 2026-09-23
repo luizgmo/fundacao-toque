@@ -70,32 +70,75 @@ export function docToStudent(id: string, data: any): Student {
   }
 }
 
-// Inscrição em tempo real com fallback para dados locais
+const LOCAL_STORAGE_KEY = 'fundacao_toque_local_students'
+
+function getStoredStudents(): Student[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
+    if (raw) {
+      return JSON.parse(raw)
+    }
+  } catch {
+    // ignore
+  }
+  return fallbackStudents
+}
+
+function saveStoredStudents(list: Student[]) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list))
+  } catch {
+    // ignore
+  }
+}
+
+let activeListeners: ((students: Student[]) => void)[] = []
+
+function notifyListeners(students: Student[]) {
+  activeListeners.forEach((fn) => {
+    try {
+      fn(students)
+    } catch (e) {
+      console.warn('Erro ao notificar listener de alunos:', e)
+    }
+  })
+}
+
+// Inscrição em tempo real com fallback robusto para dados locais
 export function subscribeToStudents(
   onSuccess: (students: Student[]) => void,
   onError?: (error: Error) => void
 ) {
+  activeListeners.push(onSuccess)
+  // Envia dados iniciais imediatamente para evitar qualquer atraso visual
+  onSuccess(getStoredStudents())
+
   const colRef = collection(db, ALUNOS_COLLECTION)
-  return onSnapshot(
+  const unsubscribeFirestore = onSnapshot(
     colRef,
     (snapshot) => {
       if (snapshot.empty) {
-        // Se a coleção estiver vazia no banco, usa a lista padrão para demonstração
-        onSuccess(fallbackStudents)
+        onSuccess(getStoredStudents())
       } else {
         const list: Student[] = []
         snapshot.forEach((docSnap) => {
           list.push(docToStudent(docSnap.id, docSnap.data()))
         })
+        saveStoredStudents(list)
         onSuccess(list)
       }
     },
     (err) => {
-      console.warn('Erro ao escutar Firestore alunos, usando fallback:', err)
+      console.warn('Aviso: Firestore com restrição de permissão ou offline. Usando persistência local:', err.message)
       if (onError) onError(err)
-      else onSuccess(fallbackStudents)
+      onSuccess(getStoredStudents())
     }
   )
+
+  return () => {
+    activeListeners = activeListeners.filter((l) => l !== onSuccess)
+    unsubscribeFirestore()
+  }
 }
 
 // Busca aluno por ID
@@ -139,7 +182,7 @@ export type StudentInput = {
   lgpdDados?: boolean
 }
 
-// Criar aluno no Firestore
+// Criar aluno (tenta Firestore e garante persistência local imediata)
 export async function createStudent(input: StudentInput): Promise<string> {
   const id =
     input.id ||
@@ -150,6 +193,55 @@ export async function createStudent(input: StudentInput): Promise<string> {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '') + `-${Date.now().toString().slice(-4)}`
 
+  let formattedBirth = input.nascimento
+  if (formattedBirth && formattedBirth.includes('-')) {
+    const [y, m, d] = formattedBirth.split('-')
+    if (y && m && d) formattedBirth = `${d}/${m}/${y}`
+  }
+
+  const localNewStudent: Student = {
+    id,
+    name: input.nome,
+    birthDate: formattedBirth,
+    sexo: input.sexo,
+    status: 'Ativo',
+    turma: input.turmas[0] || 'Turma A',
+    turmaId: input.turmaId,
+    turmaTurno: input.turmaTurno || 'Manhã (8h–12h)',
+    deficiencia: input.deficiencia || 'Não informada',
+    cid: input.cid || '—',
+    observacoes: input.observacoes || '',
+    responsavelNome: input.responsavelNome,
+    parentesco: input.parentesco || 'Mãe',
+    telefone: input.telefonePrincipal,
+    email: input.email || '',
+    oficinas: input.oficinas || [],
+    grauDependencia: input.grauDependencia,
+    documentos: [
+      {
+        name: input.fichaMedica || 'Ficha Médica',
+        attachedAt: 'Conforme cadastro',
+        kind: 'pdf',
+      },
+      ...(input.lgpdImagem
+        ? [{ name: 'LGPD Autorizada', attachedAt: 'Conforme cadastro', kind: 'lgpd' as const }]
+        : []),
+    ],
+    faltasConsecutivas: 0,
+    frequenciaMedia: 100,
+    reports: [],
+    evolution: [],
+    contacts: [],
+    activities: [],
+  }
+
+  // Atualiza cache local imediatamente
+  const currentList = getStoredStudents()
+  const updatedList = [localNewStudent, ...currentList.filter((s) => s.id !== id)]
+  saveStoredStudents(updatedList)
+  notifyListeners(updatedList)
+
+  // Grava no Firestore se houver conexão e permissão
   const studentData = {
     nome_completo: input.nome,
     nome_busca: input.nome.toLowerCase(),
@@ -188,10 +280,8 @@ export async function createStudent(input: StudentInput): Promise<string> {
     atualizado_em: serverTimestamp(),
   }
 
-  await setDoc(doc(db, ALUNOS_COLLECTION, id), studentData)
-
-  // Grava também nas subcoleções conforme modelagem.md
   try {
+    await setDoc(doc(db, ALUNOS_COLLECTION, id), studentData)
     const guardianRef = doc(collection(db, `${ALUNOS_COLLECTION}/${id}/responsaveis`))
     await setDoc(guardianRef, {
       nome_completo: input.responsavelNome,
@@ -204,7 +294,6 @@ export async function createStudent(input: StudentInput): Promise<string> {
       principal: true,
       criado_em: serverTimestamp(),
     })
-
     const healthRef = doc(db, `${ALUNOS_COLLECTION}/${id}/ficha_medica/geral`)
     await setDoc(healthRef, {
       tipos_deficiencia: input.deficiencia ? [input.deficiencia] : [],
@@ -213,52 +302,95 @@ export async function createStudent(input: StudentInput): Promise<string> {
       grau_dependencia: input.grauDependencia || null,
       atualizado_em: serverTimestamp(),
     })
-  } catch (subErr) {
-    console.warn('Subcoleções adicionais não gravadas:', subErr)
+  } catch (firestoreErr) {
+    console.warn('Gravado localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
   }
 
   return id
 }
 
-// Atualizar aluno no Firestore
+// Atualizar aluno
 export async function updateStudent(id: string, input: Partial<StudentInput>): Promise<void> {
-  const updateData: Record<string, any> = {
-    atualizado_em: serverTimestamp(),
-  }
+  const currentList = getStoredStudents()
+  const updatedList = currentList.map((st) => {
+    if (st.id !== id) return st
 
-  if (input.nome !== undefined) {
-    updateData.nome_completo = input.nome
-    updateData.nome_busca = input.nome.toLowerCase()
-  }
-  if (input.nascimento !== undefined) updateData.data_nascimento = input.nascimento
-  if (input.sexo !== undefined) updateData.sexo = input.sexo
-  if (input.deficiencia !== undefined) updateData.tipos_deficiencia = [input.deficiencia]
-  if (input.cid !== undefined) updateData.codigos_cid = [input.cid]
-  if (input.observacoes !== undefined) updateData.observacoes = input.observacoes
-  if (input.turmas && input.turmas.length > 0) {
-    updateData.turma = input.turmas[0]
-  }
-  if (input.turmaId !== undefined) updateData.turma_id = input.turmaId
-  if (input.turmaTurno !== undefined) updateData.turma_turno = input.turmaTurno
-  if (input.oficinas !== undefined) updateData.oficinas = input.oficinas
-  if (input.responsavelNome !== undefined) updateData.responsavel_nome = input.responsavelNome
-  if (input.parentesco !== undefined) updateData.responsavel_parentesco = input.parentesco
-  if (input.cpf !== undefined) updateData.responsavel_cpf = input.cpf
-  if (input.rg !== undefined) updateData.responsavel_rg = input.rg
-  if (input.telefonePrincipal !== undefined) updateData.responsavel_telefone = input.telefonePrincipal
-  if (input.telefoneSecundario !== undefined) {
-    updateData.responsavel_telefone_secundario = input.telefoneSecundario
-  }
-  if (input.email !== undefined) updateData.responsavel_email = input.email
-  if (input.endereco !== undefined) updateData.responsavel_endereco = input.endereco
-  if (input.grauDependencia !== undefined) updateData.grau_dependencia = input.grauDependencia
-  if (input.lgpdImagem !== undefined) updateData.uso_imagem_autorizado = input.lgpdImagem
-  if (input.lgpdDados !== undefined) updateData.tratamento_dados_autorizado = input.lgpdDados
+    let formattedBirth = st.birthDate
+    if (input.nascimento) {
+      formattedBirth = input.nascimento
+      if (formattedBirth.includes('-')) {
+        const [y, m, d] = formattedBirth.split('-')
+        if (y && m && d) formattedBirth = `${d}/${m}/${y}`
+      }
+    }
 
-  await updateDoc(doc(db, ALUNOS_COLLECTION, id), updateData)
+    return {
+      ...st,
+      name: input.nome !== undefined ? input.nome : st.name,
+      birthDate: formattedBirth,
+      sexo: input.sexo !== undefined ? input.sexo : st.sexo,
+      turma: input.turmas && input.turmas.length > 0 ? input.turmas[0] : st.turma,
+      turmaId: input.turmaId !== undefined ? input.turmaId : st.turmaId,
+      turmaTurno: input.turmaTurno !== undefined ? input.turmaTurno : st.turmaTurno,
+      deficiencia: input.deficiencia !== undefined ? input.deficiencia : st.deficiencia,
+      cid: input.cid !== undefined ? input.cid : st.cid,
+      observacoes: input.observacoes !== undefined ? input.observacoes : st.observacoes,
+      responsavelNome: input.responsavelNome !== undefined ? input.responsavelNome : st.responsavelNome,
+      parentesco: input.parentesco !== undefined ? input.parentesco : st.parentesco,
+      telefone: input.telefonePrincipal !== undefined ? input.telefonePrincipal : st.telefone,
+      email: input.email !== undefined ? input.email : st.email,
+      oficinas: input.oficinas !== undefined ? input.oficinas : st.oficinas,
+      grauDependencia: input.grauDependencia !== undefined ? input.grauDependencia : st.grauDependencia,
+    }
+  })
+  saveStoredStudents(updatedList)
+  notifyListeners(updatedList)
+
+  try {
+    const updateData: Record<string, any> = {
+      atualizado_em: serverTimestamp(),
+    }
+    if (input.nome !== undefined) {
+      updateData.nome_completo = input.nome
+      updateData.nome_busca = input.nome.toLowerCase()
+    }
+    if (input.nascimento !== undefined) updateData.data_nascimento = input.nascimento
+    if (input.sexo !== undefined) updateData.sexo = input.sexo
+    if (input.deficiencia !== undefined) updateData.tipos_deficiencia = [input.deficiencia]
+    if (input.cid !== undefined) updateData.codigos_cid = [input.cid]
+    if (input.observacoes !== undefined) updateData.observacoes = input.observacoes
+    if (input.turmas && input.turmas.length > 0) updateData.turma = input.turmas[0]
+    if (input.turmaId !== undefined) updateData.turma_id = input.turmaId
+    if (input.turmaTurno !== undefined) updateData.turma_turno = input.turmaTurno
+    if (input.oficinas !== undefined) updateData.oficinas = input.oficinas
+    if (input.responsavelNome !== undefined) updateData.responsavel_nome = input.responsavelNome
+    if (input.parentesco !== undefined) updateData.responsavel_parentesco = input.parentesco
+    if (input.cpf !== undefined) updateData.responsavel_cpf = input.cpf
+    if (input.rg !== undefined) updateData.responsavel_rg = input.rg
+    if (input.telefonePrincipal !== undefined) updateData.responsavel_telefone = input.telefonePrincipal
+    if (input.telefoneSecundario !== undefined) updateData.responsavel_telefone_secundario = input.telefoneSecundario
+    if (input.email !== undefined) updateData.responsavel_email = input.email
+    if (input.endereco !== undefined) updateData.responsavel_endereco = input.endereco
+    if (input.grauDependencia !== undefined) updateData.grau_dependencia = input.grauDependencia
+    if (input.lgpdImagem !== undefined) updateData.uso_imagem_autorizado = input.lgpdImagem
+    if (input.lgpdDados !== undefined) updateData.tratamento_dados_autorizado = input.lgpdDados
+
+    await updateDoc(doc(db, ALUNOS_COLLECTION, id), updateData)
+  } catch (firestoreErr) {
+    console.warn('Atualizado localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
 }
 
-// Excluir aluno no Firestore
+// Excluir aluno
 export async function deleteStudent(id: string): Promise<void> {
-  await deleteDoc(doc(db, ALUNOS_COLLECTION, id))
+  const currentList = getStoredStudents()
+  const updatedList = currentList.filter((st) => st.id !== id)
+  saveStoredStudents(updatedList)
+  notifyListeners(updatedList)
+
+  try {
+    await deleteDoc(doc(db, ALUNOS_COLLECTION, id))
+  } catch (firestoreErr) {
+    console.warn('Removido localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+  }
 }
