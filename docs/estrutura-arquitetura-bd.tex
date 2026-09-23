@@ -28,12 +28,20 @@ O repositório do projeto está organizado da seguinte forma:
 \begin{verbatim}
 fundacao-toque/
 |-- src/                        Aplicação web (React + TypeScript)
-|   |-- lib/firebase.ts         Configuração do SDK do Firebase
-|   |-- App.tsx                 Roteamento/telas principais
-|   |-- Frequencia.tsx          Tela de chamada e contatos por faltas
-|   |-- DetalheAluno.tsx        Perfil completo do aluno
-|   `-- students-data.ts        Dados de apoio das telas
-|-- prototipo/                  Protótipo estático (HTML/CSS/JS)
+|   |-- features/               Telas organizadas por funcionalidade
+|   |   |-- auth/               Login e controle de sessão (AuthContext)
+|   |   |-- alunos/             Listar, cadastrar e detalhar alunos
+|   |   |-- frequencia/         Chamada e contatos por faltas
+|   |   `-- usuarios/           Gestão de perfis (Direção)
+|   |-- services/               Regras de negócio e acesso ao Firestore
+|   |   |-- studentsService.ts  Operações de alunos
+|   |   `-- attendanceService.ts Operações de frequência
+|   |-- lib/                    Integrações e utilitários
+|   |   |-- firebase.ts         Configuração do SDK do Firebase
+|   |   `-- masks.ts            Máscaras de validação (CPF, telefone etc.)
+|   |-- types/                  Definições de tipos TypeScript
+|   `-- App.tsx                 Roteamento e telas principais
+|-- prototipo/                  Protótipo estático (usado como base)
 |   |-- alunos/                 Listar, cadastrar e detalhar alunos
 |   |-- frequencia.html         Chamada com presente/ausente
 |   |-- evolucao.html           Registro de evolução pedagógica
