@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Padrão: negar tudo. Acesso concedido apenas por regras explícitas.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isDirection() {
+      return isSignedIn() &&
+        firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.papel == 'direcao';
+    }
+
+    function isImageUpTo5MB() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    // Fotos dos registros de atividade (metadados em registros_atividade/{id}/anexos)
+    match /registros_atividade/{activityId}/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isImageUpTo5MB();
+      allow delete: if isDirection();
+    }
+
+    // Anexos dos relatórios pedagógicos (fotos e PDFs até 10 MB)
+    match /relatorios_pedagogicos/{reportId}/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isDirection();
+    }
+  }
+}

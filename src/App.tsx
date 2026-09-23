@@ -37,6 +37,9 @@ import { ListarAlunos } from './features/alunos/ListarAlunos'
 import { DetalheAluno } from './features/alunos/DetalheAluno'
 import { Frequencia } from './features/frequencia/Frequencia'
 import { GerenciarUsuarios } from './features/usuarios/GerenciarUsuarios'
+import { Turmas } from './features/turmas/Turmas'
+import { Oficinas } from './features/oficinas/Oficinas'
+import { Atividades } from './features/atividades/Atividades'
 import { LoginScreen } from './features/auth/LoginScreen'
 import { useAuth } from './features/auth/AuthContext'
 import type { UserProfile, UserRole } from './types/auth'
@@ -46,7 +49,29 @@ import { findStudent } from './features/alunos/students-data'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
-type Screen = 'home' | 'reports' | 'register' | 'students' | 'student-detail' | 'frequencia' | 'usuarios'
+type Screen =
+  | 'home'
+  | 'reports'
+  | 'register'
+  | 'students'
+  | 'student-detail'
+  | 'frequencia'
+  | 'usuarios'
+  | 'turmas'
+  | 'oficinas'
+  | 'atividades'
+
+const validScreens: Screen[] = [
+  'reports',
+  'register',
+  'students',
+  'student-detail',
+  'frequencia',
+  'usuarios',
+  'turmas',
+  'oficinas',
+  'atividades',
+]
 
 type NavItem = {
   label: string
@@ -57,10 +82,10 @@ type NavItem = {
 const mainNavigation: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, screen: 'home' },
   { label: 'Alunos', icon: Users, screen: 'students' },
-  { label: 'Turmas', icon: GraduationCap },
-  { label: 'Oficinas', icon: Palette },
+  { label: 'Turmas', icon: GraduationCap, screen: 'turmas' },
+  { label: 'Oficinas', icon: Palette, screen: 'oficinas' },
   { label: 'Frequência', icon: ClipboardCheck, screen: 'frequencia' },
-  { label: 'Atividades', icon: ListChecks },
+  { label: 'Atividades', icon: ListChecks, screen: 'atividades' },
 ]
 
 const pedagogicalNavigation: NavItem[] = [
@@ -189,6 +214,9 @@ function Topbar({
     'student-detail': studentName ?? 'Perfil do aluno',
     frequencia: 'Frequência e Registro de Chamada',
     usuarios: 'Equipe e Autores do Sistema',
+    turmas: 'Turmas',
+    oficinas: 'Oficinas e Atividades',
+    atividades: 'Registro de Atividades',
   }
 
   const initials = userProfile
@@ -300,7 +328,12 @@ function Dashboard({
   const shortcuts = [
     { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen },
     { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen },
-    { label: 'Registrar atividade', description: 'Atividades por turma', icon: BookOpenCheck },
+    {
+      label: 'Registrar atividade',
+      description: 'Atividades por turma',
+      icon: BookOpenCheck,
+      action: 'atividades' as Screen,
+    },
     {
       label: 'Gerar relatório',
       description: 'Acompanhamento pedagógico',
@@ -787,14 +820,7 @@ function App() {
 
   const [screen, setScreen] = useState<Screen>(() => {
     const param = new URLSearchParams(window.location.search).get('screen')
-    return param === 'reports' ||
-      param === 'register' ||
-      param === 'students' ||
-      param === 'student-detail' ||
-      param === 'frequencia' ||
-      param === 'usuarios'
-      ? (param as Screen)
-      : 'home'
+    return validScreens.includes(param as Screen) ? (param as Screen) : 'home'
   })
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('aluno'),
@@ -915,6 +941,9 @@ function App() {
           )}
           {screen === 'reports' && <PedagogicalReport />}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
+          {screen === 'turmas' && <Turmas onViewStudent={viewStudent} />}
+          {screen === 'oficinas' && <Oficinas />}
+          {screen === 'atividades' && <Atividades />}
           {screen === 'usuarios' &&
             (userProfile?.papel === 'direcao' ? (
               <GerenciarUsuarios />

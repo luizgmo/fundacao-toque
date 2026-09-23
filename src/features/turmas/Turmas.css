@@ -1,0 +1,3 @@
+.turmas-filter-bar {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}

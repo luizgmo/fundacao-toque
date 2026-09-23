@@ -216,6 +216,8 @@ atualizado_em: Timestamp                     obrigatório
 
 A vinculação aluno-turma deve ficar nesta coleção, e não diretamente no aluno. Isso permite preservar o histórico e possibilita mais de uma matrícula ao longo do tempo.
 
+> **Implementação atual:** o cadastro do aluno grava a turma vigente diretamente no documento do aluno (`turma_id`, com `turma` e `turma_turno` desnormalizados para exibição), sem duplicar a lista de alunos em `turmas`. A migração para `matriculas` (histórico) permanece prevista.
+
 ### `aluno_oficinas/{vinculo_id}`
 
 ```text
@@ -245,6 +247,8 @@ ids_turma_oficinas: array<string>         opcional
   oficinas realizadas no dia; pode ficar vazia quando nenhuma oficina for realizada
 usuario_responsavel_id: string               obrigatório
 observacoes_gerais: string              opcional
+total_anexos: number                     obrigatório
+  contador de fotos em `anexos`, evita ler a subcoleção para montar o histórico
 criado_em: Timestamp                     obrigatório
 atualizado_em: Timestamp                     obrigatório
 ```

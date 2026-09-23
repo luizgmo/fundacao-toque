@@ -1,0 +1,187 @@
+.oficina-modal {
+  max-width: 720px;
+}
+
+.oficina-descricao {
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+}
+
+.oficina-vinculos {
+  display: grid;
+  gap: 8px;
+}
+
+.oficina-vinculo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.oficina-vinculo-row > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oficina-vinculo-row strong {
+  color: var(--navy-800);
+  font-size: 13px;
+}
+
+.oficina-vinculo-row span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.oficina-alunos-button {
+  display: inline-flex;
+  min-height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  color: var(--green-800);
+  background: var(--green-100);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: border-color 160ms ease;
+}
+
+.oficina-alunos-button:hover {
+  border-color: var(--green-500);
+}
+
+.oficina-card-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.oficina-turmas-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.oficina-turma-item {
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.oficina-turma-item.selected {
+  background: var(--green-50);
+  border-color: var(--green-400);
+}
+
+.oficina-horario-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 110px;
+  align-items: end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.oficina-horario-fields .field {
+  margin-top: 0;
+}
+
+.oficina-dias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dia-chip {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--navy-700);
+  background: white;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.dia-chip:hover {
+  border-color: var(--green-400);
+}
+
+.dia-chip.active {
+  color: white;
+  background: var(--green-600);
+  border-color: var(--green-600);
+}
+
+.oficina-alunos-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.oficina-alunos-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.oficina-alunos-list li {
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.oficina-alunos-list li.selected {
+  background: var(--green-50);
+  border-color: var(--green-400);
+}
+
+.oficina-aluno-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.oficina-aluno-info strong {
+  color: var(--navy-800);
+}
+
+.oficina-aluno-info span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.oficina-aluno-fields {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.oficina-aluno-fields .field {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .oficina-horario-fields,
+  .oficina-aluno-fields {
+    grid-template-columns: 1fr;
+  }
+}
