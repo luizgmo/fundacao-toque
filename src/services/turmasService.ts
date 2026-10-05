@@ -1,14 +1,10 @@
 import {
   collection,
   doc,
-  getDocs,
   onSnapshot,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
-  where,
-  writeBatch,
 } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
 import { db } from '../lib/firebase'
@@ -16,8 +12,6 @@ import type { Turma, TurmaPeriodo } from '../types/turmas'
 import type { Student } from '../features/alunos/students-data'
 
 const TURMAS_COLLECTION = 'turmas'
-const TURMA_OFICINAS_COLLECTION = 'turma_oficinas'
-const ALUNO_OFICINAS_COLLECTION = 'aluno_oficinas'
 
 export function docToTurma(id: string, data: DocumentData): Turma {
   return {
@@ -242,33 +236,28 @@ export async function updateTurma(id: string, input: TurmaInput, userId: string)
   }
 }
 
-// Excluir turma e seus vínculos com oficinas (turma_oficinas e aluno_oficinas).
-// Registros de atividade e chamadas são preservados como histórico.
-export async function deleteTurma(id: string): Promise<void> {
-  // Remove do cache local imediatamente
+// Inativar turma (em vez de excluir, para preservar histórico)
+export async function inactivateTurma(id: string): Promise<void> {
+  // Atualiza cache local imediatamente
   const currentList = getStoredTurmas()
-  const updatedList = currentList.filter((t) => t.id !== id)
+  const updatedList = currentList.map((t) => {
+    if (t.id !== id) return t
+    return { ...t, ativo: false }
+  })
   saveStoredTurmas(updatedList)
   notifyTurmaListeners(updatedList)
 
   try {
-    const batch = writeBatch(db)
-
-    const vinculos = await getDocs(
-      query(collection(db, TURMA_OFICINAS_COLLECTION), where('turma_id', '==', id))
-    )
-
-    for (const vinculo of vinculos.docs) {
-      const alunosVinculados = await getDocs(
-        query(collection(db, ALUNO_OFICINAS_COLLECTION), where('turma_oficina_id', '==', vinculo.id))
-      )
-      alunosVinculados.forEach((a) => batch.delete(a.ref))
-      batch.delete(vinculo.ref)
-    }
-
-    batch.delete(doc(db, TURMAS_COLLECTION, id))
-    await batch.commit()
+    await updateDoc(doc(db, TURMAS_COLLECTION, id), {
+      ativo: false,
+      atualizado_em: serverTimestamp(),
+    })
   } catch (firestoreErr) {
-    console.warn('Turma removida localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+    console.warn('Turma inativada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
   }
+}
+
+// Manter função deleteTurma para compatibilidade, mas agora inativa
+export async function deleteTurma(id: string): Promise<void> {
+  return inactivateTurma(id)
 }

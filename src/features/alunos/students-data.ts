@@ -1,4 +1,4 @@
-export type StudentStatus = 'Ativo' | 'Em acompanhamento' | 'Inativo'
+export type StudentStatus = 'Ativo' | 'Inativo'
 
 export type ReportEntry = {
   date: string
@@ -236,7 +236,7 @@ export const students: Student[] = [
     turmaTurno: 'Manhã (8h–12h)',
     deficiencia: 'Intelectual',
     cid: 'F71',
-    status: 'Em acompanhamento',
+    status: 'Inativo',
     observacoes: 'Em processo de adaptação após mudança de turno.',
     responsavelNome: 'Lucia Cardoso',
     parentesco: 'Mãe',

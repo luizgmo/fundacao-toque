@@ -8,18 +8,17 @@ import {
   Trash2,
   UserCheck,
   UserPlus,
-  UserRoundX,
   Users,
   UserX,
   X,
 } from 'lucide-react'
 import { calculateAge } from './students-data'
 import type { Student } from './students-data'
-import { subscribeToStudents, deleteStudent } from '../../services/studentsService'
+import { subscribeToStudents, inactivateStudent } from '../../services/studentsService'
 import './ListarAlunos.css'
 
 const turmaOptions = ['Todas as turmas', 'Turma A', 'Turma B', 'Turma C', 'Turma D']
-const statusOptions = ['Todos', 'Ativo', 'Em acompanhamento', 'Inativo']
+const statusOptions = ['Todos', 'Ativo', 'Inativo']
 
 export function ListarAlunos({
   onCadastrar,
@@ -63,7 +62,6 @@ export function ListarAlunos({
     () => ({
       total: studentsList.length,
       ativos: studentsList.filter((s) => s.status === 'Ativo').length,
-      acompanhamento: studentsList.filter((s) => s.status === 'Em acompanhamento').length,
       inativos: studentsList.filter((s) => s.status === 'Inativo').length,
     }),
     [studentsList],
@@ -73,13 +71,13 @@ export function ListarAlunos({
     if (!studentToDelete) return
     setDeleting(true)
     try {
-      await deleteStudent(studentToDelete.id)
-      setActionFeedback(`Aluno ${studentToDelete.name} excluído com sucesso do Firestore.`)
+      await inactivateStudent(studentToDelete.id)
+      setActionFeedback(`Aluno ${studentToDelete.name} inativado com sucesso.`)
       setStudentToDelete(null)
       setTimeout(() => setActionFeedback(null), 3500)
     } catch (err: any) {
-      console.error('Erro ao excluir aluno:', err)
-      alert('Erro ao excluir aluno: ' + (err.message || 'Erro desconhecido.'))
+      console.error('Erro ao inativar aluno:', err)
+      alert('Erro ao inativar aluno: ' + (err.message || 'Erro desconhecido.'))
     } finally {
       setDeleting(false)
     }
@@ -138,15 +136,6 @@ export function ListarAlunos({
           <div>
             <strong>{totals.ativos}</strong>
             <span>Ativos</span>
-          </div>
-        </article>
-        <article className="metric-card">
-          <span className="metric-icon orange">
-            <UserRoundX size={25} strokeWidth={2.2} />
-          </span>
-          <div>
-            <strong>{totals.acompanhamento}</strong>
-            <span>Em acompanhamento</span>
           </div>
         </article>
         <article className="metric-card">
@@ -232,11 +221,7 @@ export function ListarAlunos({
                     <span
                       className={
                         'status-pill ' +
-                        (student.status === 'Ativo'
-                          ? 'success'
-                          : student.status === 'Em acompanhamento'
-                            ? 'warning'
-                            : 'danger')
+                        (student.status === 'Ativo' ? 'success' : 'danger')
                       }
                     >
                       {student.status}
@@ -290,7 +275,7 @@ export function ListarAlunos({
         </div>
       </div>
 
-      {/* Modal Confirmação de Exclusão */}
+      {/* Modal Confirmação de Inativação */}
       {studentToDelete && (
         <div className="modal-backdrop" onClick={() => setStudentToDelete(null)}>
           <div
@@ -302,8 +287,8 @@ export function ListarAlunos({
               <div className="modal-title-group">
                 <AlertTriangle className="modal-icon" size={22} style={{ color: '#dc2626' }} />
                 <div>
-                  <h3 style={{ color: '#991b1b' }}>Excluir Aluno</h3>
-                  <p>Ação irreversível no banco de dados</p>
+                  <h3 style={{ color: '#991b1b' }}>Inativar Aluno</h3>
+                  <p>Ação reversível - o histórico será preservado</p>
                 </div>
               </div>
               <button
@@ -318,11 +303,12 @@ export function ListarAlunos({
 
             <div style={{ padding: '1.25rem', fontSize: '0.92rem', color: '#374151', lineHeight: '1.5' }}>
               <p>
-                Tem certeza que deseja excluir o cadastro do aluno{' '}
+                Tem certeza que deseja inativar o aluno{' '}
                 <strong>{studentToDelete.name}</strong>?
               </p>
               <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#6b7280' }}>
-                O documento deste aluno será permanentemente removido da coleção do Firestore.
+                O cadastro será mantido no histórico e poderá ser reativado a qualquer momento pela
+                edição do aluno.
               </p>
             </div>
 
@@ -351,8 +337,8 @@ export function ListarAlunos({
                 style={{ background: '#dc2626', borderColor: '#dc2626' }}
                 type="button"
               >
-                <Trash2 size={16} />
-                {deleting ? 'Excluindo...' : 'Sim, Excluir Aluno'}
+                <UserX size={16} />
+                {deleting ? 'Inativando...' : 'Sim, Inativar Aluno'}
               </button>
             </div>
           </div>

@@ -15,6 +15,7 @@ import {
   Sun,
   Trash2,
   UserRoundCheck,
+  UserX,
   Users,
   X,
 } from 'lucide-react'
@@ -214,23 +215,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
     setDeleting(true)
     try {
       await deleteTurma(turmaToDelete.id)
-      showFeedback(`Turma ${turmaToDelete.nome} excluída com sucesso.`)
-      setTurmaToDelete(null)
-    } catch (err) {
-      console.error('Erro ao excluir turma:', err)
-      alert('Erro ao excluir turma: ' + ((err as Error).message || 'Erro desconhecido.'))
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  const handleInativar = async () => {
-    if (!turmaToDelete) return
-    setDeleting(true)
-    try {
-      const { id, ...rest } = turmaToDelete
-      await updateTurma(id, { ...rest, ativo: false }, userProfile?.uid || 'sistema')
-      showFeedback(`Turma ${turmaToDelete.nome} inativada.`)
+      showFeedback(`Turma ${turmaToDelete.nome} inativada com sucesso.`)
       setTurmaToDelete(null)
     } catch (err) {
       console.error('Erro ao inativar turma:', err)
@@ -631,7 +616,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
         </div>
       )}
 
-      {/* Modal Confirmação de Exclusão */}
+      {/* Modal Confirmação de Inativação */}
       {turmaToDelete && (
         <div className="modal-backdrop" onClick={() => setTurmaToDelete(null)}>
           <div className="modal-container confirm-modal" onClick={(e) => e.stopPropagation()}>
@@ -639,8 +624,8 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
               <div className="modal-title-group">
                 <AlertTriangle className="modal-icon danger" size={22} />
                 <div>
-                  <h3 className="danger-text">Excluir Turma</h3>
-                  <p>Ação irreversível no banco de dados</p>
+                  <h3 className="danger-text">Inativar Turma</h3>
+                  <p>Ação reversível - o histórico será preservado</p>
                 </div>
               </div>
               <button
@@ -658,22 +643,21 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
                 <>
                   <p>
                     A turma <strong>{turmaToDelete.nome}</strong> possui{' '}
-                    <strong>{alunosDaTurmaExcluida.length} aluno(s)</strong> vinculado(s) e não pode
-                    ser excluída.
+                    <strong>{alunosDaTurmaExcluida.length} aluno(s)</strong> vinculado(s).
                   </p>
                   <p className="confirm-modal-hint">
-                    Transfira os alunos para outra turma no cadastro de cada um ou inative a turma
-                    para mantê-la no histórico.
+                    Os alunos permanecerão vinculados, mas a turma ficará inativa. Transfira os alunos
+                    para outra turma no cadastro de cada um, se necessário.
                   </p>
                 </>
               ) : (
                 <>
                   <p>
-                    Tem certeza que deseja excluir a turma <strong>{turmaToDelete.nome}</strong>?
+                    Tem certeza que deseja inativar a turma <strong>{turmaToDelete.nome}</strong>?
                   </p>
                   <p className="confirm-modal-hint">
                     {oficinasDaTurmaExcluida.length > 0
-                      ? `Os vínculos com ${oficinasDaTurmaExcluida.length} oficina(s) também serão removidos. `
+                      ? `Os vínculos com ${oficinasDaTurmaExcluida.length} oficina(s) serão desativados. `
                       : ''}
                     Registros de atividade e chamadas já realizados são mantidos no histórico.
                   </p>
@@ -689,28 +673,15 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
               >
                 Cancelar
               </button>
-              {alunosDaTurmaExcluida.length > 0 ? (
-                turmaToDelete.ativo && (
-                  <button
-                    className="button primary"
-                    disabled={deleting}
-                    onClick={handleInativar}
-                    type="button"
-                  >
-                    {deleting ? 'Inativando...' : 'Inativar turma'}
-                  </button>
-                )
-              ) : (
-                <button
-                  className="button danger"
-                  disabled={deleting}
-                  onClick={handleConfirmDelete}
-                  type="button"
-                >
-                  <Trash2 size={16} />
-                  {deleting ? 'Excluindo...' : 'Sim, Excluir Turma'}
-                </button>
-              )}
+              <button
+                className="button primary"
+                disabled={deleting}
+                onClick={handleConfirmDelete}
+                type="button"
+              >
+                <UserX size={16} />
+                {deleting ? 'Inativando...' : 'Sim, Inativar Turma'}
+              </button>
             </div>
           </div>
         </div>

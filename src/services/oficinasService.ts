@@ -3,13 +3,10 @@ import {
   arrayUnion,
   collection,
   doc,
-  getDocs,
   onSnapshot,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
-  where,
   writeBatch,
 } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
@@ -199,28 +196,21 @@ export async function updateOficina(
   }
 }
 
-// Excluir oficina junto com seus vínculos em turma_oficinas e aluno_oficinas
-export async function deleteOficina(id: string): Promise<void> {
+// Inativar oficina (em vez de excluir, para preservar histórico)
+export async function inactivateOficina(id: string): Promise<void> {
   try {
-    const batch = writeBatch(db)
-
-    const vinculos = await getDocs(
-      query(collection(db, TURMA_OFICINAS_COLLECTION), where('oficina_id', '==', id))
-    )
-
-    for (const vinculo of vinculos.docs) {
-      const alunosVinculados = await getDocs(
-        query(collection(db, ALUNO_OFICINAS_COLLECTION), where('turma_oficina_id', '==', vinculo.id))
-      )
-      alunosVinculados.forEach((a) => batch.delete(a.ref))
-      batch.delete(vinculo.ref)
-    }
-
-    batch.delete(doc(db, OFICINAS_COLLECTION, id))
-    await batch.commit()
+    await updateDoc(doc(db, OFICINAS_COLLECTION, id), {
+      ativo: false,
+      atualizado_em: serverTimestamp(),
+    })
   } catch (firestoreErr) {
-    console.warn('Oficina removida localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+    console.warn('Oficina inativada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
   }
+}
+
+// Manter função deleteOficina para compatibilidade, mas agora inativa
+export async function deleteOficina(id: string): Promise<void> {
+  return inactivateOficina(id)
 }
 
 // ==== Vínculos turma-oficina ====
