@@ -18,7 +18,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
-import type { Student } from './students-data'
+import type { Student, StudentStatus } from './students-data'
 import { createStudent, updateStudent } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
@@ -79,6 +79,7 @@ type AlunoForm = {
   turmas: string[]
   oficinas: string[]
   grauDependencia: string
+  status: StudentStatus
 }
 
 const initialForm: AlunoForm = {
@@ -99,6 +100,7 @@ const initialForm: AlunoForm = {
   turmas: ['turma-a'],
   oficinas: [],
   grauDependencia: '',
+  status: 'Ativo',
 }
 
 function toggleListValue(list: string[], value: string) {
@@ -142,6 +144,7 @@ function studentToForm(st: Student): AlunoForm {
     turmas: [turmaValue],
     oficinas: oficinasIds,
     grauDependencia: '',
+    status: st.status,
   }
 }
 
@@ -310,6 +313,7 @@ export function CadastrarAluno({
         fichaMatricula: fichaMatricula || undefined,
         lgpdImagem,
         lgpdDados,
+        status: form.status,
       }
 
       if (initialStudent) {
@@ -709,7 +713,7 @@ export function CadastrarAluno({
               </span>
               <div>
                 <h3>Vínculos do aluno</h3>
-                <p>Defina turmas e oficinas conforme o plano individual do aluno.</p>
+                <p>Defina turmas, oficinas e status conforme o plano individual do aluno.</p>
               </div>
             </div>
 
@@ -768,6 +772,17 @@ export function CadastrarAluno({
                 <option>Baixo</option>
                 <option>Médio</option>
                 <option>Alto</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Status do aluno *</span>
+              <select
+                onChange={(event) => updateField('status', event.target.value as StudentStatus)}
+                value={form.status}
+              >
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
               </select>
             </label>
           </div>
@@ -878,6 +893,10 @@ export function CadastrarAluno({
                             .join(', ')
                         : '—'}
                     </dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{form.status}</dd>
                   </div>
                 </dl>
               </div>

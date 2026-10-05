@@ -4,7 +4,6 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc,
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore'
@@ -27,7 +26,7 @@ export function docToStudent(id: string, data: any): Student {
   let status: StudentStatus = 'Ativo'
   const rawStatus = (data.status || '').toLowerCase()
   if (rawStatus === 'inativo' || rawStatus === 'inativa') status = 'Inativo'
-  else if (rawStatus.includes('acompanhamento')) status = 'Em acompanhamento'
+  else status = 'Ativo'
 
   return {
     id,
@@ -180,6 +179,7 @@ export type StudentInput = {
   fichaMatricula?: string
   lgpdImagem?: boolean
   lgpdDados?: boolean
+  status?: StudentStatus
 }
 
 // Criar aluno (tenta Firestore e garante persistência local imediata)
@@ -204,7 +204,7 @@ export async function createStudent(input: StudentInput): Promise<string> {
     name: input.nome,
     birthDate: formattedBirth,
     sexo: input.sexo,
-    status: 'Ativo',
+    status: input.status || 'Ativo',
     turma: input.turmas[0] || 'Turma A',
     turmaId: input.turmaId,
     turmaTurno: input.turmaTurno || 'Manhã (8h–12h)',
@@ -247,7 +247,7 @@ export async function createStudent(input: StudentInput): Promise<string> {
     nome_busca: input.nome.toLowerCase(),
     data_nascimento: input.nascimento,
     sexo: input.sexo,
-    status: 'ativo',
+    status: (input.status || 'Ativo').toLowerCase(),
     uso_imagem_autorizado: Boolean(input.lgpdImagem),
     tratamento_dados_autorizado: Boolean(input.lgpdDados),
     tipos_deficiencia: input.deficiencia ? [input.deficiencia] : [],
@@ -341,6 +341,7 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
       email: input.email !== undefined ? input.email : st.email,
       oficinas: input.oficinas !== undefined ? input.oficinas : st.oficinas,
       grauDependencia: input.grauDependencia !== undefined ? input.grauDependencia : st.grauDependencia,
+      status: input.status !== undefined ? input.status : st.status,
     }
   })
   saveStoredStudents(updatedList)
@@ -374,6 +375,7 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
     if (input.grauDependencia !== undefined) updateData.grau_dependencia = input.grauDependencia
     if (input.lgpdImagem !== undefined) updateData.uso_imagem_autorizado = input.lgpdImagem
     if (input.lgpdDados !== undefined) updateData.tratamento_dados_autorizado = input.lgpdDados
+    if (input.status !== undefined) updateData.status = input.status.toLowerCase()
 
     await updateDoc(doc(db, ALUNOS_COLLECTION, id), updateData)
   } catch (firestoreErr) {
@@ -381,16 +383,27 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
   }
 }
 
-// Excluir aluno
-export async function deleteStudent(id: string): Promise<void> {
+// Inativar aluno (em vez de excluir, para preservar histórico)
+export async function inactivateStudent(id: string): Promise<void> {
   const currentList = getStoredStudents()
-  const updatedList = currentList.filter((st) => st.id !== id)
+  const updatedList = currentList.map((st) => {
+    if (st.id !== id) return st
+    return { ...st, status: 'Inativo' as StudentStatus }
+  })
   saveStoredStudents(updatedList)
   notifyListeners(updatedList)
 
   try {
-    await deleteDoc(doc(db, ALUNOS_COLLECTION, id))
+    await updateDoc(doc(db, ALUNOS_COLLECTION, id), {
+      status: 'inativo',
+      atualizado_em: serverTimestamp(),
+    })
   } catch (firestoreErr) {
-    console.warn('Removido localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
+    console.warn('Inativado localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
   }
+}
+
+// Manter função deleteStudent para compatibilidade, mas agora inativa
+export async function deleteStudent(id: string): Promise<void> {
+  return inactivateStudent(id)
 }

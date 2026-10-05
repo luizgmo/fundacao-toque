@@ -136,11 +136,7 @@ export function DetalheAluno({
         <span
           className={
             'status-pill student-header-status ' +
-            (student.status === 'Ativo'
-              ? 'success'
-              : student.status === 'Em acompanhamento'
-              ? 'warning'
-              : 'danger')
+            (student.status === 'Ativo' ? 'success' : 'danger')
           }
         >
           {student.status}

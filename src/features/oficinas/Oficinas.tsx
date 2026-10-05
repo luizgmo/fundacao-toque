@@ -13,6 +13,7 @@ import {
   Search,
   Trash2,
   UserRoundCheck,
+  UserX,
   Users,
   X,
 } from 'lucide-react'
@@ -370,11 +371,11 @@ export function Oficinas() {
     setDeleting(true)
     try {
       await deleteOficina(oficinaToDelete.id)
-      showFeedback(`Oficina ${oficinaToDelete.nome} excluída com sucesso.`)
+      showFeedback(`Oficina ${oficinaToDelete.nome} inativada com sucesso.`)
       setOficinaToDelete(null)
     } catch (err) {
-      console.error('Erro ao excluir oficina:', err)
-      alert('Erro ao excluir oficina: ' + ((err as Error).message || 'Erro desconhecido.'))
+      console.error('Erro ao inativar oficina:', err)
+      alert('Erro ao inativar oficina: ' + ((err as Error).message || 'Erro desconhecido.'))
     } finally {
       setDeleting(false)
     }
@@ -925,7 +926,7 @@ export function Oficinas() {
         </div>
       )}
 
-      {/* Modal Confirmação de Exclusão */}
+      {/* Modal Confirmação de Inativação */}
       {oficinaToDelete && (
         <div className="modal-backdrop" onClick={() => setOficinaToDelete(null)}>
           <div className="modal-container confirm-modal" onClick={(e) => e.stopPropagation()}>
@@ -933,8 +934,8 @@ export function Oficinas() {
               <div className="modal-title-group">
                 <AlertTriangle className="modal-icon danger" size={22} />
                 <div>
-                  <h3 className="danger-text">Excluir Oficina</h3>
-                  <p>Ação irreversível no banco de dados</p>
+                  <h3 className="danger-text">Inativar Oficina</h3>
+                  <p>Ação reversível - o histórico será preservado</p>
                 </div>
               </div>
               <button
@@ -949,12 +950,12 @@ export function Oficinas() {
 
             <div className="confirm-modal-body">
               <p>
-                Tem certeza que deseja excluir a oficina <strong>{oficinaToDelete.nome}</strong>?
+                Tem certeza que deseja inativar a oficina <strong>{oficinaToDelete.nome}</strong>?
               </p>
               <p className="confirm-modal-hint">
                 {vinculosDaOficinaExcluida.length > 0
                   ? `Ela está vinculada a ${vinculosDaOficinaExcluida.length} turma(s) e ` +
-                    `${alunosDaOficinaExcluida} aluno(s); esses vínculos também serão removidos. `
+                    `${alunosDaOficinaExcluida} aluno(s); esses vínculos serão desativados. `
                   : ''}
                 Registros de atividade já realizados são mantidos no histórico.
               </p>
@@ -974,8 +975,8 @@ export function Oficinas() {
                 onClick={handleConfirmDelete}
                 type="button"
               >
-                <Trash2 size={16} />
-                {deleting ? 'Excluindo...' : 'Sim, Excluir Oficina'}
+                <UserX size={16} />
+                {deleting ? 'Inativando...' : 'Sim, Inativar Oficina'}
               </button>
             </div>
           </div>
