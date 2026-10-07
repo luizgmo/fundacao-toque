@@ -490,7 +490,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                             </span>
                             <div className="student-info">
                               <div className="student-name-row">
-                                <strong>{student.name}</strong>
+                                {onViewStudentProfile ? (
+                                  <button
+                                    className="student-name-link"
+                                    onClick={() => onViewStudentProfile(student.id)}
+                                    title="Clique para ver o perfil completo do aluno"
+                                    type="button"
+                                  >
+                                    <strong>{student.name}</strong>
+                                  </button>
+                                ) : (
+                                  <strong>{student.name}</strong>
+                                )}
                                 {isHighAbsence && (
                                   <span
                                     className="absence-warning-badge"
@@ -558,14 +569,26 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem' }}>
                             {isHighAbsence ? (
-                              <button
-                                className="button secondary sm-button alert-action-btn"
-                                onClick={() => handleOpenContactModal(student, dateStr)}
-                                title="Abrir ocorrência e registrar contato com a família devido às faltas recorrentes"
-                                type="button"
-                              >
-                                <Phone size={13} /> Ocorrência
-                              </button>
+                              <>
+                                <button
+                                  className="button secondary sm-button alert-action-btn"
+                                  onClick={() => handleOpenContactModal(student, dateStr)}
+                                  title="Abrir ocorrência e registrar contato com a família devido às faltas recorrentes"
+                                  type="button"
+                                >
+                                  <Phone size={13} /> Ocorrência
+                                </button>
+                                {onViewStudentProfile && (
+                                  <button
+                                    className="text-button-sm"
+                                    onClick={() => onViewStudentProfile(student.id)}
+                                    title="Ver ficha e perfil completo do aluno"
+                                    type="button"
+                                  >
+                                    Ver perfil
+                                  </button>
+                                )}
+                              </>
                             ) : (
                               <>
                                 {currentStatus === 'ausente' && (
@@ -673,7 +696,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                           .join('')}
                       </span>
                       <div className="recurrent-text">
-                        <strong>{st.name}</strong>
+                        {onViewStudentProfile ? (
+                          <button
+                            className="student-name-link"
+                            onClick={() => onViewStudentProfile(st.id)}
+                            title="Ver perfil completo do aluno"
+                            type="button"
+                          >
+                            <strong>{st.name}</strong>
+                          </button>
+                        ) : (
+                          <strong>{st.name}</strong>
+                        )}
                         <span>
                           {st.turma} · {st.faltasConsecutivas} faltas consecutivas
                         </span>

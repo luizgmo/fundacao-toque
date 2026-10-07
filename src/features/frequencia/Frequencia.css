@@ -335,6 +335,25 @@
   color: var(--navy-900);
 }
 
+.student-name-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+}
+
+.student-name-link strong {
+  color: var(--navy-900);
+  transition: color 0.15s ease;
+}
+
+.student-name-link:hover strong {
+  color: var(--green-700);
+  text-decoration: underline;
+}
+
 .absence-warning-badge {
   display: inline-flex;
   align-items: center;
