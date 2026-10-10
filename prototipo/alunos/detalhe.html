@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -19,7 +20,10 @@
 
   <div class="app">
     <aside class="sidebar">
-      <div class="logo-area"><img src="../assets/img/logo.svg" alt="Fundação Toque" /></div>
+      <div class="logo-area">
+        <img src="../assets/img/logo.svg" alt="Fundação Toque" />
+      </div>
+
       <div class="menu-section">
         <div class="menu-section-title">Principal</div>
         <a href="../dashboard.html" class="menu-item"><i class="fa-solid fa-house"></i> Dashboard</a>
@@ -29,29 +33,43 @@
         <a href="../frequencia.html" class="menu-item"><i class="fa-solid fa-clipboard-check"></i> Frequência</a>
         <a href="../atividades.html" class="menu-item"><i class="fa-solid fa-list-check"></i> Atividades</a>
       </div>
+
       <div class="menu-section">
         <div class="menu-section-title">Pedagógico</div>
         <a href="../evolucao.html" class="menu-item"><i class="fa-solid fa-chart-line"></i> Evolução</a>
         <a href="../relatorios.html" class="menu-item"><i class="fa-solid fa-file-lines"></i> Relatórios</a>
       </div>
+
       <div class="menu-section" id="adminMenu" style="display:none">
         <div class="menu-section-title">Administração</div>
         <a href="../usuarios.html" class="menu-item"><i class="fa-solid fa-user-shield"></i> Usuários</a>
       </div>
+
       <a href="../index.html" class="menu-item logout"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
     </aside>
 
     <div>
       <header class="header">
         <div style="display:flex; align-items:center; gap: var(--esp-3);">
-          <button class="btn-menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <button class="btn-menu-toggle" onclick="toggleSidebar()">
+            <i class="fa-solid fa-bars"></i>
+          </button>
           <h1 class="page-title">Perfil do aluno</h1>
         </div>
+
         <div class="header-right">
-          <button class="btn-icon" title="Imprimir"><i class="fa-solid fa-print"></i></button>
-          <button class="btn btn-outline btn-sm" onclick="openModal('modalEditar')"><i class="fa-solid fa-pen"></i> Editar cadastro</button>
+          <button class="btn-icon" title="Imprimir">
+            <i class="fa-solid fa-print"></i>
+          </button>
+
+          <button class="btn btn-outline btn-sm" onclick="openModal('modalEditar')">
+            <i class="fa-solid fa-pen"></i> Editar cadastro
+          </button>
+
           <div class="user-chip">
-            <div class="avatar"><img src="../assets/img/avatar-padrao.svg" alt="" /></div>
+            <div class="avatar">
+              <img src="../assets/img/avatar-padrao.svg" alt="" />
+            </div>
             <div class="user-info">
               <span class="user-name" id="userName">Ana Carolina</span>
               <span class="user-role" id="userRole">Pedagoga</span>
@@ -69,9 +87,12 @@
           <span class="current">Lucas Oliveira Santos</span>
         </nav>
 
-        <!-- Header do aluno -->
+        <!-- Cabeçalho do aluno -->
         <div class="student-header">
-          <div class="avatar xl"><img src="../assets/img/avatar-padrao.svg" alt="Lucas Oliveira Santos" /></div>
+          <div class="avatar xl">
+            <img src="../assets/img/avatar-padrao.svg" alt="Lucas Oliveira Santos" />
+          </div>
+
           <div class="student-header-info">
             <h1>Lucas Oliveira Santos</h1>
             <div class="meta">
@@ -81,6 +102,7 @@
               <span class="badge warning">⚠️ 5 faltas consecutivas</span>
             </div>
           </div>
+
           <div>
             <span class="badge success" style="font-size: 14px; padding: 8px 16px;">Ativo</span>
           </div>
@@ -98,7 +120,7 @@
               <button class="tab" onclick="openTab('tab-contato', this)">Contato por faltas</button>
             </div>
 
-            <!-- ABA VISÃO GERAL -->
+            <!-- ABA: VISÃO GERAL -->
             <div class="tab-content active" id="tab-visao">
               <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--esp-5);">
                 <div>
@@ -110,6 +132,7 @@
                   <p style="margin: 6px 0;"><strong>CID:</strong> F71</p>
                   <p style="margin: 6px 0;"><strong>Observações:</strong> Aluno participativo, gosta de atividades musicais.</p>
                 </div>
+
                 <div>
                   <h3 style="margin-bottom: var(--esp-3);">Responsável</h3>
                   <p style="margin: 6px 0;"><strong>Nome:</strong> Maria Oliveira Santos</p>
@@ -125,6 +148,7 @@
                   <h4 style="font-size: var(--tamanho-body); margin-bottom: var(--esp-2);">🏫 Turmas</h4>
                   <span class="badge primary">Turma A — Manhã</span>
                 </div>
+
                 <div class="card" style="background: var(--cor-fundo);">
                   <h4 style="font-size: var(--tamanho-body); margin-bottom: var(--esp-2);">🎨 Oficinas</h4>
                   <span class="badge primary" style="margin-right: 4px;">Musicalização</span>
@@ -139,11 +163,13 @@
                   <p style="font-size: var(--tamanho-label); margin: 0;">ficha_medica.pdf</p>
                   <p style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Anexado em 15/02/2026</p>
                 </div>
+
                 <div class="card" style="background: var(--cor-fundo); text-align: center;">
                   <i class="fa-solid fa-file-pdf" style="font-size: 32px; color: var(--cor-erro); margin-bottom: 8px;"></i>
                   <p style="font-size: var(--tamanho-label); margin: 0;">matricula.pdf</p>
                   <p style="font-size: var(--tamanho-pequeno); color: var(--cor-texto-secundario);">Anexado em 15/02/2026</p>
                 </div>
+
                 <div class="card" style="background: var(--cor-fundo); text-align: center;">
                   <i class="fa-solid fa-shield-halved" style="font-size: 32px; color: var(--cor-sucesso); margin-bottom: 8px;"></i>
                   <p style="font-size: var(--tamanho-label); margin: 0;">LGPD</p>
@@ -152,98 +178,61 @@
               </div>
             </div>
 
-            <!-- ABA RELATÓRIOS PEDAGÓGICOS -->
+            <!-- ABA: RELATÓRIOS PEDAGÓGICOS -->
             <div class="tab-content" id="tab-relatorios">
               <div class="page-header" style="margin-bottom: var(--esp-4);">
                 <h2>Relatórios pedagógicos</h2>
-                <button class="btn btn-primary" onclick="openModal('modalRelatorio')"><i class="fa-solid fa-plus"></i> Novo relatório</button>
+                <button class="btn btn-primary" onclick="openModal('modalRelatorio')">
+                  <i class="fa-solid fa-plus"></i> Novo relatório
+                </button>
               </div>
 
-              <div class="timeline">
-                <div class="timeline-item">
-                  <div class="timeline-date">28/08/2026 — 1º semestre 2026</div>
-                  <div class="card" style="background: var(--cor-fundo);">
-                    <h4 style="margin-bottom: var(--esp-2);">Relatório Semestral</h4>
-                    <p><strong>Profissional:</strong> Ana Carolina Silva (Pedagoga)</p>
-                    <p><strong>Evolução:</strong> Lucas demonstrou avanços significativos na comunicação verbal, ampliando vocabulário e iniciando frases simples.</p>
-                    <p><strong>Dificuldades:</strong> Ainda apresenta resistência em atividades em grupo grandes.</p>
-                    <p><strong>Avanços:</strong> Maior autonomia em higiene pessoal, integração com colegas da oficina de musicalização.</p>
-                    <p><strong>Encaminhamentos:</strong> Manter frequência na oficina de musicalização; considerar avaliação com fonoaudióloga.</p>
-                  </div>
-                </div>
-                <div class="timeline-item">
-                  <div class="timeline-date">15/06/2026 — Junho/2026</div>
-                  <div class="card" style="background: var(--cor-fundo);">
-                    <h4 style="margin-bottom: var(--esp-2);">Acompanhamento Mensal</h4>
-                    <p><strong>Profissional:</strong> Ana Carolina Silva</p>
-                    <p><strong>Evolução:</strong> Responde bem a comandos sequenciais. Identifica cores e formas geométricas básicas.</p>
-                  </div>
-                </div>
-                <div class="timeline-item">
-                  <div class="timeline-date">10/03/2026 — Março/2026</div>
-                  <div class="card" style="background: var(--cor-fundo);">
-                    <h4 style="margin-bottom: var(--esp-2);">Avaliação Inicial</h4>
-                    <p><strong>Profissional:</strong> Maria Aparecida Santos (Diretora)</p>
-                    <p><strong>Evolução:</strong> Avaliação inicial do aluno no programa. Pontos fortes: socialização, interesse por música.</p>
-                  </div>
-                </div>
+              <div id="listaRelatorios" class="timeline">
+                <p>Carregando relatórios pedagógicos...</p>
               </div>
             </div>
 
-            <!-- ABA EVOLUÇÃO -->
+            <!-- ABA: EVOLUÇÃO -->
             <div class="tab-content" id="tab-evolucao">
               <div class="page-header" style="margin-bottom: var(--esp-4);">
                 <h2>Registros de evolução</h2>
-                <button class="btn btn-primary" onclick="openModal('modalEvolucao')"><i class="fa-solid fa-plus"></i> Nova observação</button>
+                <button class="btn btn-primary" onclick="openModal('modalEvolucao')">
+                  <i class="fa-solid fa-plus"></i> Nova observação
+                </button>
               </div>
 
-              <div class="grid cols-2" style="gap: var(--esp-4);">
-                <div class="card" style="background: var(--cor-fundo);">
-                  <h4 style="font-size: var(--tamanho-body); color: var(--cor-info); margin-bottom: var(--esp-2);">
-                    <i class="fa-solid fa-brain"></i> Área Cognitiva
-                  </h4>
-                  <p style="font-size: var(--tamanho-label); margin: 4px 0;"><strong>20/08/2026</strong> — Ana Carolina</p>
-                  <p>Identifica números até 10. Inicia reconhecimento de letras do alfabeto.</p>
-                </div>
-                <div class="card" style="background: var(--cor-fundo);">
-                  <h4 style="font-size: var(--tamanho-body); color: var(--cor-acento); margin-bottom: var(--esp-2);">
-                    <i class="fa-solid fa-person-running"></i> Área Motora
-                  </h4>
-                  <p style="font-size: var(--tamanho-label); margin: 4px 0;"><strong>18/08/2026</strong> — Ana Carolina</p>
-                  <p>Boa coordenação motora fina. Consegue segurar lápis com firmeza.</p>
-                </div>
-                <div class="card" style="background: var(--cor-fundo);">
-                  <h4 style="font-size: var(--tamanho-body); color: var(--cor-primaria); margin-bottom: var(--esp-2);">
-                    <i class="fa-solid fa-people-group"></i> Área Social
-                  </h4>
-                  <p style="font-size: var(--tamanho-label); margin: 4px 0;"><strong>15/08/2026</strong> — Roberto Mendes</p>
-                  <p>Interage bem com colegas. Iniciou diálogo com outro aluno durante oficina de musicalização.</p>
-                </div>
-                <div class="card" style="background: var(--cor-fundo);">
-                  <h4 style="font-size: var(--tamanho-body); color: var(--cor-coral); margin-bottom: var(--esp-2);">
-                    <i class="fa-solid fa-comments"></i> Comunicação
-                  </h4>
-                  <p style="font-size: var(--tamanho-label); margin: 4px 0;"><strong>10/08/2026</strong> — Ana Carolina</p>
-                  <p>Ampliou vocabulário para 30 palavras. Inicia formação de frases curtas.</p>
-                </div>
+              <div id="listaEvolucoes" class="grid" style="grid-template-columns: 1fr; gap: var(--esp-3);">
+                <p>Carregando registros de evolução...</p>
               </div>
             </div>
 
-            <!-- ABA FREQUÊNCIA -->
+            <!-- ABA: FREQUÊNCIA -->
             <div class="tab-content" id="tab-frequencia">
               <h2 style="margin-bottom: var(--esp-4);">Frequência — últimos 30 dias</h2>
+
               <div class="card" style="background: var(--cor-fundo); margin-bottom: var(--esp-4);">
                 <div style="display:flex; gap: var(--esp-5); flex-wrap: wrap; margin-bottom: var(--esp-4);">
                   <div><strong>Total de dias letivos:</strong> 22</div>
                   <div><strong>Presenças:</strong> 17 (77%)</div>
                   <div><strong>Faltas:</strong> 5 (23%)</div>
                 </div>
+
                 <div class="bar-chart">
-                  <div class="bar-row"><span class="bar-label">Agosto 2026</span><div class="bar-track"><div class="bar-fill success" style="width: 77%;">77%</div></div></div>
-                  <div class="bar-row"><span class="bar-label">Julho 2026</span><div class="bar-track"><div class="bar-fill success" style="width: 90%;">90%</div></div></div>
-                  <div class="bar-row"><span class="bar-label">Junho 2026</span><div class="bar-track"><div class="bar-fill success" style="width: 85%;">85%</div></div></div>
+                  <div class="bar-row">
+                    <span class="bar-label">Agosto 2026</span>
+                    <div class="bar-track"><div class="bar-fill success" style="width: 77%;">77%</div></div>
+                  </div>
+                  <div class="bar-row">
+                    <span class="bar-label">Julho 2026</span>
+                    <div class="bar-track"><div class="bar-fill success" style="width: 90%;">90%</div></div>
+                  </div>
+                  <div class="bar-row">
+                    <span class="bar-label">Junho 2026</span>
+                    <div class="bar-track"><div class="bar-fill success" style="width: 85%;">85%</div></div>
+                  </div>
                 </div>
               </div>
+
               <div class="alert warning">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <div class="alert-content">
@@ -253,9 +242,10 @@
               </div>
             </div>
 
-            <!-- ABA ATIVIDADES -->
+            <!-- ABA: ATIVIDADES -->
             <div class="tab-content" id="tab-atividades">
               <h2 style="margin-bottom: var(--esp-4);">Oficinas e atividades</h2>
+
               <div class="grid cols-2" style="gap: var(--esp-4);">
                 <div class="card" style="background: var(--cor-fundo);">
                   <h4 style="margin-bottom: var(--esp-2);">🎵 Musicalização</h4>
@@ -263,6 +253,7 @@
                   <p style="margin: 4px 0; font-size: var(--tamanho-label);"><strong>Horário:</strong> Ter/Qui — 9h às 10h</p>
                   <p style="margin: 4px 0;">Participa ativamente, gosta de instrumentos de percussão.</p>
                 </div>
+
                 <div class="card" style="background: var(--cor-fundo);">
                   <h4 style="margin-bottom: var(--esp-2);">🌱 Horta/NEMA</h4>
                   <p style="margin: 4px 0; font-size: var(--tamanho-label);"><strong>Profissional:</strong> Marcos Pereira</p>
@@ -272,12 +263,15 @@
               </div>
             </div>
 
-            <!-- ABA CONTATO POR FALTAS -->
+            <!-- ABA: CONTATO POR FALTAS -->
             <div class="tab-content" id="tab-contato">
               <div class="page-header" style="margin-bottom: var(--esp-4);">
                 <h2>Contato com a família</h2>
-                <button class="btn btn-primary" onclick="openModal('modalContato')"><i class="fa-solid fa-phone"></i> Registrar contato</button>
+                <button class="btn btn-primary" onclick="openModal('modalContato')">
+                  <i class="fa-solid fa-phone"></i> Registrar contato
+                </button>
               </div>
+
               <div class="alert danger">
                 <i class="fa-solid fa-circle-exclamation"></i>
                 <div class="alert-content">
@@ -285,6 +279,7 @@
                   <p>Atenção: o sistema recomenda contato com a família a partir de 3 faltas seguidas.</p>
                 </div>
               </div>
+
               <div class="timeline">
                 <div class="timeline-item">
                   <div class="timeline-date">30/08/2026 — Roberto Mendes (Administrativo)</div>
@@ -293,6 +288,7 @@
                     <p><strong>Observação:</strong> Mãe informou que Lucas está com gripe. Retorno previsto para próxima semana.</p>
                   </div>
                 </div>
+
                 <div class="timeline-item">
                   <div class="timeline-date">25/08/2026 — Roberto Mendes</div>
                   <div class="card" style="background: var(--cor-fundo);">
@@ -315,47 +311,58 @@
         <h2>Novo relatório pedagógico</h2>
         <button class="modal-close" onclick="closeModal('modalRelatorio')">×</button>
       </div>
+
       <div class="modal-body">
         <div class="form-row">
           <div class="form-group">
             <label>Data do registro <span class="required">*</span></label>
-            <input type="date" class="input" />
+            <input type="date" class="input" id="dataReferenciaRelatorio" required />
           </div>
+
           <div class="form-group">
-            <label>Período avaliado <span class="required">*</span></label>
-            <select class="select">
-              <option>Mensal</option>
-              <option>Semestral</option>
-              <option>Anual</option>
+            <label>Periodicidade <span class="required">*</span></label>
+            <select class="select" id="tipoRelatorio" required>
+              <option value="diario">Diário</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
             </select>
           </div>
         </div>
-        <div class="form-group">
-          <label>Evolução pedagógica observada <span class="required">*</span></label>
-          <textarea class="textarea" rows="3"></textarea>
+
+        <div class="alert info">
+          <i class="fa-solid fa-circle-info"></i>
+          <div class="alert-content">
+            <strong>Relatório automático</strong>
+            <p>O sistema reunirá as observações de evolução registradas para o aluno no período escolhido.</p>
+          </div>
         </div>
+
         <div class="form-row cols-2">
           <div class="form-group">
             <label>Dificuldades identificadas</label>
-            <textarea class="textarea" rows="2"></textarea>
+            <textarea class="textarea" rows="2" id="dificuldadesRelatorio"></textarea>
           </div>
+
           <div class="form-group">
             <label>Avanços identificados</label>
-            <textarea class="textarea" rows="2"></textarea>
+            <textarea class="textarea" rows="2" id="avancosRelatorio"></textarea>
           </div>
         </div>
+
         <div class="form-group">
           <label>Encaminhamentos</label>
-          <textarea class="textarea" rows="2"></textarea>
+          <textarea class="textarea" rows="2" id="encaminhamentosRelatorio"></textarea>
         </div>
+
         <div class="form-group">
-          <label>Profissional responsável <span class="required">*</span></label>
-          <input type="text" class="input" value="Ana Carolina Silva" />
+          <label>Profissional responsável</label>
+          <input type="text" class="input" id="profissionalRelatorio" readonly />
         </div>
       </div>
+
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal('modalRelatorio')">Cancelar</button>
-        <button class="btn btn-primary" onclick="closeModal('modalRelatorio'); showToast('Relatório salvo com sucesso!', 'success');">Salvar relatório</button>
+        <button class="btn btn-primary" id="btnGerarRelatorio" type="button">Gerar relatório</button>
       </div>
     </div>
   </div>
@@ -367,35 +374,41 @@
         <h2>Nova observação de evolução</h2>
         <button class="modal-close" onclick="closeModal('modalEvolucao')">×</button>
       </div>
+
       <div class="modal-body">
         <div class="form-row">
           <div class="form-group">
             <label>Data <span class="required">*</span></label>
-            <input type="date" class="input" />
+            <input type="date" class="input" id="dataEvolucao" required />
           </div>
+
           <div class="form-group">
             <label>Área avaliada <span class="required">*</span></label>
-            <select class="select">
-              <option>Cognitiva</option>
-              <option>Motora</option>
-              <option>Social</option>
-              <option>Comunicação</option>
-              <option>Autonomia</option>
+            <select class="select" id="areaEvolucao" required>
+              <option value="cognitiva">Cognitiva</option>
+              <option value="motora">Motora</option>
+              <option value="social">Social</option>
+              <option value="comunicacao">Comunicação</option>
+              <option value="autonomia">Autonomia</option>
+              <option value="outra">Outra</option>
             </select>
           </div>
         </div>
+
         <div class="form-group">
           <label>Descrição da observação <span class="required">*</span></label>
-          <textarea class="textarea" rows="4"></textarea>
+          <textarea class="textarea" rows="4" id="descricaoEvolucao" required></textarea>
         </div>
+
         <div class="form-group">
           <label>Profissional responsável</label>
-          <input type="text" class="input" value="Ana Carolina Silva" />
+          <input type="text" class="input" id="profissionalEvolucao" readonly />
         </div>
       </div>
+
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal('modalEvolucao')">Cancelar</button>
-        <button class="btn btn-primary" onclick="closeModal('modalEvolucao'); showToast('Observação registrada!', 'success');">Salvar</button>
+        <button class="btn btn-primary" id="btnSalvarEvolucao" type="button">Salvar</button>
       </div>
     </div>
   </div>
@@ -407,17 +420,20 @@
         <h2>Registrar contato com família</h2>
         <button class="modal-close" onclick="closeModal('modalContato')">×</button>
       </div>
+
       <div class="modal-body">
         <div class="form-row">
           <div class="form-group">
             <label>Data da falta</label>
             <input type="date" class="input" />
           </div>
+
           <div class="form-group">
             <label>Data do contato <span class="required">*</span></label>
             <input type="date" class="input" />
           </div>
         </div>
+
         <div class="form-row">
           <div class="form-group">
             <label>Tipo de contato <span class="required">*</span></label>
@@ -428,16 +444,19 @@
               <option>E-mail</option>
             </select>
           </div>
+
           <div class="form-group">
             <label>Responsável pelo contato</label>
             <input type="text" class="input" value="Roberto Mendes" />
           </div>
         </div>
+
         <div class="form-group">
           <label>Observações</label>
           <textarea class="textarea" rows="3"></textarea>
         </div>
       </div>
+
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal('modalContato')">Cancelar</button>
         <button class="btn btn-primary" onclick="closeModal('modalContato'); showToast('Contato registrado!', 'success');">Salvar</button>
@@ -452,17 +471,20 @@
         <h2>Editar cadastro</h2>
         <button class="modal-close" onclick="closeModal('modalEditar')">×</button>
       </div>
+
       <div class="modal-body">
         <div class="form-row">
           <div class="form-group">
             <label>Nome completo</label>
             <input type="text" class="input" value="Lucas Oliveira Santos" />
           </div>
+
           <div class="form-group">
             <label>Data de nascimento</label>
             <input type="date" class="input" value="2008-03-15" />
           </div>
         </div>
+
         <div class="form-row cols-3">
           <div class="form-group">
             <label>Sexo</label>
@@ -471,6 +493,7 @@
               <option>Feminino</option>
             </select>
           </div>
+
           <div class="form-group">
             <label>Deficiência</label>
             <select class="select">
@@ -478,16 +501,19 @@
               <option>Múltipla</option>
             </select>
           </div>
+
           <div class="form-group">
             <label>CID</label>
             <input type="text" class="input" value="F71" />
           </div>
         </div>
+
         <div class="form-group">
           <label>Observações</label>
           <textarea class="textarea" rows="3">Aluno participativo, gosta de atividades musicais.</textarea>
         </div>
       </div>
+
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal('modalEditar')">Cancelar</button>
         <button class="btn btn-primary" onclick="closeModal('modalEditar'); showToast('Cadastro atualizado!', 'success');">Salvar alterações</button>
@@ -495,14 +521,23 @@
     </div>
   </div>
 
-  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float"><i class="fa-brands fa-whatsapp"></i></a>
+  <a href="https://wa.me/5516997029696" target="_blank" class="whatsapp-float">
+    <i class="fa-brands fa-whatsapp"></i>
+  </a>
+
   <div id="toast" class="toast"></div>
+
   <script src="../assets/js/menu.js"></script>
   <script src="../assets/js/footer.js"></script>
   <script src="../assets/js/modals.js"></script>
+  <script type="module" src="../assets/js/evolucao_firestore.js"></script>
+
   <script>
     const user = JSON.parse(sessionStorage.getItem('toque_user') || '{}');
-    if (user.role === 'direcao') document.getElementById('adminMenu').style.display = 'block';
+
+    if (user.role === 'direcao') {
+      document.getElementById('adminMenu').style.display = 'block';
+    }
   </script>
 </body>
 </html>

@@ -1,0 +1,504 @@
+
+/* ==========================================
+   TEMA VISUAL — FUNDAÇÃO TOQUE
+   ========================================== */
+
+:root {
+  color-scheme: light;
+}
+
+/* BASE */
+
+body {
+  background-color: var(--cor-fundo);
+  color: var(--cor-texto);
+}
+
+/* MENU LATERAL */
+
+.sidebar {
+  background: #FFFFFF;
+  border-right: 1px solid var(--cor-borda);
+}
+
+.sidebar .logo-area {
+  border-bottom-color: var(--cor-borda);
+}
+
+.menu-item {
+  border-radius: 0 10px 10px 0;
+  margin-right: 12px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.menu-item:hover,
+.menu-item.active {
+  background: var(--cor-primaria-clara);
+  color: var(--cor-primaria-escura);
+}
+
+.menu-item.active {
+  border-left-color: var(--cor-primaria);
+  font-weight: 700;
+}
+
+.menu-item.logout {
+  color: var(--cor-erro);
+}
+
+.menu-item.logout:hover {
+  background: #FCEEEE;
+  color: #9F2929;
+}
+
+/* CABEÇALHO */
+
+.header {
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.header h1.page-title {
+  color: var(--cor-primaria-escura);
+}
+
+/* BOTÕES */
+
+.btn-primary {
+  background: var(--cor-primaria);
+  color: #FFFFFF;
+  border-color: transparent;
+}
+
+.btn-primary:hover {
+  background: var(--cor-primaria-escura);
+  color: #FFFFFF;
+}
+
+.btn-secondary {
+  background: var(--cor-acento);
+  color: #302313;
+  border-color: transparent;
+}
+
+.btn-secondary:hover {
+  background: var(--cor-acento-escura);
+  color: #FFFFFF;
+}
+
+.btn-coral {
+  background: var(--cor-coral);
+  color: #FFFFFF;
+}
+
+.btn-coral:hover {
+  background: #C65D1D;
+  color: #FFFFFF;
+}
+
+.btn-outline {
+  background: transparent;
+  border-color: var(--cor-primaria);
+  color: var(--cor-primaria-escura);
+}
+
+.btn-outline:hover {
+  background: var(--cor-primaria-clara);
+}
+
+.btn-ghost:hover {
+  background: var(--cor-fundo);
+  color: var(--cor-primaria-escura);
+}
+
+.btn-danger {
+  background: var(--cor-erro);
+  color: #FFFFFF;
+}
+
+.btn-danger:hover {
+  background: #9F2929;
+  color: #FFFFFF;
+}
+
+.btn-icon:hover {
+  background: var(--cor-primaria-clara);
+  color: var(--cor-primaria-escura);
+}
+
+/* FORMULÁRIOS */
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--cor-primaria);
+  box-shadow: 0 0 0 3px rgba(40, 122, 75, 0.14);
+}
+
+.checkbox input,
+.radio input {
+  accent-color: var(--cor-primaria);
+}
+
+.upload-zone:hover {
+  border-color: var(--cor-primaria);
+  background: var(--cor-primaria-clara);
+}
+
+.upload-item {
+  background: var(--cor-primaria-clara);
+}
+
+/* TABELAS */
+
+.table thead {
+  background: var(--cor-primaria-clara);
+}
+
+.table th {
+  color: var(--cor-primaria-escura);
+  border-bottom-color: var(--cor-borda);
+}
+
+.table td {
+  border-bottom-color: var(--cor-borda);
+}
+
+.table tbody tr:hover {
+  background: #F7FAF8;
+}
+
+/* ETIQUETAS */
+
+.badge.success {
+  background: #E1F3E7;
+  color: #1D6539;
+}
+
+.badge.warning {
+  background: #FFF2D5;
+  color: #805600;
+}
+
+.badge.danger {
+  background: #FCEEEE;
+  color: #982E2E;
+}
+
+.badge.info {
+  background: #E4F0FB;
+  color: #205E8D;
+}
+
+.badge.primary {
+  background: var(--cor-primaria-clara);
+  color: var(--cor-primaria-escura);
+}
+
+/* MODAIS */
+
+.modal {
+  background: #FFFFFF;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--radius-lg);
+}
+
+.modal-header {
+  border-bottom-color: var(--cor-borda);
+}
+
+.modal-footer {
+  background: var(--cor-fundo);
+  border-top-color: var(--cor-borda);
+}
+
+.modal-close:hover {
+  color: var(--cor-primaria-escura);
+}
+
+/* ABAS */
+
+.tabs {
+  border-bottom-color: var(--cor-borda);
+}
+
+.tab:hover {
+  color: var(--cor-primaria);
+}
+
+.tab.active {
+  color: var(--cor-primaria-escura);
+  border-bottom-color: var(--cor-primaria);
+}
+
+/* DASHBOARD */
+
+.welcome-banner {
+  background: linear-gradient(
+    120deg,
+    #287A4B 0%,
+    #1D5937 100%
+  );
+  color: #FFFFFF;
+}
+
+.welcome-banner h1,
+.welcome-banner p {
+  color: #FFFFFF;
+}
+
+.quick-action-card {
+  background: #FFFFFF;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--radius-lg);
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.quick-action-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--cor-primaria);
+  box-shadow: var(--sombra-md);
+}
+
+.quick-action-card i {
+  color: var(--cor-primaria);
+}
+
+/* LOGIN */
+
+.login-page {
+  background: linear-gradient(
+    135deg,
+    #E7F4EB 0%,
+    #FFFFFF 54%,
+    #FFF4E5 100%
+  );
+}
+
+.login-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(40, 122, 75, 0.12);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--sombra-lg);
+}
+
+.login-card h1 {
+  color: var(--cor-primaria-escura);
+}
+
+.role-option.selected {
+  border-color: var(--cor-primaria);
+  background: var(--cor-primaria-clara);
+}
+
+.role-option.selected i {
+  color: var(--cor-primaria-escura);
+}
+
+/* CARTÃO DO ALUNO */
+
+.student-header {
+  background: #FFFFFF;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--sombra-sm);
+}
+
+.student-header .avatar {
+  border-color: var(--cor-primaria-clara);
+}
+
+/* INDICADORES */
+
+.stat-card {
+  background: #FFFFFF;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--radius-lg);
+  transition: box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: var(--sombra-md);
+}
+
+.stat-icon.green {
+  background: #E8F5EE;
+  color: #1D5937;
+}
+
+.stat-icon.orange {
+  background: #FFF0DA;
+  color: #985308;
+}
+
+.stat-icon.blue {
+  background: #E4F0FB;
+  color: #205E8D;
+}
+
+.stat-icon.red {
+  background: #FCEEEE;
+  color: #9F2929;
+}
+
+/* OFICINAS E TURMAS */
+
+.entity-card {
+  background: #FFFFFF;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--radius-lg);
+}
+
+.entity-card:hover {
+  border-color: var(--cor-primaria);
+  box-shadow: var(--sombra-md);
+}
+
+.entity-card .entity-icon {
+  background: var(--cor-primaria-clara);
+  color: var(--cor-primaria-escura);
+}
+
+/* LINHA DO TEMPO */
+
+.timeline::before {
+  background: var(--cor-borda);
+}
+
+.timeline-item::before {
+  background: var(--cor-acento);
+  box-shadow: 0 0 0 2px var(--cor-acento);
+}
+
+/* RELATÓRIOS */
+
+.pdf-header {
+  border-bottom-color: var(--cor-primaria);
+}
+
+.pdf-section h3 {
+  color: var(--cor-primaria-escura);
+}
+
+/* AVISOS E ACESSO RESTRITO */
+
+.restricted-banner {
+  background: #FFF7E5;
+  border-left-color: var(--cor-aviso);
+}
+
+.restricted-banner i {
+  color: #986B0A;
+}
+
+.lgpd-box {
+  background: var(--cor-primaria-clara);
+  border-color: #B9DCC5;
+}
+
+.lgpd-box h4 {
+  color: var(--cor-primaria-escura);
+}
+
+/* ALERTAS */
+
+.alert.success {
+  background: #EAF6EE;
+  border-color: var(--cor-sucesso);
+  color: #1D6539;
+}
+
+.alert.warning {
+  background: #FFF7E5;
+  border-color: var(--cor-aviso);
+  color: #805600;
+}
+
+.alert.danger {
+  background: #FCEEEE;
+  border-color: var(--cor-erro);
+  color: #982E2E;
+}
+
+.alert.info {
+  background: #EAF3FB;
+  border-color: var(--cor-info);
+  color: #205E8D;
+}
+
+/* NOTIFICAÇÕES */
+
+.toast.success {
+  background: var(--cor-sucesso);
+  color: #FFFFFF;
+}
+
+.toast.error {
+  background: var(--cor-erro);
+  color: #FFFFFF;
+}
+
+.toast.warning {
+  background: #FFF0C7;
+  color: #674700;
+}
+
+/* GRÁFICOS */
+
+.bar-fill {
+  background: var(--cor-primaria);
+}
+
+.bar-fill.warning {
+  background: var(--cor-aviso);
+  color: #302313;
+}
+
+.bar-fill.danger {
+  background: var(--cor-erro);
+}
+
+.bar-fill.success {
+  background: var(--cor-sucesso);
+}
+
+/* RODAPÉ */
+
+.footer {
+  background: var(--cor-primaria-escura);
+}
+
+.footer a:hover {
+  color: #FFC16B;
+}
+
+/* LINKS E ACESSIBILIDADE */
+
+a:hover {
+  color: var(--cor-primaria-escura);
+}
+
+:focus-visible {
+  outline: 3px solid var(--cor-primaria);
+  outline-offset: 2px;
+}
+
+/* RESPONSIVIDADE */
+
+@media (max-width: 768px) {
+  .menu-item {
+    margin-right: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
