@@ -1,4 +1,3 @@
-
 /* ==========================================
    TEMA VISUAL — FUNDAÇÃO TOQUE
    ========================================== */
@@ -47,14 +46,16 @@ body {
 }
 
 .menu-item.logout:hover {
-  background: #FCEEEE;
-  color: #9F2929;
+  background: #FBE6E4;
+  color: #A92B27;
 }
 
 /* CABEÇALHO */
 
 .header {
-  background: #FFFFFF;
+  background:
+    linear-gradient(90deg, #4C8C2B 0 25%, #1F6FB5 25% 50%, #F2B01E 50% 75%, #D43F3A 75% 100%) top / 100% 4px no-repeat,
+    #FFFFFF;
   border-bottom: 1px solid var(--cor-borda);
 }
 
@@ -117,7 +118,7 @@ body {
 }
 
 .btn-danger:hover {
-  background: #9F2929;
+  background: #A92B27;
   color: #FFFFFF;
 }
 
@@ -133,7 +134,7 @@ body {
 .textarea:focus {
   outline: none;
   border-color: var(--cor-primaria);
-  box-shadow: 0 0 0 3px rgba(40, 122, 75, 0.14);
+  box-shadow: 0 0 0 3px rgba(76, 140, 43, 0.14);
 }
 
 .checkbox input,
@@ -166,14 +167,14 @@ body {
 }
 
 .table tbody tr:hover {
-  background: #F7FAF8;
+  background: #F9F7F1;
 }
 
 /* ETIQUETAS */
 
 .badge.success {
-  background: #E1F3E7;
-  color: #1D6539;
+  background: #E9F3DF;
+  color: #336B1B;
 }
 
 .badge.warning {
@@ -182,13 +183,13 @@ body {
 }
 
 .badge.danger {
-  background: #FCEEEE;
-  color: #982E2E;
+  background: #FBE6E4;
+  color: #A92B27;
 }
 
 .badge.info {
-  background: #E4F0FB;
-  color: #205E8D;
+  background: #E1EEF9;
+  color: #164F85;
 }
 
 .badge.primary {
@@ -237,8 +238,8 @@ body {
 .welcome-banner {
   background: linear-gradient(
     120deg,
-    #287A4B 0%,
-    #1D5937 100%
+    #336B1B 0%,
+    #1F6FB5 100%
   );
   color: #FFFFFF;
 }
@@ -270,15 +271,15 @@ body {
 .login-page {
   background: linear-gradient(
     135deg,
-    #E7F4EB 0%,
+    #E9F3DF 0%,
     #FFFFFF 54%,
-    #FFF4E5 100%
+    #FFF3DA 100%
   );
 }
 
 .login-card {
   background: #FFFFFF;
-  border: 1px solid rgba(40, 122, 75, 0.12);
+  border: 1px solid rgba(76, 140, 43, 0.12);
   border-radius: var(--radius-lg);
   box-shadow: var(--sombra-lg);
 }
@@ -323,8 +324,8 @@ body {
 }
 
 .stat-icon.green {
-  background: #E8F5EE;
-  color: #1D5937;
+  background: #E9F3DF;
+  color: #336B1B;
 }
 
 .stat-icon.orange {
@@ -333,13 +334,13 @@ body {
 }
 
 .stat-icon.blue {
-  background: #E4F0FB;
-  color: #205E8D;
+  background: #E1EEF9;
+  color: #164F85;
 }
 
 .stat-icon.red {
-  background: #FCEEEE;
-  color: #9F2929;
+  background: #FBE6E4;
+  color: #A92B27;
 }
 
 /* OFICINAS E TURMAS */
@@ -394,7 +395,7 @@ body {
 
 .lgpd-box {
   background: var(--cor-primaria-clara);
-  border-color: #B9DCC5;
+  border-color: #BFDCA8;
 }
 
 .lgpd-box h4 {
@@ -404,9 +405,9 @@ body {
 /* ALERTAS */
 
 .alert.success {
-  background: #EAF6EE;
+  background: #E9F3DF;
   border-color: var(--cor-sucesso);
-  color: #1D6539;
+  color: #336B1B;
 }
 
 .alert.warning {
@@ -416,15 +417,15 @@ body {
 }
 
 .alert.danger {
-  background: #FCEEEE;
+  background: #FBE6E4;
   border-color: var(--cor-erro);
-  color: #982E2E;
+  color: #A92B27;
 }
 
 .alert.info {
-  background: #EAF3FB;
+  background: #E1EEF9;
   border-color: var(--cor-info);
-  color: #205E8D;
+  color: #164F85;
 }
 
 /* NOTIFICAÇÕES */
@@ -470,7 +471,7 @@ body {
 }
 
 .footer a:hover {
-  color: #FFC16B;
+  color: #F5C25B;
 }
 
 /* LINKS E ACESSIBILIDADE */
@@ -502,3 +503,38 @@ a:hover {
   }
 }
 
+/* ==========================================
+   CORES DA FUNDAÇÃO — AZUL, AMARELO E VERMELHO
+   ========================================== */
+
+/* Atalhos rápidos: um ícone de cada cor */
+.quick-action-card:nth-child(1) i { color: #4C8C2B; }
+.quick-action-card:nth-child(2) i { color: #1F6FB5; }
+.quick-action-card:nth-child(3) i { color: #E0A010; }
+.quick-action-card:nth-child(4) i { color: #D43F3A; }
+
+.quick-action-card:nth-child(2):hover { border-color: #1F6FB5; }
+.quick-action-card:nth-child(3):hover { border-color: #F2B01E; }
+.quick-action-card:nth-child(4):hover { border-color: #D43F3A; }
+
+/* Indicadores mais vivos */
+.stat-icon.green  { background: #DCEFC9; color: #336B1B; }
+.stat-icon.blue   { background: #D2E6F7; color: #164F85; }
+.stat-icon.orange { background: #FFEBB8; color: #A86F00; }
+.stat-icon.red    { background: #F9D5D2; color: #A92B27; }
+
+/* Botão secundário em azul */
+.btn-info {
+  background: #1F6FB5;
+  color: #FFFFFF;
+}
+.btn-info:hover {
+  background: #164F85;
+  color: #FFFFFF;
+}
+
+/* Item ativo do menu com destaque azul no hover */
+.menu-item:not(.active):not(.logout):hover {
+  background: #E1EEF9;
+  color: #164F85;
+}

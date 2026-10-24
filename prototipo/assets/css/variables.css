@@ -1,46 +1,53 @@
-
 /* ============================
    VARIÁVEIS — Fundação Toque
    ============================ */
 
 :root {
-  /* Identidade visual — verde principal */
-  --cor-primaria: #287A4B;
-  --cor-primaria-escura: #1D5937;
-  --cor-primaria-clara: #EAF5EE;
+  /* Verde (principal) */
+  --cor-primaria: #4C8C2B;
+  --cor-primaria-escura: #336B1B;
+  --cor-primaria-clara: #E9F3DF;
 
-  /* Cores de destaque — laranja */
-  --cor-acento: #E98A16;
-  --cor-acento-escura: #B96808;
-  --cor-coral: #E8752A;
+  /* Azul */
+  --cor-azul: #1F6FB5;
+  --cor-azul-escura: #164F85;
+  --cor-azul-clara: #E1EEF9;
+
+  /* Amarelo (destaque) */
+  --cor-acento: #F2B01E;
+  --cor-acento-escura: #C98A00;
+  --cor-coral: #EE7B2B;
+
+  /* Vermelho */
+  --cor-vermelho: #D43F3A;
 
   /* Cores semânticas */
-  --cor-info: #2878B8;
-  --cor-info-clara: #EAF3FB;
+  --cor-info: #1F6FB5;
+  --cor-info-clara: #E1EEF9;
 
-  --cor-sucesso: #27834D;
-  --cor-aviso: #E8A317;
-  --cor-erro: #C63D3D;
-  --cor-erro-escura: #9F2929;
-  --cor-erro-clara: #FCEEEE;
+  --cor-sucesso: #4C8C2B;
+  --cor-aviso: #F2B01E;
+  --cor-erro: #D43F3A;
+  --cor-erro-escura: #A92B27;
+  --cor-erro-clara: #FBE6E4;
 
   /* WhatsApp */
   --cor-whatsapp: #25D366;
 
   /* Fundos */
-  --cor-fundo: #F5F7F6;
+  --cor-fundo: #F7F4EC;
   --cor-card: #FFFFFF;
-  --cor-fundo-escuro: #1D5937;
+  --cor-fundo-escuro: #336B1B;
 
   /* Texto */
-  --cor-texto: #26352D;
-  --cor-texto-secundario: #69776F;
+  --cor-texto: #2B2F26;
+  --cor-texto-secundario: #6E6F63;
   --cor-texto-claro: #FFFFFF;
   --cor-texto-sobre-verde: #FFFFFF;
 
   /* Bordas */
-  --cor-borda: #DFE7E1;
-  --cor-borda-escura: #B8C7BD;
+  --cor-borda: #E6E0D2;
+  --cor-borda-escura: #C4BBA9;
 
   /* Tipografia */
   --fonte-principal: 'Roboto', sans-serif;
@@ -68,12 +75,11 @@
   --raio-pill: 999px;
 
   /* Sombras suaves */
-  --sombra-sm: 0 1px 3px rgba(25, 55, 38, 0.06);
-  --sombra-md: 0 4px 12px rgba(25, 55, 38, 0.08);
-  --sombra-lg: 0 10px 28px rgba(25, 55, 38, 0.13);
+  --sombra-sm: 0 1px 3px rgba(60, 50, 30, 0.06);
+  --sombra-md: 0 4px 12px rgba(60, 50, 30, 0.08);
+  --sombra-lg: 0 10px 28px rgba(60, 50, 30, 0.13);
 
   /* Layout */
   --largura-sidebar: 240px;
   --altura-header: 64px;
 }
-
