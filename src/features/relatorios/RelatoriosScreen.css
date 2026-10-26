@@ -1,0 +1,118 @@
+.relatorios-screen {
+  min-width: 0;
+}
+
+.relatorios-loading {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.relatorios-tabs-bar {
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+
+.relatorios-tabs {
+  display: flex;
+  width: min(1452px, calc(100% - 48px));
+  gap: 28px;
+  margin: 0 auto;
+}
+
+.relatorios-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 2px 12px;
+  margin-bottom: -1px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  text-align: left;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.relatorios-tab:hover {
+  color: var(--green-700);
+}
+
+.relatorios-tab.active {
+  color: var(--green-700);
+  border-bottom-color: var(--green-600);
+}
+
+.relatorios-tab-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  border-radius: 9px;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.relatorios-tab.active .relatorios-tab-icon {
+  color: var(--green-700);
+  background: var(--green-100);
+}
+
+.relatorios-tab > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.relatorios-tab strong {
+  color: var(--navy-800);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.relatorios-tab.active strong {
+  color: var(--green-800);
+}
+
+.relatorios-tab small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+@media (max-width: 820px) {
+  .relatorios-tabs {
+    width: min(100% - 32px, 1452px);
+    gap: 8px;
+  }
+
+  .relatorios-tab {
+    flex: 1;
+    justify-content: center;
+    padding: 11px 2px 10px;
+  }
+
+  .relatorios-tab small {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .relatorios-tabs {
+    width: calc(100% - 24px);
+  }
+
+  .relatorios-tab {
+    gap: 7px;
+  }
+
+  .relatorios-tab-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .relatorios-tab strong {
+    font-size: 12px;
+  }
+}

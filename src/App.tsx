@@ -40,6 +40,7 @@ import { GerenciarUsuarios } from './features/usuarios/GerenciarUsuarios'
 import { Turmas } from './features/turmas/Turmas'
 import { Oficinas } from './features/oficinas/Oficinas'
 import { Atividades } from './features/atividades/Atividades'
+import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
 import { LoginScreen } from './features/auth/LoginScreen'
 import { useAuth } from './features/auth/AuthContext'
 import type { UserProfile, UserRole } from './types/auth'
@@ -208,7 +209,7 @@ function Topbar({
 }) {
   const titles: Record<Screen, string> = {
     home: 'Dashboard',
-    reports: 'Relatório pedagógico',
+    reports: 'Relatórios',
     register: 'Cadastrar aluno',
     students: 'Alunos',
     'student-detail': studentName ?? 'Perfil do aluno',
@@ -312,7 +313,7 @@ function Dashboard({
   onNavigate,
   userName,
 }: {
-  onNavigate: (screen: Screen) => void
+  onNavigate: (screen: Screen, params?: Record<string, string>) => void
   userName?: string
 }) {
   const formattedDate = useMemo(() => {
@@ -368,7 +369,14 @@ function Dashboard({
                 <button
                   className="shortcut-button"
                   key={shortcut.label}
-                  onClick={() => shortcut.action && onNavigate(shortcut.action)}
+                  onClick={() => {
+                    if (!shortcut.action) return
+                    if (shortcut.action === 'reports') {
+                      onNavigate('reports', { aba: 'pedagogico' })
+                      return
+                    }
+                    onNavigate(shortcut.action)
+                  }}
                   type="button"
                 >
                   <Icon size={34} strokeWidth={2} />
@@ -853,7 +861,7 @@ function App() {
     return <LoginScreen />
   }
 
-  const navigate = (nextScreen: Screen) => {
+  const navigate = (nextScreen: Screen, params: Record<string, string> = {}) => {
     const url = new URL(window.location.href)
     if (nextScreen === 'home') {
       url.searchParams.delete('screen')
@@ -863,6 +871,13 @@ function App() {
     if (nextScreen !== 'student-detail') {
       url.searchParams.delete('aluno')
     }
+    if (nextScreen !== 'reports') {
+      url.searchParams.delete('aba')
+    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value)
+      else url.searchParams.delete(key)
+    })
     window.history.replaceState({}, '', url)
     setScreen(nextScreen)
   }
@@ -871,6 +886,7 @@ function App() {
     const url = new URL(window.location.href)
     url.searchParams.set('screen', 'student-detail')
     url.searchParams.set('aluno', id)
+    url.searchParams.delete('aba')
     window.history.replaceState({}, '', url)
     setSelectedStudentId(id)
     setScreen('student-detail')
@@ -935,11 +951,16 @@ function App() {
             <DetalheAluno
               onBack={() => navigate('students')}
               onEdit={handleEditStudent}
-              onNovoRelatorio={() => navigate('reports')}
+              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico' })}
               studentId={selectedStudentId}
             />
           )}
-          {screen === 'reports' && <PedagogicalReport />}
+          {screen === 'reports' && (
+            <RelatoriosScreen
+              isDirection={userProfile?.papel === 'direcao'}
+              pedagogicalContent={<PedagogicalReport />}
+            />
+          )}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
           {screen === 'turmas' && <Turmas onViewStudent={viewStudent} />}
           {screen === 'oficinas' && <Oficinas />}
