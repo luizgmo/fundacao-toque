@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -7,7 +7,6 @@ import {
   BarChart3,
   Bell,
   BookOpenCheck,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
@@ -43,6 +42,22 @@ import { Atividades } from './features/atividades/Atividades'
 import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
 import { LoginScreen } from './features/auth/LoginScreen'
 import { useAuth } from './features/auth/AuthContext'
+import { subscribeToStudents } from './services/studentsService'
+import {
+  getRelatoriosDoAluno,
+  saveRelatorio,
+  subscribeToRelatoriosDoAluno,
+  uploadAnexoRelatorio,
+} from './services/relatoriosService'
+import type { RelatorioPedagogico } from './types/relatoriosPedagogicos'
+import { tipoRelatorioToFirestore, tipoRelatorioToLabel } from './types/relatoriosPedagogicos'
+import {
+  getAlunosFaltasRecorrentes,
+  getDashboardMetrics,
+  getTarefasDeHoje,
+  getUltimasAtualizacoes,
+} from './services/dashboardService'
+import type { AlunoFaltaRecorrente, TimelineItem } from './services/dashboardService'
 import type { UserProfile, UserRole } from './types/auth'
 import { ROLE_LABELS } from './types/auth'
 import type { Student } from './features/alunos/students-data'
@@ -326,6 +341,50 @@ function Dashboard({
     return text.charAt(0).toUpperCase() + text.slice(1)
   }, [])
 
+  const [metrics, setMetrics] = useState({ alunosAtivos: 0, turmasAtivas: 0, oficinasAtivas: 0, frequenciaMedia: null as number | null })
+  const [loadingMetrics, setLoadingMetrics] = useState(true)
+  const [faltas, setFaltas] = useState<AlunoFaltaRecorrente[]>([])
+  const [timeline, setTimeline] = useState<TimelineItem[]>([])
+  const [tarefas, setTarefas] = useState<{ titulo: string; prazo: string; feito: boolean }[]>([])
+  const [dashboardError, setDashboardError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      setLoadingMetrics(true)
+      setDashboardError('')
+      try {
+        const [m, f, t, tasks] = await Promise.all([
+          getDashboardMetrics(),
+          getAlunosFaltasRecorrentes(5),
+          getUltimasAtualizacoes(6),
+          getTarefasDeHoje(),
+        ])
+        if (!mounted) return
+        setMetrics({
+          alunosAtivos: m.alunosAtivos,
+          turmasAtivas: m.turmasAtivas,
+          oficinasAtivas: m.oficinasAtivas,
+          frequenciaMedia: m.frequenciaMedia,
+        })
+        setFaltas(f)
+        setTimeline(t)
+        setTarefas(tasks)
+      } catch (err) {
+        console.warn('Erro ao carregar dashboard do Firestore:', err)
+        if (mounted) setDashboardError('Não foi possível carregar os dados do banco. Verifique a conexão/permissões.')
+      } finally {
+        if (mounted) setLoadingMetrics(false)
+      }
+    }
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const pendentes = tarefas.filter((t) => !t.feito).length
+
   const shortcuts = [
     { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen },
     { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen },
@@ -353,11 +412,22 @@ function Dashboard({
         <Sparkles aria-hidden="true" size={60} strokeWidth={1.5} />
       </section>
 
+      {dashboardError && (
+        <p style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '0.6rem 0.9rem' }}>
+          {dashboardError}
+        </p>
+      )}
+
       <section aria-label="Resumo do sistema" className="metrics-grid">
-        <MetricCard icon={Users} label="Alunos ativos" tone="green" value="47" />
-        <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value="5" />
-        <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value="12" />
-        <MetricCard icon={TrendingUp} label="Frequência média (mês)" tone="mint" value="87%" />
+        <MetricCard icon={Users} label="Alunos ativos" tone="green" value={loadingMetrics ? '…' : String(metrics.alunosAtivos)} />
+        <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value={loadingMetrics ? '…' : String(metrics.turmasAtivas)} />
+        <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value={loadingMetrics ? '…' : String(metrics.oficinasAtivas)} />
+        <MetricCard
+          icon={TrendingUp}
+          label="Frequência média (mês)"
+          tone="mint"
+          value={loadingMetrics ? '…' : metrics.frequenciaMedia === null ? '—' : `${metrics.frequenciaMedia}%`}
+        />
       </section>
 
       <div className="dashboard-primary-grid">
@@ -389,35 +459,34 @@ function Dashboard({
         </SectionCard>
 
         <SectionCard
-          action={<span className="status-pill warning">3 pendentes</span>}
+          action={<span className="status-pill warning">{pendentes} pendentes</span>}
           className="tasks-card"
           title="Tarefas de hoje"
         >
           <div className="task-list">
-            <article className="task-item">
-              <ClipboardCheck className="task-icon amber" size={21} />
-              <div>
-                <strong>Frequência — Turma A</strong>
-                <span><Clock3 size={13} /> Prazo: 12h00</span>
-              </div>
-              <span className="status-pill danger">Pendente</span>
-            </article>
-            <article className="task-item">
-              <ListChecks className="task-icon orange" size={21} />
-              <div>
-                <strong>Atividades — Turma B</strong>
-                <span><Clock3 size={13} /> Prazo: 17h00</span>
-              </div>
-              <span className="status-pill danger">Pendente</span>
-            </article>
-            <article className="task-item">
-              <FileText className="task-icon green-text" size={21} />
-              <div>
-                <strong>Relatório semanal</strong>
-                <span><CalendarDays size={13} /> Prazo: sexta</span>
-              </div>
-              <span className="status-pill warning">Em breve</span>
-            </article>
+            {tarefas.length === 0 && (
+              <article className="task-item">
+                <Clock3 className="task-icon amber" size={21} />
+                <div>
+                  <strong>{loadingMetrics ? 'Carregando tarefas…' : 'Nenhuma tarefa encontrada'}</strong>
+                  <span>Verifique os registros de hoje</span>
+                </div>
+              </article>
+            )}
+            {tarefas.map((tarefa, i) => (
+              <article className="task-item" key={tarefa.titulo}>
+                {i === 0 && <ClipboardCheck className="task-icon amber" size={21} />}
+                {i === 1 && <ListChecks className="task-icon orange" size={21} />}
+                {i > 1 && <FileText className="task-icon green-text" size={21} />}
+                <div>
+                  <strong>{tarefa.titulo}</strong>
+                  <span><Clock3 size={13} /> {tarefa.prazo}</span>
+                </div>
+                <span className={'status-pill ' + (tarefa.feito ? 'success' : 'danger')}>
+                  {tarefa.feito ? 'Feito' : 'Pendente'}
+                </span>
+              </article>
+            ))}
           </div>
         </SectionCard>
       </div>
@@ -430,47 +499,53 @@ function Dashboard({
           <div className="absence-alert">
             <AlertTriangle size={21} />
             <div>
-              <strong>3 alunos precisam de contato com a família</strong>
+              <strong>
+                {faltas.length === 0
+                  ? 'Nenhum aluno com 3+ faltas consecutivas'
+                  : `${faltas.length} aluno${faltas.length === 1 ? '' : 's'} precisa${faltas.length === 1 ? '' : 'm'} de contato com a família`}
+              </strong>
               <span>Verifique os registros de contato e as ausências recentes.</span>
             </div>
           </div>
           <div className="student-alert-list">
-            {['Lucas Almeida', 'Mariana Oliveira', 'Pedro Henrique'].map((student, index) => (
-              <div className="student-alert-row" key={student}>
-                <span className="mini-avatar">{student.charAt(0)}</span>
+            {faltas.map((aluno) => (
+              <div className="student-alert-row" key={aluno.alunoId}>
+                <span className="mini-avatar">{aluno.alunoNome.charAt(0)}</span>
                 <div>
-                  <strong>{student}</strong>
-                  <span>Turma {String.fromCharCode(65 + index)} · {3 + index} faltas consecutivas</span>
+                  <strong>{aluno.alunoNome}</strong>
+                  <span>{aluno.turmaNome} · {aluno.faltasConsecutivas} faltas consecutivas</span>
                 </div>
                 <button onClick={() => onNavigate('frequencia')} type="button">Ver chamadas</button>
               </div>
             ))}
+            {faltas.length === 0 && !loadingMetrics && (
+              <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Sem alertas no momento. Bom trabalho!</p>
+            )}
           </div>
         </SectionCard>
 
         <SectionCard title="Últimas atualizações">
           <div className="timeline">
-            <article>
-              <span className="timeline-dot"><CheckCircle2 size={15} /></span>
-              <div>
-                <small>Hoje, 09:42</small>
-                <p><strong>Roberto Mendes</strong> registrou frequência da <strong>Turma A</strong>.</p>
-              </div>
-            </article>
-            <article>
-              <span className="timeline-dot"><Activity size={15} /></span>
-              <div>
-                <small>Hoje, 08:15</small>
-                <p><strong>Ana Carolina</strong> anexou fotos à atividade <strong>Musicalização</strong>.</p>
-              </div>
-            </article>
-            <article>
-              <span className="timeline-dot"><FileText size={15} /></span>
-              <div>
-                <small>Ontem, 16:28</small>
-                <p>Relatório semestral de <strong>Mariana Oliveira</strong> foi atualizado.</p>
-              </div>
-            </article>
+            {timeline.length === 0 && (
+              <article>
+                <span className="timeline-dot"><Activity size={15} /></span>
+                <div>
+                  <small>{loadingMetrics ? 'Carregando…' : 'Sem movimentações'}</small>
+                  <p>{loadingMetrics ? 'Buscando dados do banco…' : 'Nenhuma atividade, chamada ou relatório recente.'}</p>
+                </div>
+              </article>
+            )}
+            {timeline.map((item, index) => (
+              <article key={item.id}>
+                <span className="timeline-dot">
+                  {index % 3 === 0 ? <CheckCircle2 size={15} /> : index % 3 === 1 ? <Activity size={15} /> : <FileText size={15} />}
+                </span>
+                <div>
+                  <small>{item.horario}</small>
+                  <p><strong>{item.autor}</strong> {item.texto}</p>
+                </div>
+              </article>
+            ))}
           </div>
         </SectionCard>
       </div>
@@ -496,7 +571,7 @@ const initialReport: ReportValues = {
   reportType: 'Semestral',
   periodStart: '2026-01-01',
   periodEnd: '2026-06-30',
-  professional: 'Ana Carolina Silva',
+  professional: '',
   evolution:
     'Mariana demonstrou evolução gradual na participação das atividades coletivas e maior segurança para realizar tarefas com orientação.',
   advances:
@@ -509,6 +584,7 @@ const initialReport: ReportValues = {
 }
 
 function PedagogicalReport() {
+  const { currentUser, userProfile } = useAuth()
   const [values, setValues] = useState<ReportValues>(initialReport)
   const [areas, setAreas] = useState({
     cognitive: 'Em evolução',
@@ -518,34 +594,190 @@ function PedagogicalReport() {
     autonomy: 'Necessita apoio',
   })
   const [status, setStatus] = useState<'Rascunho' | 'Concluído'>('Rascunho')
-  const [savedMessage, setSavedMessage] = useState('Salvo automaticamente às 14:18')
+  const [savedMessage, setSavedMessage] = useState('Nenhum salvamento ainda — preencha e salve no banco.')
   const [attachmentName, setAttachmentName] = useState('')
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [students, setStudents] = useState<Student[]>([])
+  const [history, setHistory] = useState<RelatorioPedagogico[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [error, setError] = useState('')
+
+  const canWrite = userProfile?.papel === 'direcao' || userProfile?.papel === 'pedagogia'
+  // Profissional exibido: o digitado, ou o nome do usuário logado como padrão
+  const professionalName = values.professional || userProfile?.nome_completo || ''
+
+  // Alunos reais do Firestore para o select (antes eram 3 fixos)
+  useEffect(() => {
+    const unsub = subscribeToStudents((list) => {
+      setStudents(list)
+      setValues((current) => {
+        if (list.length === 0) return current
+        const exists = list.some((s) => s.id === current.student)
+        if (!exists) return { ...current, student: list[0].id }
+        return current
+      })
+    })
+    return () => unsub()
+  }, [])
+
+  // Histórico real do aluno selecionado (antes eram 2 fixos)
+  useEffect(() => {
+    if (!values.student) return undefined
+    const unsub = subscribeToRelatoriosDoAluno(
+      values.student,
+      (list) => {
+        setHistory(list)
+        setLoadingHistory(false)
+      },
+      () => setLoadingHistory(false)
+    )
+    return () => unsub()
+  }, [values.student])
+
+  const selectedStudent = students.find((s) => s.id === values.student)
 
   const updateValue = (field: keyof ReportValues, value: string) => {
     setValues((current) => ({ ...current, [field]: value }))
     setStatus('Rascunho')
+    if (field === 'student' || field === 'reportType' || field === 'periodStart' || field === 'periodEnd') {
+      setEditingId(null)
+    }
+    if (field === 'student') {
+      setHistory([])
+      setLoadingHistory(true)
+    }
+  }
+
+  function buildInput(nextStatus: 'rascunho' | 'concluido') {
+    return {
+      alunoId: values.student,
+      tipoRelatorio: tipoRelatorioToFirestore(values.reportType),
+      periodoInicio: values.periodStart,
+      periodoFim: values.periodEnd,
+      evolucao: values.evolution,
+      dificuldades: values.difficulties,
+      avancos: values.advances,
+      encaminhamentos: values.referrals,
+      observacoesFinais: values.finalNotes,
+      avaliacaoPorArea: {
+        cognitivo: areas.cognitive,
+        motor: areas.motor,
+        social: areas.social,
+        comunicacao: areas.communication,
+        autonomia: areas.autonomy,
+      },
+      usuarioResponsavelId: currentUser?.uid || userProfile?.uid || 'desconhecido',
+      usuarioResponsavelNome: values.professional || userProfile?.nome_completo || '',
+      status: nextStatus,
+    }
+  }
+
+  async function persist(nextStatus: 'rascunho' | 'concluido'): Promise<boolean> {
+    setError('')
+    if (!canWrite) {
+      setError('Seu perfil não tem permissão para salvar relatórios (apenas Direção e Pedagogia).')
+      return false
+    }
+    if (!values.student) {
+      setError('Selecione um aluno.')
+      return false
+    }
+    if (!values.periodStart || !values.periodEnd) {
+      setError('Informe o período avaliado.')
+      return false
+    }
+    if (values.periodStart > values.periodEnd) {
+      setError('O início do período não pode ser depois do fim.')
+      return false
+    }
+    setSaving(true)
+    try {
+      const userId = currentUser?.uid || userProfile?.uid || 'desconhecido'
+      const id = await saveRelatorio(buildInput(nextStatus), userId, editingId)
+      setEditingId(id)
+      if (attachmentFile) {
+        try {
+          await uploadAnexoRelatorio(id, attachmentFile, userId)
+        } catch (anexoErr) {
+          console.warn('Relatório salvo, mas anexo falhou:', anexoErr)
+          setError('Relatório salvo, mas o anexo falhou (projeto sem Storage ou permissão).')
+        }
+      }
+      if (nextStatus === 'rascunho') {
+        setStatus('Rascunho')
+        setSavedMessage(
+          'Rascunho salvo no banco às ' +
+            new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date())
+        )
+      } else {
+        setStatus('Concluído')
+        setSavedMessage('Relatório finalizado e salvo no banco — pronto para consulta.')
+      }
+      try {
+        const updated = await getRelatoriosDoAluno(values.student)
+        setHistory(updated)
+      } catch {
+        // realtime já atualiza
+      }
+      return true
+    } catch (err) {
+      console.error('Erro ao salvar relatório no Firestore:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('permission') || msg.includes('Missing or insufficient')) {
+        setError('Sem permissão no Firestore (firestore.rules: apenas Direção/Pedagogia criam relatórios).')
+      } else {
+        setError('Não foi possível salvar no banco: ' + msg)
+      }
+      return false
+    } finally {
+      setSaving(false)
+    }
   }
 
   const saveDraft = () => {
-    setStatus('Rascunho')
-    setSavedMessage(
-      'Rascunho salvo às ' +
-        new Intl.DateTimeFormat('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }).format(new Date()),
-    )
+    void persist('rascunho')
   }
 
   const finishReport = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setStatus('Concluído')
-    setSavedMessage('Relatório finalizado e pronto para consulta')
+    void persist('concluido')
   }
 
   const selectAttachment = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0]
+    const selectedFile = event.target.files?.[0] || null
+    setAttachmentFile(selectedFile)
     setAttachmentName(selectedFile?.name ?? '')
+  }
+
+  function loadReportIntoForm(report: RelatorioPedagogico) {
+    setEditingId(report.id)
+    setValues({
+      student: report.alunoId,
+      reportType: tipoRelatorioToLabel(report.tipoRelatorio),
+      periodStart: report.periodoInicio,
+      periodEnd: report.periodoFim,
+      professional: report.usuarioResponsavelNome || values.professional,
+      evolution: report.evolucao,
+      advances: report.avancos,
+      difficulties: report.dificuldades,
+      referrals: report.encaminhamentos,
+      finalNotes: report.observacoesFinais || '',
+    })
+    setAreas({
+      cognitive: report.avaliacaoPorArea.cognitivo,
+      motor: report.avaliacaoPorArea.motor,
+      social: report.avaliacaoPorArea.social,
+      communication: report.avaliacaoPorArea.comunicacao,
+      autonomy: report.avaliacaoPorArea.autonomia,
+    })
+    setStatus(report.status === 'concluido' ? 'Concluído' : 'Rascunho')
+    setSavedMessage(
+      report.status === 'concluido'
+        ? 'Relatório concluído carregado do banco para consulta.'
+        : 'Rascunho carregado do banco — continue editando.'
+    )
   }
 
   return (
@@ -558,18 +790,28 @@ function PedagogicalReport() {
         </div>
         <div className="report-heading-actions">
           <span className={'report-status ' + (status === 'Concluído' ? 'completed' : '')}>
-            {status}
+            {status}{editingId ? ' · no banco' : ''}
           </span>
-          <button className="button secondary" onClick={saveDraft} type="button">
+          <button className="button secondary" disabled={saving || !canWrite} onClick={saveDraft} type="button">
             <Save size={18} />
-            Salvar rascunho
+            {saving ? 'Salvando…' : 'Salvar rascunho'}
           </button>
-          <button className="button primary" form="pedagogical-report-form" type="submit">
+          <button className="button primary" disabled={saving || !canWrite} form="pedagogical-report-form" type="submit">
             <CheckCircle2 size={18} />
             Finalizar relatório
           </button>
         </div>
       </div>
+      {error && (
+        <p style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '0.6rem 0.9rem', marginBottom: '1rem' }}>
+          {error}
+        </p>
+      )}
+      {!canWrite && (
+        <p style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '0.6rem 0.9rem', marginBottom: '1rem' }}>
+          Visualização somente leitura: seu perfil ({userProfile?.papel}) não pode salvar relatórios no banco.
+        </p>
+      )}
 
       <div className="report-layout">
         <form className="report-form" id="pedagogical-report-form" onSubmit={finishReport}>
@@ -590,9 +832,10 @@ function PedagogicalReport() {
                   required
                   value={values.student}
                 >
-                  <option value="mariana-oliveira">Mariana Oliveira</option>
-                  <option value="lucas-almeida">Lucas Almeida</option>
-                  <option value="pedro-henrique">Pedro Henrique</option>
+                  {students.length === 0 && <option value="">Carregando alunos do banco…</option>}
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </label>
               <label className="field">
@@ -628,19 +871,22 @@ function PedagogicalReport() {
                 <span>Profissional responsável</span>
                 <input
                   onChange={(event) => updateValue('professional', event.target.value)}
+                  placeholder={userProfile?.nome_completo || 'Nome do profissional'}
                   required
-                  value={values.professional}
+                  value={professionalName}
                 />
               </label>
             </div>
 
             <div className="selected-student">
-              <span className="student-avatar">MO</span>
+              <span className="student-avatar">
+                {(selectedStudent?.name || values.professional || 'A').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+              </span>
               <div>
-                <strong>Mariana Oliveira</strong>
-                <span>12 anos · Turma B · Período da manhã</span>
+                <strong>{selectedStudent?.name || 'Selecione um aluno'}</strong>
+                <span>{selectedStudent ? `${selectedStudent.turma} · ${selectedStudent.turmaTurno}` : 'Dados do banco'}</span>
               </div>
-              <span className="status-pill success">Cadastro ativo</span>
+              <span className="status-pill success">{selectedStudent?.status || '—'}</span>
             </div>
           </section>
 
@@ -766,10 +1012,10 @@ function PedagogicalReport() {
           </section>
 
           <div className="mobile-form-actions">
-            <button className="button secondary" onClick={saveDraft} type="button">
-              <Save size={18} /> Salvar rascunho
+            <button className="button secondary" disabled={saving || !canWrite} onClick={saveDraft} type="button">
+              <Save size={18} /> {saving ? 'Salvando…' : 'Salvar rascunho'}
             </button>
-            <button className="button primary" type="submit">
+            <button className="button primary" disabled={saving || !canWrite} type="submit">
               <CheckCircle2 size={18} /> Finalizar relatório
             </button>
           </div>
@@ -778,39 +1024,36 @@ function PedagogicalReport() {
         <aside className="report-aside">
           <SectionCard title="Resumo">
             <dl className="report-summary">
-              <div><dt>Aluno</dt><dd>Mariana Oliveira</dd></div>
-              <div><dt>Turma</dt><dd>Turma B</dd></div>
-              <div><dt>Período</dt><dd>1º semestre de 2026</dd></div>
-              <div><dt>Responsável</dt><dd>Ana Carolina Silva</dd></div>
+              <div><dt>Aluno</dt><dd>{selectedStudent?.name || '—'}</dd></div>
+              <div><dt>Turma</dt><dd>{selectedStudent?.turma || '—'}</dd></div>
+              <div><dt>Período</dt><dd>{values.periodStart || '—'} a {values.periodEnd || '—'}</dd></div>
+              <div><dt>Responsável</dt><dd>{professionalName || '—'}</dd></div>
             </dl>
             <div className="save-feedback">
               <CheckCircle2 size={16} />
-              <span>{savedMessage}</span>
+              <span>{saving ? 'Salvando no banco…' : savedMessage}</span>
             </div>
           </SectionCard>
 
           <SectionCard title="Relatórios anteriores">
             <div className="report-history">
-              <article>
-                <span className="history-icon"><FileText size={19} /></span>
-                <div>
-                  <strong>Relatório anual</strong>
-                  <span>Janeiro a dezembro de 2025</span>
-                  <small>Concluído em 18/12/2025</small>
-                </div>
-                <button aria-label="Baixar relatório anual" type="button"><Download size={17} /></button>
-              </article>
-              <article>
-                <span className="history-icon"><FileText size={19} /></span>
-                <div>
-                  <strong>Relatório semestral</strong>
-                  <span>Janeiro a junho de 2025</span>
-                  <small>Concluído em 02/07/2025</small>
-                </div>
-                <button aria-label="Baixar relatório semestral" type="button"><Download size={17} /></button>
-              </article>
+              {loadingHistory && <p style={{ color: '#6b7280' }}>Carregando do banco…</p>}
+              {!loadingHistory && history.length === 0 && (
+                <p style={{ color: '#6b7280' }}>Nenhum relatório deste aluno no banco ainda.</p>
+              )}
+              {history.map((report) => (
+                <article key={report.id}>
+                  <span className="history-icon"><FileText size={19} /></span>
+                  <div>
+                    <strong>Relatório {tipoRelatorioToLabel(report.tipoRelatorio).toLowerCase()}</strong>
+                    <span>{report.periodoInicio} a {report.periodoFim}</span>
+                    <small>{report.status === 'concluido' ? 'Concluído' : 'Rascunho'}</small>
+                  </div>
+                  <button aria-label="Carregar relatório" onClick={() => loadReportIntoForm(report)} type="button"><Download size={17} /></button>
+                </article>
+              ))}
             </div>
-            <button className="text-button" type="button">Ver histórico completo</button>
+            <button className="text-button" onClick={() => { setEditingId(null); setStatus('Rascunho'); setSavedMessage('Novo relatório — preencha e salve no banco.') }} type="button">Novo relatório</button>
           </SectionCard>
 
           <div className="privacy-note">
