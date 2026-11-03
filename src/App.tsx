@@ -17,6 +17,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   ListChecks,
+  KeyRound,
   LogOut,
   Menu,
   MessageCircle,
@@ -41,6 +42,7 @@ import { Oficinas } from './features/oficinas/Oficinas'
 import { Atividades } from './features/atividades/Atividades'
 import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
 import { LoginScreen } from './features/auth/LoginScreen'
+import { TrocarSenha } from './features/auth/TrocarSenha'
 import { useAuth } from './features/auth/AuthContext'
 import { subscribeToStudents } from './services/studentsService'
 import {
@@ -134,6 +136,7 @@ function Sidebar({
   onClose,
   onNavigate,
   onLogout,
+  onChangePassword,
 }: {
   currentScreen: Screen
   isOpen: boolean
@@ -141,6 +144,7 @@ function Sidebar({
   onClose: () => void
   onNavigate: (screen: Screen) => void
   onLogout: () => void
+  onChangePassword?: () => void
 }) {
   const renderItem = (item: NavItem) => {
     const Icon = item.icon
@@ -193,6 +197,20 @@ function Sidebar({
             </>
           )}
         </nav>
+
+        {onChangePassword && (
+          <button
+            className="nav-item"
+            onClick={() => {
+              onChangePassword()
+              onClose()
+            }}
+            type="button"
+          >
+            <KeyRound size={19} strokeWidth={2} />
+            <span>Alterar senha</span>
+          </button>
+        )}
 
         <button className="logout-button" onClick={onLogout} title="Sair da conta" type="button">
           <LogOut size={19} />
@@ -1067,7 +1085,7 @@ function PedagogicalReport() {
 }
 
 function App() {
-  const { currentUser, userProfile, loading, logout } = useAuth()
+  const { currentUser, userProfile, loading, logout, isGuest } = useAuth()
 
   const [screen, setScreen] = useState<Screen>(() => {
     const param = new URLSearchParams(window.location.search).get('screen')
@@ -1078,6 +1096,7 @@ function App() {
   )
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   if (loading) {
     return (
@@ -1102,6 +1121,10 @@ function App() {
 
   if (!currentUser) {
     return <LoginScreen />
+  }
+
+  if (userProfile?.trocar_senha) {
+    return <TrocarSenha />
   }
 
   const navigate = (nextScreen: Screen, params: Record<string, string> = {}) => {
@@ -1151,6 +1174,7 @@ function App() {
         currentScreen={screen}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onChangePassword={isGuest ? undefined : () => setChangingPassword(true)}
         onLogout={logout}
         onNavigate={navigate}
         userRole={userProfile?.papel}
@@ -1226,6 +1250,7 @@ function App() {
             ))}
         </main>
       </div>
+      {changingPassword && <TrocarSenha onClose={() => setChangingPassword(false)} />}
       <button aria-label="Contato pelo WhatsApp" className="whatsapp-button" type="button">
         <MessageCircle size={26} />
       </button>

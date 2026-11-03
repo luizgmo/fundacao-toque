@@ -59,6 +59,7 @@ email: string                             obrigatório
 papel: string                              obrigatório
   valores: direcao | pedagogia | administrativo
 ativo: boolean                           obrigatório
+trocar_senha: boolean                    opcional (true = senha provisória criada pela Direção)
 ultimo_login_em: Timestamp                  opcional
 criado_em: Timestamp                     obrigatório
 atualizado_em: Timestamp                     obrigatório
