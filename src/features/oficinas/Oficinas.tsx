@@ -116,13 +116,21 @@ export function Oficinas() {
   const [oficinaToDelete, setOficinaToDelete] = useState<Oficina | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubs = [
-      subscribeToOficinas((data) => {
-        setOficinas(data)
-        setLoading(false)
-      }),
+      subscribeToOficinas(
+        (data) => {
+          setOficinas(data)
+          setLoadError(null)
+          setLoading(false)
+        },
+        (err) => {
+          setLoadError('Não foi possível carregar as oficinas do banco de dados: ' + err.message)
+          setLoading(false)
+        }
+      ),
       subscribeToTurmas(setTurmas),
       subscribeToTurmaOficinas(setVinculos),
       subscribeToAlunoOficinas(setAlunoOficinas),
@@ -370,7 +378,7 @@ export function Oficinas() {
     if (!oficinaToDelete) return
     setDeleting(true)
     try {
-      await deleteOficina(oficinaToDelete.id)
+      await deleteOficina(oficinaToDelete.id, userProfile?.uid || 'sistema')
       showFeedback(`Oficina ${oficinaToDelete.nome} inativada com sucesso.`)
       setOficinaToDelete(null)
     } catch (err) {
@@ -410,6 +418,13 @@ export function Oficinas() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="feedback-banner warning">
+          <AlertCircle size={18} />
+          <span>{loadError}</span>
+        </div>
+      )}
 
       {actionFeedback && (
         <div className="feedback-banner success">

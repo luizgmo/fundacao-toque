@@ -20,8 +20,12 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { AttendanceStatus, ContactEntry, Student } from '../alunos/students-data'
-import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students as defaultStudents } from '../alunos/students-data'
+import { addContactToStudent, saveAttendanceSession, students as defaultStudents } from '../alunos/students-data'
 import { subscribeToStudents } from '../../services/studentsService'
+import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
+import { subscribeToOficinas, subscribeToTurmaOficinas } from '../../services/oficinasService'
+import type { Turma } from '../../types/turmas'
+import type { Oficina, TurmaOficina } from '../../types/oficinas'
 import {
   getAttendanceFromFirestore,
   saveAttendanceToFirestore,
@@ -35,9 +39,6 @@ type Props = {
   onViewStudentProfile?: (studentId: string) => void
 }
 
-const TURMAS_DISPONIVEIS = ['Turma A', 'Turma B', 'Turma C']
-const OFICINAS_DISPONIVEIS = ['Todas / Geral', 'Musicalização', 'Dança', 'Artes', 'Horta/NEMA', 'Culinária', 'Esporte']
-
 export function Frequencia({ onViewStudentProfile }: Props) {
   const { userProfile } = useAuth()
   const [allStudents, setAllStudents] = useState<Student[]>(defaultStudents)
@@ -50,9 +51,22 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     return () => unsub()
   }, [])
 
-  // Chamada states
-  const [selectedTurma, setSelectedTurma] = useState<string>('Turma A')
-  const [selectedOficina, setSelectedOficina] = useState<string>('Todas / Geral')
+  const [turmas, setTurmas] = useState<Turma[]>([])
+  const [oficinas, setOficinas] = useState<Oficina[]>([])
+  const [vinculos, setVinculos] = useState<TurmaOficina[]>([])
+
+  useEffect(() => {
+    const unsubs = [
+      subscribeToTurmas(setTurmas),
+      subscribeToOficinas(setOficinas),
+      subscribeToTurmaOficinas(setVinculos),
+    ]
+    return () => unsubs.forEach((unsub) => unsub())
+  }, [])
+
+  // Chamada states (IDs do Firestore)
+  const [selectedTurmaId, setSelectedTurmaId] = useState<string>('')
+  const [selectedTurmaOficinaId, setSelectedTurmaOficinaId] = useState<string>('')
   const [dateStr, setDateStr] = useState<string>(() => {
     const today = new Date()
     return today.toISOString().split('T')[0]
@@ -62,16 +76,38 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // Attendance values per student for current selected parameters
   const [attendanceRecords, setAttendanceRecords] = useState<
     Record<string, { status: AttendanceStatus; observation: string }>
-  >(() => {
-    const defaultSession = getAttendanceSession('2026-09-15_Turma A_geral')
-    return defaultSession ? { ...defaultSession.records } : {}
-  })
+  >({})
+
+  const turmasAtivas = useMemo(() => turmas.filter((t) => t.ativo), [turmas])
+  // Turma selecionada ou, enquanto nenhuma foi escolhida, a primeira turma ativa
+  const turmaAtual = turmasAtivas.find((t) => t.id === selectedTurmaId) || turmasAtivas[0]
+  const turmaId = turmaAtual?.id || ''
+
+  // Oficinas oferecidas na turma (vínculos ativos de turma_oficinas)
+  const oficinasDaTurma = useMemo(
+    () =>
+      vinculos
+        .filter((v) => v.turmaId === turmaId && v.ativo)
+        .map((v) => ({
+          id: v.id,
+          nome: oficinas.find((o) => o.id === v.oficinaId)?.nome || 'Oficina',
+        }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    [vinculos, oficinas, turmaId]
+  )
+  const oficinaAtual =
+    oficinasDaTurma.find((o) => o.id === selectedTurmaOficinaId) || oficinasDaTurma[0]
+  const chamadaPorOficina = scope === 'oficina'
+  const sessionId =
+    turmaId && (!chamadaPorOficina || oficinaAtual)
+      ? `${dateStr}_${turmaId}_${chamadaPorOficina ? oficinaAtual.id : 'geral'}`
+      : ''
 
   // Sincroniza com a sessão do Firestore quando os filtros mudam
   useEffect(() => {
     let isMounted = true
-    const sessionId = `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`
-    getAttendanceFromFirestore(sessionId).then((existing) => {
+    const load = sessionId ? getAttendanceFromFirestore(sessionId) : Promise.resolve(null)
+    load.then((existing) => {
       if (isMounted) {
         if (existing) {
           setAttendanceRecords({ ...existing.records })
@@ -83,7 +119,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     return () => {
       isMounted = false
     }
-  }, [dateStr, selectedTurma, scope, selectedOficina])
+  }, [sessionId])
 
   // Threshold X for alerts
   const [absenceThreshold, setAbsenceThreshold] = useState<number>(3)
@@ -113,13 +149,13 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // Filter students by selected Turma
   const turmaStudents = useMemo(() => {
     return allStudents.filter((s) => {
-      const matchTurma = s.turma?.toLowerCase().includes(selectedTurma.toLowerCase())
+      const matchTurma = !!turmaAtual && studentBelongsToTurma(s, turmaAtual)
       const matchSearch = studentSearch
         ? s.name.toLowerCase().includes(studentSearch.toLowerCase())
         : true
       return matchTurma && matchSearch
     })
-  }, [allStudents, selectedTurma, studentSearch])
+  }, [allStudents, turmaAtual, studentSearch])
 
   // Get current status for a student in local form state
   const getStudentStatus = (studentId: string): AttendanceStatus => {
@@ -203,6 +239,14 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
   // Save attendance handler integrado ao Firestore
   const handleSaveAttendance = async () => {
+    if (!sessionId) {
+      alert(
+        chamadaPorOficina
+          ? 'Selecione uma turma com oficina vinculada para registrar a chamada.'
+          : 'Cadastre uma turma ativa para registrar a chamada.'
+      )
+      return
+    }
     setSavingChamada(true)
     const recordsMap: Record<string, { status: AttendanceStatus; observation: string }> = {}
     turmaStudents.forEach((st) => {
@@ -213,15 +257,17 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     })
 
     const professional = userProfile?.nome_completo || 'Ana Carolina Silva'
-    const sessionId = `${dateStr}_${selectedTurma}_${scope === 'oficina' ? selectedOficina : 'geral'}`
+    const turmaOficinaId = chamadaPorOficina ? oficinaAtual?.id : undefined
+    const oficinaName = chamadaPorOficina ? oficinaAtual?.nome : undefined
 
     try {
       await saveAttendanceToFirestore({
         id: sessionId,
         date: dateStr,
-        turmaId: selectedTurma,
+        turmaId,
         scope,
-        oficinaName: scope === 'oficina' ? selectedOficina : undefined,
+        turmaOficinaId,
+        oficinaName,
         registeredBy: professional,
         records: recordsMap,
       })
@@ -229,9 +275,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       saveAttendanceSession({
         id: sessionId,
         date: dateStr,
-        turmaId: selectedTurma,
+        turmaId,
         scope,
-        oficinaName: scope === 'oficina' ? selectedOficina : undefined,
+        oficinaName,
         registeredBy: professional,
         registeredAt: new Date().toISOString(),
         records: recordsMap,
@@ -351,10 +397,11 @@ export function Frequencia({ onViewStudentProfile }: Props) {
             <div className="control-group">
               <label>
                 <span>Turma</span>
-                <select onChange={(e) => setSelectedTurma(e.target.value)} value={selectedTurma}>
-                  {TURMAS_DISPONIVEIS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
+                <select onChange={(e) => setSelectedTurmaId(e.target.value)} value={turmaId}>
+                  {turmasAtivas.length === 0 && <option value="">Nenhuma turma cadastrada</option>}
+                  {turmasAtivas.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nome}
                     </option>
                   ))}
                 </select>
@@ -378,12 +425,15 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                 <label>
                   <span>Oficina</span>
                   <select
-                    onChange={(e) => setSelectedOficina(e.target.value)}
-                    value={selectedOficina}
+                    onChange={(e) => setSelectedTurmaOficinaId(e.target.value)}
+                    value={oficinaAtual?.id || ''}
                   >
-                    {OFICINAS_DISPONIVEIS.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
+                    {oficinasDaTurma.length === 0 && (
+                      <option value="">Nenhuma oficina nesta turma</option>
+                    )}
+                    {oficinasDaTurma.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.nome}
                       </option>
                     ))}
                   </select>
