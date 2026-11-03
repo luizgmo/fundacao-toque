@@ -5,11 +5,15 @@ import {
   signInWithEmailAndPassword,
   signOut,
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth as getSecondaryAuth } from 'firebase/auth'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db, isFirebaseConfigured } from '../../lib/firebase'
 import type { UserProfile, UserRole } from '../../types/auth'
 
@@ -18,19 +22,22 @@ interface AuthContextType {
   userProfile: UserProfile | null
   loading: boolean
   isConfigured: boolean
+  isGuest: boolean
   login: (email: string, pass: string) => Promise<void>
   loginAsGuest: (papel?: UserRole) => void
   logout: () => Promise<void>
-  setupInitialAdmin: (nome: string, email: string, pass: string) => Promise<void>
   createAuthorUser: (
     nome: string,
     email: string,
     pass: string,
     papel: UserRole
   ) => Promise<string>
+  changePassword: (currentPass: string, newPass: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+const GUEST_UID = 'guest-local-uid'
 
 const secondaryAppName = 'SecondaryAuthAdmin'
 function getSecondaryAuthInstance() {
@@ -50,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (saved) {
         const parsed = JSON.parse(saved)
         return {
-          uid: parsed.uid || 'guest-local-uid',
+          uid: parsed.uid || GUEST_UID,
           email: parsed.email || '',
           displayName: parsed.nome_completo || '',
         } as unknown as User
@@ -85,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               email: data.email || user.email || '',
               papel: (data.papel as UserRole) || 'direcao',
               ativo: data.ativo !== false,
+              trocar_senha: data.trocar_senha === true,
             })
           } else {
             // Se o usuário foi criado no Auth mas ainda não tem doc no Firestore
@@ -135,13 +143,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginAsGuest = (papel: UserRole = 'direcao') => {
     const mockUser = {
-      uid: 'guest-local-uid',
+      uid: GUEST_UID,
       email: `${papel}@fundacaotoque.org.br`,
       displayName: papel === 'direcao' ? 'Direção (Modo Teste)' : papel === 'pedagogia' ? 'Pedagoga (Modo Teste)' : 'Administrativo (Modo Teste)',
     } as unknown as User
 
     const mockProfile: UserProfile = {
-      uid: 'guest-local-uid',
+      uid: GUEST_UID,
       nome_completo: mockUser.displayName || 'Colaborador',
       email: mockUser.email || '',
       papel,
@@ -173,31 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserProfile(null)
   }
 
-  // Cria o primeiro admin Direção (semeador ou setup inicial)
-  const setupInitialAdmin = async (nome: string, email: string, pass: string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass)
-    const user = userCredential.user
-
-    const profileData: UserProfile = {
-      uid: user.uid,
-      nome_completo: nome,
-      email: email,
-      papel: 'direcao',
-      ativo: true,
-    }
-
-    await setDoc(doc(db, 'usuarios', user.uid), {
-      nome_completo: nome,
-      email: email,
-      papel: 'direcao',
-      ativo: true,
-      criado_em: serverTimestamp(),
-      atualizado_em: serverTimestamp(),
-    })
-
-    setUserProfile(profileData)
-  }
-
   // Permite à Direção criar outro autor sem deslogar a sessão atual
   const createAuthorUser = async (
     nome: string,
@@ -209,17 +192,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(secAuth, email, pass)
     const newUid = cred.user.uid
 
-    await setDoc(doc(db, 'usuarios', newUid), {
-      nome_completo: nome,
-      email: email,
-      papel: papel,
-      ativo: true,
-      criado_em: serverTimestamp(),
+    try {
+      await setDoc(doc(db, 'usuarios', newUid), {
+        nome_completo: nome,
+        email: email,
+        papel: papel,
+        ativo: true,
+        trocar_senha: true,
+        criado_em: serverTimestamp(),
+        atualizado_em: serverTimestamp(),
+      })
+    } catch (err) {
+      // Sem o perfil no Firestore a conta fica órfã no Auth e bloqueia o e-mail;
+      // desfaz a criação para permitir nova tentativa.
+      await deleteUser(cred.user).catch((delErr) =>
+        console.warn('Não foi possível desfazer a conta criada no Auth:', delErr)
+      )
+      throw err
+    } finally {
+      await signOut(secAuth).catch(() => {})
+    }
+
+    return newUid
+  }
+
+  // Troca a senha do usuário logado e libera o aviso de senha provisória
+  const changePassword = async (currentPass: string, newPass: string) => {
+    const user = auth.currentUser
+    if (!user || !user.email) {
+      throw new Error('Nenhum usuário autenticado no Firebase.')
+    }
+
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPass))
+    await updatePassword(user, newPass)
+    await updateDoc(doc(db, 'usuarios', user.uid), {
+      trocar_senha: false,
       atualizado_em: serverTimestamp(),
     })
 
-    await signOut(secAuth)
-    return newUid
+    setUserProfile((prev) => (prev ? { ...prev, trocar_senha: false } : prev))
   }
 
   return (
@@ -229,11 +240,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userProfile,
         loading,
         isConfigured: isFirebaseConfigured,
+        isGuest: currentUser?.uid === GUEST_UID,
         login,
         loginAsGuest,
         logout,
-        setupInitialAdmin,
         createAuthorUser,
+        changePassword,
       }}
     >
       {children}

@@ -3,10 +3,7 @@ import type { FormEvent } from 'react'
 import {
   Lock,
   Mail,
-  User,
-  ShieldCheck,
   AlertCircle,
-  CheckCircle2,
   Sparkles,
   ArrowRight,
   Eye,
@@ -17,22 +14,14 @@ import logoUrl from '../../assets/logo.png'
 import './LoginScreen.css'
 
 export function LoginScreen() {
-  const { login, loginAsGuest, setupInitialAdmin, isConfigured } = useAuth()
+  const { login, loginAsGuest, isConfigured } = useAuth()
 
-  const [mode, setMode] = useState<'login' | 'setup-admin'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  // Setup initial admin fields
-  const [adminNome, setAdminNome] = useState('')
-  const [adminEmail, setAdminEmail] = useState('')
-  const [adminPassword, setAdminPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -61,37 +50,6 @@ export function LoginScreen() {
     }
   }
 
-  const handleSetupAdmin = async (e: FormEvent) => {
-    e.preventDefault()
-    setErrorMsg(null)
-
-    if (adminPassword.length < 6) {
-      setErrorMsg('A senha deve conter no mínimo 6 caracteres.')
-      return
-    }
-
-    if (adminPassword !== confirmPassword) {
-      setErrorMsg('As senhas digitadas não coincidem.')
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      await setupInitialAdmin(adminNome.trim(), adminEmail.trim(), adminPassword)
-      setSuccessMsg('Usuário Administrador (Direção) criado com sucesso! Redirecionando...')
-    } catch (err: any) {
-      console.error('Erro ao criar admin inicial:', err)
-      if (err.code === 'auth/email-already-in-use') {
-        setErrorMsg('Este e-mail já está cadastrado. Tente fazer login.')
-      } else if (err.code === 'auth/weak-password') {
-        setErrorMsg('A senha escolhida é muito fraca.')
-      } else {
-        setErrorMsg('Erro ao criar administrador: ' + (err.message || 'Erro desconhecido.'))
-      }
-      setSubmitting(false)
-    }
-  }
-
   return (
     <div className="login-wrapper">
       <div className="login-card-container">
@@ -104,30 +62,6 @@ export function LoginScreen() {
           <p>Sistema Integrado de Gestão Pedagógica e Acompanhamento</p>
         </div>
 
-        {/* Mode Switcher */}
-        <div className="login-mode-tabs">
-          <button
-            className={`tab-btn ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('login')
-              setErrorMsg(null)
-            }}
-            type="button"
-          >
-            Entrar no Sistema
-          </button>
-          <button
-            className={`tab-btn ${mode === 'setup-admin' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('setup-admin')
-              setErrorMsg(null)
-            }}
-            type="button"
-          >
-            <ShieldCheck size={16} /> Primeiro Acesso (Admin)
-          </button>
-        </div>
-
         {/* Alerts */}
         {errorMsg && (
           <div className="login-alert error">
@@ -136,190 +70,100 @@ export function LoginScreen() {
           </div>
         )}
 
-        {successMsg && (
-          <div className="login-alert success">
-            <CheckCircle2 size={18} />
-            <span>{successMsg}</span>
-          </div>
-        )}
+        <form className="login-form" onSubmit={handleLogin}>
+          <label className="login-field">
+            <span>E-mail</span>
+            <div className="input-icon-group">
+              <Mail className="field-icon" size={18} />
+              <input
+                autoComplete="email"
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="exemplo@fundacaotoque.org.br"
+                required
+                type="email"
+                value={email}
+              />
+            </div>
+          </label>
 
-        {mode === 'login' ? (
-          <form className="login-form" onSubmit={handleLogin}>
-            <label className="login-field">
-              <span>E-mail</span>
-              <div className="input-icon-group">
-                <Mail className="field-icon" size={18} />
-                <input
-                  autoComplete="email"
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="exemplo@fundacaotoque.org.br"
-                  required
-                  type="email"
-                  value={email}
-                />
-              </div>
-            </label>
-
-            <label className="login-field">
-              <span>Senha</span>
-              <div className="input-icon-group">
-                <Lock className="field-icon" size={18} />
-                <input
-                  autoComplete="current-password"
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Sua senha cadastrada"
-                  required
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                />
-                <button
-                  aria-label="Alternar visualização da senha"
-                  className="toggle-password-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  type="button"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </label>
-
-            <button className="login-submit-button" disabled={submitting} type="submit">
-              {submitting ? (
-                'Autenticando...'
-              ) : (
-                <>
-                  Entrar no Sistema <ArrowRight size={18} />
-                </>
-              )}
-            </button>
-
-            <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', margin: '0.75rem 0', gap: '0.5rem' }}>
-                <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
-                <span style={{ fontSize: '0.75rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Ou para testes locais
-                </span>
-                <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
-              </div>
-
+          <label className="login-field">
+            <span>Senha</span>
+            <div className="input-icon-group">
+              <Lock className="field-icon" size={18} />
+              <input
+                autoComplete="current-password"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Sua senha cadastrada"
+                required
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+              />
               <button
-                className="button secondary"
-                onClick={() => loginAsGuest('direcao')}
-                style={{
-                  width: '100%',
-                  justifyContent: 'center',
-                  background: '#f8fafc',
-                  borderColor: '#cbd5e1',
-                  color: '#334155',
-                  padding: '0.75rem',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                }}
+                aria-label="Alternar visualização da senha"
+                className="toggle-password-btn"
+                onClick={() => setShowPassword(!showPassword)}
                 type="button"
               >
-                <Sparkles size={16} style={{ color: '#059669' }} /> Entrar em Modo Demonstração (Direção)
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+          </label>
 
-            <div className="login-hint-box" style={{ marginTop: '0.75rem' }}>
-              <Sparkles size={16} />
-              <span>
-                {!isConfigured ? (
-                  <>
-                    <strong>Ambiente Local:</strong> Nenhuma chave do Firebase (.env.local) foi detectada.
-                    Você pode usar o botão <strong>"Modo Demonstração"</strong> acima para testar todos os fluxos e telas imediatamente.
-                  </>
-                ) : (
-                  <>
-                    Se ainda não possui um administrador cadastrado no banco, use a aba{' '}
-                    <strong>"Primeiro Acesso (Admin)"</strong> para criar a conta de Direção.
-                  </>
-                )}
+          <button className="login-submit-button" disabled={submitting} type="submit">
+            {submitting ? (
+              'Autenticando...'
+            ) : (
+              <>
+                Entrar no Sistema <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+
+          <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', margin: '0.75rem 0', gap: '0.5rem' }}>
+              <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+              <span style={{ fontSize: '0.75rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Ou para testes locais
               </span>
-            </div>
-          </form>
-        ) : (
-          <form className="login-form" onSubmit={handleSetupAdmin}>
-            <div className="admin-setup-badge">
-              <ShieldCheck size={18} />
-              <span>Perfil a ser criado: <strong>Direção (Administrador Master)</strong></span>
+              <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
             </div>
 
-            <label className="login-field">
-              <span>Nome Completo *</span>
-              <div className="input-icon-group">
-                <User className="field-icon" size={18} />
-                <input
-                  onChange={(e) => setAdminNome(e.target.value)}
-                  placeholder="Ex: Maria Aparecida Silva"
-                  required
-                  type="text"
-                  value={adminNome}
-                />
-              </div>
-            </label>
+            <button
+              className="button secondary"
+              onClick={() => loginAsGuest('direcao')}
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                background: '#f8fafc',
+                borderColor: '#cbd5e1',
+                color: '#334155',
+                padding: '0.75rem',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+              }}
+              type="button"
+            >
+              <Sparkles size={16} style={{ color: '#059669' }} /> Entrar em Modo Demonstração (Direção)
+            </button>
+          </div>
 
-            <label className="login-field">
-              <span>E-mail Corporativo ou Pessoal *</span>
-              <div className="input-icon-group">
-                <Mail className="field-icon" size={18} />
-                <input
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="direcao@fundacaotoque.org.br"
-                  required
-                  type="email"
-                  value={adminEmail}
-                />
-              </div>
-            </label>
-
-            <label className="login-field">
-              <span>Criar Senha (mínimo 6 caracteres) *</span>
-              <div className="input-icon-group">
-                <Lock className="field-icon" size={18} />
-                <input
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Crie uma senha segura"
-                  required
-                  type={showPassword ? 'text' : 'password'}
-                  value={adminPassword}
-                />
-                <button
-                  aria-label="Alternar visualização da senha"
-                  className="toggle-password-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  type="button"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </label>
-
-            <label className="login-field">
-              <span>Confirmar Senha *</span>
-              <div className="input-icon-group">
-                <Lock className="field-icon" size={18} />
-                <input
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repita a senha criada"
-                  required
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                />
-              </div>
-            </label>
-
-            <button className="login-submit-button primary-accent" disabled={submitting} type="submit">
-              {submitting ? (
-                'Criando Administrador...'
+          <div className="login-hint-box" style={{ marginTop: '0.75rem' }}>
+            <Sparkles size={16} />
+            <span>
+              {!isConfigured ? (
+                <>
+                  <strong>Ambiente Local:</strong> Nenhuma chave do Firebase (.env.local) foi detectada.
+                  Você pode usar o botão <strong>"Modo Demonstração"</strong> acima para testar todos os fluxos e telas imediatamente.
+                </>
               ) : (
                 <>
-                  <ShieldCheck size={18} /> Criar Administrador & Acessar
+                  Ainda não tem acesso? Solicite à <strong>Direção</strong> o cadastro da sua conta
+                  na página <strong>Equipe / Autores</strong>.
                 </>
               )}
-            </button>
-          </form>
-        )}
+            </span>
+          </div>
+        </form>
 
         <footer className="login-footer">
           <small>© 2026 Fundação Toque · Todos os direitos reservados</small>
