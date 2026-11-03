@@ -15,9 +15,11 @@ import {
 import { calculateAge } from './students-data'
 import type { Student } from './students-data'
 import { subscribeToStudents, inactivateStudent } from '../../services/studentsService'
+import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
+import type { Turma } from '../../types/turmas'
 import './ListarAlunos.css'
 
-const turmaOptions = ['Todas as turmas', 'Turma A', 'Turma B', 'Turma C', 'Turma D']
+const TODAS_TURMAS = 'todas'
 const statusOptions = ['Todos', 'Ativo', 'Inativo']
 
 export function ListarAlunos({
@@ -31,7 +33,8 @@ export function ListarAlunos({
 }) {
   const [studentsList, setStudentsList] = useState<Student[]>([])
   const [search, setSearch] = useState('')
-  const [turma, setTurma] = useState(turmaOptions[0])
+  const [turma, setTurma] = useState(TODAS_TURMAS)
+  const [turmas, setTurmas] = useState<Turma[]>([])
   const [status, setStatus] = useState(statusOptions[0])
 
   // Delete modal states
@@ -40,6 +43,8 @@ export function ListarAlunos({
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
 
   // Escuta dados do Firestore em tempo real
+  useEffect(() => subscribeToTurmas(setTurmas), [])
+
   useEffect(() => {
     const unsubscribe = subscribeToStudents((data) => {
       setStudentsList(data)
@@ -50,13 +55,13 @@ export function ListarAlunos({
   const filtered = useMemo(() => {
     return studentsList.filter((student) => {
       const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase())
+      const turmaSelecionada = turmas.find((t) => t.id === turma)
       const matchesTurma =
-        turma === turmaOptions[0] ||
-        student.turma.toLowerCase().includes(turma.toLowerCase())
+        turma === TODAS_TURMAS || (!!turmaSelecionada && studentBelongsToTurma(student, turmaSelecionada))
       const matchesStatus = status === statusOptions[0] || student.status === status
       return matchesSearch && matchesTurma && matchesStatus
     })
-  }, [studentsList, search, turma, status])
+  }, [studentsList, turmas, search, turma, status])
 
   const totals = useMemo(
     () => ({
@@ -165,8 +170,12 @@ export function ListarAlunos({
           <label className="field">
             <span>Turma</span>
             <select onChange={(event) => setTurma(event.target.value)} value={turma}>
-              {turmaOptions.map((option) => (
-                <option key={option}>{option}</option>
+              <option value={TODAS_TURMAS}>Todas as turmas</option>
+              {turmas.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                  {t.ativo ? '' : ' (inativa)'}
+                </option>
               ))}
             </select>
           </label>
@@ -213,7 +222,7 @@ export function ListarAlunos({
                       ? `${calculateAge(student.birthDate)} anos`
                       : '—'}
                   </td>
-                  <td>{student.turma}</td>
+                  <td>{turmas.find((t) => t.id === student.turmaId)?.nome || student.turma}</td>
                   <td>
                     {student.deficiencia} / {student.cid}
                   </td>

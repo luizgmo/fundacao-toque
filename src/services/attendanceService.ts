@@ -20,12 +20,14 @@ export interface SaveSessionInput {
   date: string
   turmaId: string
   scope: 'turma' | 'oficina'
+  // ID do vínculo em turma_oficinas; obrigatório quando scope = 'oficina'
+  turmaOficinaId?: string
   oficinaName?: string
   registeredBy: string
   records: Record<string, { status: AttendanceStatus; observation: string }>
 }
 
-// Salva sessão de chamada no Firestore (com fallback local)
+// Salva sessão de chamada no Firestore
 export async function saveAttendanceToFirestore(session: SaveSessionInput): Promise<void> {
   const presencasMap: Record<string, AttendanceStatus> = {}
   const observacoesMap: Record<string, string> = {}
@@ -37,7 +39,24 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
     }
   })
 
-  // Salva no cache local imediatamente para transição instantânea
+  const docData = {
+    data_chamada: session.date,
+    turma_id: session.turmaId,
+    escopo: session.scope,
+    turma_oficina_id: session.turmaOficinaId || null,
+    oficina_nome: session.oficinaName || null,
+    presencas: presencasMap,
+    observacoes: observacoesMap,
+    registrado_por: session.registeredBy,
+    criado_em: serverTimestamp(),
+    atualizado_em: serverTimestamp(),
+  }
+
+  // Grava com o ID determinístico: YYYY-MM-DD_TurmaId_(TurmaOficinaId | geral)
+  const sessionDocId = session.id.replace(/\//g, '-')
+  await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
+
+  // Atualiza o cache em memória só depois de gravar no banco
   initialAttendanceSessions[session.id] = {
     id: session.id,
     date: session.date,
@@ -47,26 +66,6 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
     registeredBy: session.registeredBy,
     registeredAt: new Date().toISOString(),
     records: session.records,
-  }
-
-  const docData = {
-    data_chamada: session.date,
-    turma_id: session.turmaId,
-    escopo: session.scope,
-    oficina_nome: session.oficinaName || null,
-    presencas: presencasMap,
-    observacoes: observacoesMap,
-    registrado_por: session.registeredBy,
-    criado_em: serverTimestamp(),
-    atualizado_em: serverTimestamp(),
-  }
-
-  // Grava com o ID determinístico: YYYY-MM-DD_Turma_Escopo
-  const sessionDocId = session.id.replace(/\//g, '-')
-  try {
-    await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
-  } catch (firestoreErr) {
-    console.warn('Chamada gravada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
   }
 }
 
