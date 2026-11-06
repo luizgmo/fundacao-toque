@@ -2,13 +2,14 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import type { Student, StudentStatus } from '../features/alunos/students-data'
+import type { Student, StudentStatus, DocumentoTipo } from '../features/alunos/students-data'
 import { students as fallbackStudents } from '../features/alunos/students-data'
 
 const ALUNOS_COLLECTION = 'alunos'
@@ -49,15 +50,42 @@ export function docToStudent(id: string, data: any): Student {
     oficinas: Array.isArray(data.oficinas) ? data.oficinas : [],
     grauDependencia: data.grau_dependencia || undefined,
     documentos: Array.isArray(data.documentos)
-      ? data.documentos
+      ? data.documentos.map((d: any) => ({
+          id: d.id || d.name || 'doc-legacy',
+          tipo: (d.tipo_documento || d.tipo || 'ficha_medica') as DocumentoTipo,
+          dataUrl: d.data_url || d.dataUrl || '',
+          nomeArquivoOriginal: d.nome_arquivo_original || d.nomeArquivoOriginal || d.name || 'documento',
+          tipoConteudo: d.tipo_conteudo || d.tipoConteudo || 'application/octet-stream',
+          tamanhoBytes: d.tamanho_bytes ?? d.tamanhoBytes ?? 0,
+          enviadoPor: d.enviado_por || d.enviadoPor || 'sistema',
+          enviadoEm: d.enviado_em ? new Date(d.enviado_em).toISOString() : (d.attachedAt || new Date().toISOString()),
+          // Campos legados mantidos para compatibilidade com dados existentes
+          name: d.name || d.nome_arquivo_original || d.nomeArquivoOriginal || undefined,
+          attachedAt: d.attachedAt || undefined,
+          kind: (d.kind as 'pdf' | 'lgpd') || undefined,
+        }))
       : [
           {
-            name: data.ficha_medica_nome || 'Ficha Médica',
-            attachedAt: 'Conforme cadastro',
-            kind: 'pdf' as const,
+            id: 'ficha-medica-legacy',
+            tipo: 'ficha_medica' as DocumentoTipo,
+            dataUrl: '',
+            nomeArquivoOriginal: data.ficha_medica_nome || 'Ficha Médica',
+            tipoConteudo: 'application/pdf',
+            tamanhoBytes: 0,
+            enviadoPor: 'sistema',
+            enviadoEm: new Date().toISOString(),
           },
           ...(data.uso_imagem_autorizado
-            ? [{ name: 'LGPD Autorizada', attachedAt: 'Conforme cadastro', kind: 'lgpd' as const }]
+            ? [{
+                id: 'lgpd-legacy',
+                tipo: 'autorizacao_imagem' as DocumentoTipo,
+                dataUrl: '',
+                nomeArquivoOriginal: 'Autorização de Imagem (LGPD)',
+                tipoConteudo: 'application/pdf',
+                tamanhoBytes: 0,
+                enviadoPor: 'sistema',
+                enviadoEm: new Date().toISOString(),
+              }]
             : []),
         ],
     faltasConsecutivas: data.faltas_consecutivas ?? data.faltasConsecutivas ?? 0,
@@ -70,6 +98,7 @@ export function docToStudent(id: string, data: any): Student {
 }
 
 const LOCAL_STORAGE_KEY = 'fundacao_toque_local_students'
+const LOCAL_DOCUMENTOS_KEY = 'fundacao_toque_local_documentos'
 
 function getStoredStudents(): Student[] {
   try {
@@ -89,6 +118,33 @@ function saveStoredStudents(list: Student[]) {
   } catch {
     // ignore
   }
+}
+
+// Persistência local de documentos (fallback quando Firestore/Storage não está acessível)
+function getStoredDocumentos(alunoId: string): DocumentEntry[] {
+  try {
+    const raw = localStorage.getItem(`${LOCAL_DOCUMENTOS_KEY}_${alunoId}`)
+    if (raw) {
+      return JSON.parse(raw)
+    }
+  } catch {
+    // ignore
+  }
+  return []
+}
+
+function saveStoredDocumentos(alunoId: string, docs: DocumentEntry[]) {
+  try {
+    localStorage.setItem(`${LOCAL_DOCUMENTOS_KEY}_${alunoId}`, JSON.stringify(docs))
+  } catch {
+    // ignore
+  }
+}
+
+function appendStoredDocumento(alunoId: string, doc: DocumentEntry) {
+  const current = getStoredDocumentos(alunoId)
+  const updated = [...current.filter((d) => d.id !== doc.id), doc]
+  saveStoredDocumentos(alunoId, updated)
 }
 
 let activeListeners: ((students: Student[]) => void)[] = []
@@ -406,4 +462,175 @@ export async function inactivateStudent(id: string): Promise<void> {
 // Manter função deleteStudent para compatibilidade, mas agora inativa
 export async function deleteStudent(id: string): Promise<void> {
   return inactivateStudent(id)
+}
+
+// ============================================================================
+// Documentos do aluno (arquivo em base64 dentro do Firestore, sem custo do Storage)
+// ============================================================================
+
+const DOCUMENTOS_SUBCOLLECTION = 'documentos'
+
+// Limite de 500 KB por documento (Firestore limita ~1MB por documento; base64 expande ~33%).
+export const MAX_DOCUMENTO_BYTES = 500 * 1024
+
+const TIPOS_PERMITIDOS: Record<string, boolean> = {
+  'application/pdf': true,
+  'image/jpeg': true,
+  'image/png': true,
+  'image/jpg': true,
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error || new Error('Falha ao ler arquivo.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// Lê um arquivo como DataURL (base64) e grava os metadados + conteúdo em
+// alunos/{alunoId}/documentos/{documentoId} dentro do Firestore.
+// Sempre persiste localmente (localStorage) como fallback para funcionar sem Firebase.
+export async function uploadDocumento(
+  alunoId: string,
+  file: File,
+  tipo: DocumentoTipo,
+  userId: string
+): Promise<DocumentEntry> {
+  if (!TIPOS_PERMITIDOS[file.type]) {
+    throw new Error(`Tipo de arquivo não permitido: ${file.type || 'desconhecido'}`)
+  }
+  if (file.size > MAX_DOCUMENTO_BYTES) {
+    throw new Error(`Arquivo excede o limite de ${Math.round(MAX_DOCUMENTO_BYTES / 1024)} KB`)
+  }
+
+  const docRef = doc(collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`))
+  const dataUrl = await fileToDataUrl(file)
+
+  const agora = new Date().toISOString()
+  const entry: DocumentEntry = {
+    id: docRef.id,
+    tipo,
+    dataUrl,
+    nomeArquivoOriginal: file.name,
+    tipoConteudo: file.type,
+    tamanhoBytes: file.size,
+    enviadoPor: userId,
+    enviadoEm: agora,
+  }
+
+  // 1) Sempre grava no localStorage primeiro (funciona sem Firebase)
+  appendStoredDocumento(alunoId, entry)
+
+  // 2) Tenta gravar no Firestore quando disponível
+  try {
+    await setDoc(docRef, {
+      tipo_documento: tipo,
+      data_url: dataUrl,
+      nome_arquivo_original: file.name,
+      tipo_conteudo: file.type,
+      tamanho_bytes: file.size,
+      enviado_por: userId,
+      enviado_em: serverTimestamp(),
+    })
+  } catch (err) {
+    console.warn('[uploadDocumento] Firestore não disponível, mantido apenas localmente:', err)
+    appendStoredDocumento(alunoId, entry)
+    throw new Error(
+      `Arquivo salvo apenas localmente (Firestore indisponível): ${(err as Error).message}`,
+      { cause: err }
+    )
+  }
+
+  return entry
+}
+
+// Lista os documentos de um aluno, retornando o dataUrl (base64) de cada um.
+// Quando o Firestore não está acessível, lê do localStorage (persistência local).
+export async function getDocumentosComUrl(
+  alunoId: string
+): Promise<(DocumentEntry & { url: string | null })[]> {
+  try {
+    const snap = await getDocs(collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`))
+    return snap.docs.map((d) => {
+      const data = d.data()
+      const entry: DocumentEntry = {
+        id: d.id,
+        tipo: (data.tipo_documento || 'ficha_medica') as DocumentoTipo,
+        dataUrl: data.data_url || '',
+        nomeArquivoOriginal: data.nome_arquivo_original || 'documento',
+        tipoConteudo: data.tipo_conteudo || 'application/octet-stream',
+        tamanhoBytes: data.tamanho_bytes ?? 0,
+        enviadoPor: data.enviado_por || '',
+        enviadoEm: data.enviado_em ? new Date(data.enviado_em).toISOString() : new Date().toISOString(),
+      }
+      return { ...entry, url: entry.dataUrl || null }
+    })
+  } catch (err) {
+    console.warn('[getDocumentosComUrl] Firestore não disponível, lendo do localStorage:', err)
+    const locais = getStoredDocumentos(alunoId)
+    return locais.map((entry) => ({ ...entry, url: entry.dataUrl || null }))
+  }
+}
+
+// Substitui um documento existente: grava o novo arquivo primeiro, depois atualiza os
+// metadados no Firestore (mesmo documentoId). Não apaga o histórico antes de confirmar.
+export async function substituirDocumento(
+  alunoId: string,
+  documentoId: string,
+  file: File,
+  tipo: DocumentoTipo,
+  userId: string
+): Promise<DocumentEntry> {
+  const dataUrl = await fileToDataUrl(file)
+
+  const agora = new Date().toISOString()
+  const entry: DocumentEntry = {
+    id: documentoId,
+    tipo,
+    dataUrl,
+    nomeArquivoOriginal: file.name,
+    tipoConteudo: file.type,
+    tamanhoBytes: file.size,
+    enviadoPor: userId,
+    enviadoEm: agora,
+  }
+
+  // Persiste localmente
+  appendStoredDocumento(alunoId, entry)
+
+  try {
+    await setDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`), {
+      tipo_documento: tipo,
+      data_url: dataUrl,
+      nome_arquivo_original: file.name,
+      tipo_conteudo: file.type,
+      tamanho_bytes: file.size,
+      enviado_por: userId,
+      enviado_em: serverTimestamp(),
+      atualizado_por: userId,
+      atualizado_em: serverTimestamp(),
+    })
+  } catch (err) {
+    console.warn('[substituirDocumento] Firestore não disponível:', err)
+    throw new Error(
+      `Falha ao gravar no Firestore: ${(err as Error).message}`,
+      { cause: err }
+    )
+  }
+
+  return entry
+}
+
+// Exclui um documento: remove do Firestore e do localStorage.
+export async function deleteDocumento(alunoId: string, documentoId: string): Promise<void> {
+  const snap = await getDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`))
+  if (snap.exists()) {
+    await doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`).delete()
+  }
+  // Remove do localStorage também
+  const current = getStoredDocumentos(alunoId)
+  const updated = current.filter((d) => d.id !== documentoId)
+  saveStoredDocumentos(alunoId, updated)
 }

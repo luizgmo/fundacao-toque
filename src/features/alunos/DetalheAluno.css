@@ -216,3 +216,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+.student-document-card button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+}

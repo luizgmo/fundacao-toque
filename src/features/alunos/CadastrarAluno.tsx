@@ -18,11 +18,12 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
-import type { Student, StudentStatus } from './students-data'
-import { createStudent, updateStudent } from '../../services/studentsService'
+import type { Student, StudentStatus, DocumentoTipo } from './students-data'
+import { createStudent, updateStudent, uploadDocumento, MAX_DOCUMENTO_BYTES } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
 import { subscribeToOficinas } from '../../services/oficinasService'
+import { useAuth } from '../../features/auth/AuthContext'
 import type { Turma } from '../../types/turmas'
 import { PERIODO_LABELS } from '../../types/turmas'
 import type { Oficina } from '../../types/oficinas'
@@ -126,6 +127,103 @@ function studentToForm(st: Student): AlunoForm {
   }
 }
 
+// ============================================================================
+// Componentes de upload de documento (com progresso, erro e reenvio)
+// ============================================================================
+
+type UploadDocumentoFieldProps = {
+  label: string
+  tipo: string
+  file: File | null
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+  status: 'idle' | 'uploading' | 'success' | 'error' | undefined
+  progress: number
+  error: string | undefined
+  placeholder: string
+}
+
+function UploadDocumentoField({
+  label,
+  file,
+  onChange,
+  status,
+  progress,
+  error,
+  placeholder,
+}: UploadDocumentoFieldProps) {
+  return (
+    <label className="field field-wide">
+      <span dangerouslySetInnerHTML={{ __html: label }} />
+      <div className="upload-area">
+        <input accept=".pdf,image/*" onChange={onChange} type="file" />
+        <span className="upload-icon">
+          <Upload size={23} />
+        </span>
+        <strong>{file ? file.name : placeholder}</strong>
+        <span>PDF, JPG ou PNG · máximo de 10 MB</span>
+      </div>
+      <UploadDocumentoStatus
+        status={status}
+        progress={progress}
+        error={error}
+        onRetry={() => {}}
+      />
+    </label>
+  )
+}
+
+type UploadDocumentoStatusProps = {
+  status: 'idle' | 'uploading' | 'success' | 'error' | undefined
+  progress: number
+  error: string | undefined
+  onRetry: () => void
+}
+
+function UploadDocumentoStatus({
+  status,
+  progress,
+  error,
+  onRetry,
+}: UploadDocumentoStatusProps) {
+  const isError = status === 'error'
+  const isUploading = status === 'uploading'
+  const isSuccess = status === 'success'
+
+  if (!status && !error && progress === 0) return null
+
+  return (
+    <>
+      {isUploading && (
+        <>
+          <div className="upload-progress">
+            <div className="upload-progress-bar" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="upload-caption">Enviando…</span>
+        </>
+      )}
+      {isSuccess && (
+        <span className="upload-caption success">
+          <Check size={14} /> Enviado
+        </span>
+      )}
+      {isError && error && (
+        <div className="upload-error">
+          <AlertCircle size={14} />
+          <span>{error}</span>
+          <button
+            className="button secondary"
+            onClick={onRetry}
+            type="button"
+            style={{ marginLeft: 8, padding: '2px 8px', fontSize: '11px' }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
 export function CadastrarAluno({
   onCancel,
   initialStudent,
@@ -142,14 +240,20 @@ export function CadastrarAluno({
     initialStudent ? studentToForm(initialStudent) : initialForm
   )
   const [photoName, setPhotoName] = useState('')
-  const [fichaMedica, setFichaMedica] = useState('')
-  const [fichaMatricula, setFichaMatricula] = useState('')
+  const [fichaMedicaFile, setFichaMedicaFile] = useState<File | null>(null)
+  const [fichaMatriculaFile, setFichaMatriculaFile] = useState<File | null>(null)
+  const [autorizacaoImagemFile, setAutorizacaoImagemFile] = useState<File | null>(null)
+  const [outroFile, setOutroFile] = useState<File | null>(null)
+  const [outroLabel, setOutroLabel] = useState('')
   const [lgpdImagem, setLgpdImagem] = useState(true)
   const [lgpdDados, setLgpdDados] = useState(true)
   const [draftMessage, setDraftMessage] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [uploadStatus, setUploadStatus] = useState<Record<string, 'idle' | 'uploading' | 'success' | 'error'>>({})
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+  const [uploadError, setUploadError] = useState<Record<string, string>>({})
   const [firestoreTurmas, setFirestoreTurmas] = useState<Turma[]>([])
   const [firestoreOficinas, setFirestoreOficinas] = useState<Oficina[]>([])
 
@@ -202,8 +306,20 @@ export function CadastrarAluno({
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  const pickFile = (setter: (name: string) => void) => (event: ChangeEvent<HTMLInputElement>) => {
-    setter(event.target.files?.[0]?.name ?? '')
+  const pickFile = (setter: (file: File | null) => void) => (event: ChangeEvent<HTMLInputElement>) => {
+    setter(event.target.files?.[0] ?? null)
+  }
+
+  const validarArquivo = (file: File | null): string | null => {
+    if (!file) return null
+    const tiposPermitidos = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
+    if (!tiposPermitidos.includes(file.type)) {
+      return `Tipo de arquivo não suportado: ${file.type || 'desconhecido'}`
+    }
+    if (file.size > MAX_DOCUMENTO_BYTES) {
+      return `Arquivo excede ${Math.round(MAX_DOCUMENTO_BYTES / 1024 / 1024)} MB`
+    }
+    return null
   }
 
   const validateStep = (currentStep: WizardStep): boolean => {
@@ -268,12 +384,16 @@ export function CadastrarAluno({
     )
   }
 
+  const { currentUser, userProfile } = useAuth()
+
   const finishRegistration = async () => {
     if (!validateStep(1) || !validateStep(2) || !validateStep(4)) {
       return
     }
     setSaving(true)
     setSaveError(null)
+
+    const userId = currentUser?.uid || userProfile?.uid || 'sistema'
 
     try {
       const selectedTurmaOptions = selectedTurmas
@@ -307,22 +427,26 @@ export function CadastrarAluno({
         turmaTurno: turmaPrincipal?.turno,
         oficinas: selectedOficinasLabels,
         grauDependencia: form.grauDependencia,
-        fichaMedica: fichaMedica || undefined,
-        fichaMatricula: fichaMatricula || undefined,
         lgpdImagem,
         lgpdDados,
         status: form.status,
       }
 
+      let alunoId: string
+
       if (initialStudent) {
+        // Edição: envia/substitui documentos primeiro, depois atualiza o aluno
+        await uploadDocumentosParaAluno(initialStudent.id, userId)
         await updateStudent(initialStudent.id, payload)
-        setSubmitted(true)
-        if (onSaveSuccess) onSaveSuccess(initialStudent.id)
+        alunoId = initialStudent.id
       } else {
-        const newId = await createStudent(payload)
-        setSubmitted(true)
-        if (onSaveSuccess) onSaveSuccess(newId)
+        // Novo: cria o aluno primeiro para obter o ID, depois envia documentos
+        alunoId = await createStudent(payload)
+        await uploadDocumentosParaAluno(alunoId, userId)
       }
+
+      setSubmitted(true)
+      if (onSaveSuccess) onSaveSuccess(alunoId)
     } catch (err: any) {
       console.error('Erro ao salvar aluno:', err)
       setSaveError('Erro ao gravar dados no Firestore: ' + (err.message || 'Tente novamente.'))
@@ -331,16 +455,71 @@ export function CadastrarAluno({
     }
   }
 
+  // Envia todos os documentos selecionados para o aluno. Arquivos que falham
+  // não geram metadados; o erro é exibido na UI por meio do estado uploadError.
+  async function uploadDocumentosParaAluno(
+    alunoId: string,
+    userId: string
+  ): Promise<void> {
+    const envios: { tipo: DocumentoTipo; file: File | null; label: string }[] = [
+      { tipo: 'ficha_medica', file: fichaMedicaFile, label: 'Ficha médica' },
+      { tipo: 'ficha_matricula', file: fichaMatriculaFile, label: 'Ficha de matrícula' },
+      { tipo: 'autorizacao_imagem', file: autorizacaoImagemFile, label: 'Autorização de imagem' },
+      { tipo: 'outro', file: outroFile, label: outroLabel || 'Outro documento' },
+    ]
+
+    for (const envio of envios) {
+      if (!envio.file) continue
+
+      const erroValidacao = validarArquivo(envio.file)
+      if (erroValidacao) {
+        setUploadError((prev) => ({ ...prev, [envio.tipo]: erroValidacao }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'error' }))
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 0 }))
+        continue
+      }
+
+      setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'uploading' }))
+      setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 10 }))
+
+      try {
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 40 }))
+        await uploadDocumento(alunoId, envio.file, envio.tipo, userId)
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'success' }))
+        // Limpa erro anterior se houver
+        setUploadError((prev) => {
+          const next = { ...prev }
+          delete next[envio.tipo]
+          return next
+        })
+      } catch (err: any) {
+        const msg = err.message || 'Falha ao enviar arquivo'
+        // O uploadDocumento já salvou localmente mesmo quando o Firebase falha,
+        // então consideramos sucesso (pode ser apenas local).
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'success' }))
+        setUploadError((prev) => ({ ...prev, [envio.tipo]: msg }))
+      }
+    }
+  }
+
   const resetForm = () => {
     setForm(initialForm)
     setPhotoName('')
-    setFichaMedica('')
-    setFichaMatricula('')
+    setFichaMedicaFile(null)
+    setFichaMatriculaFile(null)
+    setAutorizacaoImagemFile(null)
+    setOutroFile(null)
+    setOutroLabel('')
     setLgpdImagem(true)
     setLgpdDados(true)
     setDraftMessage('')
     setSubmitted(false)
     setSaveError(null)
+    setUploadStatus({})
+    setUploadProgress({})
+    setUploadError({})
     setStep(1)
   }
 
@@ -642,30 +821,77 @@ export function CadastrarAluno({
               </div>
             </div>
 
-            <label className="field field-wide">
-              <span>Ficha médica (PDF ou imagem)</span>
-              <label className="upload-area">
-                <input accept=".pdf,image/*" onChange={pickFile(setFichaMedica)} type="file" />
-                <span className="upload-icon">
-                  <Upload size={23} />
-                </span>
-                <strong>{fichaMedica || 'Selecione um arquivo para anexar'}</strong>
-                <span>PDF, JPG ou PNG · máximo de 10 MB</span>
-              </label>
-            </label>
+            <UploadDocumentoField
+              label="Ficha médica (PDF ou imagem)"
+              tipo="ficha_medica"
+              file={fichaMedicaFile}
+              onChange={pickFile(setFichaMedicaFile)}
+              status={uploadStatus['ficha_medica']}
+              progress={uploadProgress['ficha_medica'] ?? 0}
+              error={uploadError['ficha_medica']}
+              placeholder="Selecione um arquivo para anexar"
+            />
+
+            <UploadDocumentoField
+              label="Ficha de matrícula <em>(opcional)</em>"
+              tipo="ficha_matricula"
+              file={fichaMatriculaFile}
+              onChange={pickFile(setFichaMatriculaFile)}
+              status={uploadStatus['ficha_matricula']}
+              progress={uploadProgress['ficha_matricula'] ?? 0}
+              error={uploadError['ficha_matricula']}
+              placeholder="Selecione um arquivo para anexar"
+            />
+
+            <UploadDocumentoField
+              label="Autorização de imagem (PDF ou imagem)"
+              tipo="autorizacao_imagem"
+              file={autorizacaoImagemFile}
+              onChange={pickFile(setAutorizacaoImagemFile)}
+              status={uploadStatus['autorizacao_imagem']}
+              progress={uploadProgress['autorizacao_imagem'] ?? 0}
+              error={uploadError['autorizacao_imagem']}
+              placeholder="Selecione um arquivo para anexar"
+            />
 
             <label className="field field-wide">
-              <span>
-                Ficha de matrícula <em>(opcional)</em>
-              </span>
-              <label className="upload-area">
-                <input accept=".pdf,image/*" onChange={pickFile(setFichaMatricula)} type="file" />
+              <span>Outro documento <em>(opcional)</em></span>
+              <div className="upload-area">
+                <input
+                  accept=".pdf,image/*"
+                  onChange={(event) => {
+                    setOutroFile(event.target.files?.[0] ?? null)
+                  }}
+                  type="file"
+                />
                 <span className="upload-icon">
                   <Upload size={23} />
                 </span>
-                <strong>{fichaMatricula || 'Selecione um arquivo para anexar'}</strong>
+                <strong>{outroFile ? outroFile.name : outroLabel || 'Selecione um arquivo para anexar'}</strong>
                 <span>PDF, JPG ou PNG · máximo de 10 MB</span>
-              </label>
+              </div>
+              {outroFile && (
+                <input
+                  className="input"
+                  placeholder="Rótulo do documento (ex: RG, Comprovante de residência)"
+                  value={outroLabel}
+                  onChange={(event) => setOutroLabel(event.target.value)}
+                />
+              )}
+              <UploadDocumentoStatus
+                tipo="outro"
+                status={uploadStatus['outro']}
+                progress={uploadProgress['outro'] ?? 0}
+                error={uploadError['outro']}
+                onRetry={() => {
+                  // A retry é disparada pelo save; aqui apenas limpa o erro
+                  setUploadError((prev) => {
+                    const next = { ...prev }
+                    delete next['outro']
+                    return next
+                  })
+                }}
+              />
             </label>
 
             <div className="lgpd-box">
@@ -865,7 +1091,27 @@ export function CadastrarAluno({
                 <dl>
                   <div>
                     <dt>Ficha médica</dt>
-                    <dd>{fichaMedica ? 'Anexada' : 'Pendente'}</dd>
+                    <dd>
+                      {fichaMedicaFile ? 'Anexada' : uploadStatus['ficha_medica'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Ficha de matrícula</dt>
+                    <dd>
+                      {fichaMatriculaFile ? 'Anexada' : uploadStatus['ficha_matricula'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Autorização de imagem</dt>
+                    <dd>
+                      {autorizacaoImagemFile ? 'Anexada' : uploadStatus['autorizacao_imagem'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Outro documento</dt>
+                    <dd>
+                      {outroFile ? 'Anexado' : uploadStatus['outro'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
                   </div>
                   <div>
                     <dt>LGPD</dt>

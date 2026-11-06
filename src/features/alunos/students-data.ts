@@ -22,10 +22,22 @@ export type ContactEntry = {
   status?: string
 }
 
+export type DocumentoTipo = 'ficha_medica' | 'ficha_matricula' | 'autorizacao_imagem' | 'outro'
+
 export type DocumentEntry = {
-  name: string
-  attachedAt: string
-  kind: 'pdf' | 'lgpd'
+  id: string
+  tipo: DocumentoTipo
+  // dataUrl armazena o arquivo em base64 (DataURL) dentro do Firestore, evitando custo do Storage
+  dataUrl: string
+  nomeArquivoOriginal: string
+  tipoConteudo: string
+  tamanhoBytes: number
+  enviadoPor: string
+  enviadoEm: string
+  // Campos legados (dados existentes antes desta refatoração)
+  name?: string
+  attachedAt?: string
+  kind?: 'pdf' | 'lgpd'
 }
 
 export type Student = {

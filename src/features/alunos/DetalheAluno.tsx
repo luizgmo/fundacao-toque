@@ -4,6 +4,7 @@ import {
   Cake,
   ChevronLeft,
   ClipboardCheck,
+  Download,
   FileText,
   ListChecks,
   NotebookPen,
@@ -13,10 +14,12 @@ import {
   Printer,
   School,
   ShieldCheck,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { calculateAge, findStudent } from './students-data'
-import type { Student, ContactEntry } from './students-data'
-import { getStudentById } from '../../services/studentsService'
+import type { Student, ContactEntry, DocumentEntry } from './students-data'
+import { getStudentById, getDocumentosComUrl } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
 import './DetalheAluno.css'
 
@@ -45,6 +48,9 @@ export function DetalheAluno({
   const [activeTab, setActiveTab] = useState<TabId>('visao')
   const [student, setStudent] = useState<Student | null>(() => findStudent(studentId) || null)
   const [dbContacts, setDbContacts] = useState<ContactEntry[]>([])
+  const [documentos, setDocumentos] = useState<(DocumentEntry & { url: string | null })[]>([])
+  const [documentosError, setDocumentosError] = useState<string | null>(null)
+  const [documentosLoading, setDocumentosLoading] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -63,6 +69,38 @@ export function DetalheAluno({
     return () => {
       isMounted = false
       unsubOccurrences()
+    }
+  }, [studentId])
+
+  useEffect(() => {
+    let isMounted = true
+    let cancel = false
+
+    const carregarDocumentos = async () => {
+      setDocumentosLoading(true)
+      setDocumentosError(null)
+      try {
+        const docs = await getDocumentosComUrl(studentId)
+        if (isMounted && !cancel) {
+          setDocumentos(docs)
+        }
+      } catch (err: any) {
+        if (isMounted && !cancel) {
+          setDocumentosError(err.message || 'Falha ao carregar documentos')
+          setDocumentos([])
+        }
+      } finally {
+        if (isMounted && !cancel) {
+          setDocumentosLoading(false)
+        }
+      }
+    }
+
+    carregarDocumentos()
+
+    return () => {
+      isMounted = false
+      cancel = true
     }
   }, [studentId])
 
@@ -227,16 +265,83 @@ export function DetalheAluno({
             </div>
 
             <h3 className="student-section-title">Documentos</h3>
+
+            {documentosLoading && (
+              <div className="student-empty">Carregando documentos…</div>
+            )}
+
+            {documentosError && (
+              <div style={{ padding: '14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '12px', marginBottom: '10px' }}>
+                <AlertCircle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                {documentosError}
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setDocumentosLoading(true)
+                    setDocumentosError(null)
+                    void getDocumentosComUrl(studentId).then((docs) => {
+                      setDocumentos(docs)
+                      setDocumentosLoading(false)
+                    }).catch((err) => {
+                      setDocumentosError(err.message || 'Falha ao carregar documentos')
+                      setDocumentosLoading(false)
+                    })
+                  }}
+                  type="button"
+                  style={{ marginTop: '6px', padding: '4px 10px', fontSize: '11px' }}
+                >
+                  <RefreshCw size={14} /> Tentar novamente
+                </button>
+              </div>
+            )}
+
             <div className="student-documents-grid">
-              {student.documentos.map((doc) => (
-                <div className="student-document-card" key={doc.name}>
-                  {doc.kind === 'lgpd' ? <ShieldCheck size={28} /> : <FileText size={28} />}
-                  <p>{doc.name}</p>
-                  <span>
-                    {doc.kind === 'lgpd' ? '✅ Autorizado' : 'Anexado em ' + doc.attachedAt}
-                  </span>
-                </div>
-              ))}
+              {(documentos.length > 0 ? documentos : student.documentos).map((doc) => {
+                const nome = 'nomeArquivoOriginal' in doc ? doc.nomeArquivoOriginal : doc.name
+                const tipo = 'tipo' in doc ? doc.tipo : (doc.kind === 'lgpd' ? 'autorizacao_imagem' : 'ficha_medica')
+                const dataUrl = 'dataUrl' in doc ? doc.dataUrl : ''
+                const enviadoEm = 'enviadoEm' in doc ? doc.enviadoEm : (doc.attachedAt || '')
+                const ehImagem = dataUrl.startsWith('data:image/')
+                const ehPdf = dataUrl.startsWith('data:application/pdf') || tipo === 'ficha_medica'
+                return (
+                  <div className="student-document-card" key={doc.id || doc.name}>
+                    {tipo === 'autorizacao_imagem' ? <ShieldCheck size={28} /> : <FileText size={28} />}
+                    <p title={nome}>{nome}</p>
+                    {ehImagem && dataUrl ? (
+                      <img
+                        src={dataUrl}
+                        alt={nome}
+                        style={{
+                          width: '100%',
+                          height: 'auto',
+                          maxHeight: 200,
+                          objectFit: 'contain',
+                          borderRadius: '6px',
+                          marginTop: '8px',
+                          border: '1px solid var(--border)',
+                        }}
+                      />
+                    ) : ehPdf && dataUrl ? (
+                      <a
+                        href={dataUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="button secondary"
+                        style={{ padding: '4px 10px', fontSize: '11px', marginTop: '8px', width: '100%' }}
+                      >
+                        <Download size={14} /> Abrir PDF
+                      </a>
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#6b7280', marginTop: '8px', display: 'block' }}>
+                        {enviadoEm ? 'Anexado em ' + enviadoEm : 'Sem arquivo'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              {(documentos.length === 0 && student.documentos.length === 0) && (
+                <p className="student-empty">Nenhum documento anexado.</p>
+              )}
             </div>
           </div>
         )}
