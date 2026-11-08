@@ -404,19 +404,21 @@ function Dashboard({
   const pendentes = tarefas.filter((t) => !t.feito).length
 
   const shortcuts = [
-    { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen },
-    { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen },
+    { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen, tone: 'green' },
+    { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen, tone: 'blue' },
     {
       label: 'Registrar atividade',
       description: 'Atividades por turma',
       icon: BookOpenCheck,
       action: 'atividades' as Screen,
+      tone: 'orange',
     },
     {
       label: 'Gerar relatório',
       description: 'Acompanhamento pedagógico',
       icon: FileBarChart,
       action: 'reports' as Screen,
+      tone: 'red',
     },
   ]
 
@@ -443,7 +445,7 @@ function Dashboard({
         <MetricCard
           icon={TrendingUp}
           label="Frequência média (mês)"
-          tone="mint"
+          tone="yellow"
           value={loadingMetrics ? '…' : metrics.frequenciaMedia === null ? '—' : `${metrics.frequenciaMedia}%`}
         />
       </section>
@@ -455,7 +457,7 @@ function Dashboard({
               const Icon = shortcut.icon
               return (
                 <button
-                  className="shortcut-button"
+                  className={`shortcut-button tone-${shortcut.tone}`}
                   key={shortcut.label}
                   onClick={() => {
                     if (!shortcut.action) return
