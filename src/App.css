@@ -20,7 +20,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--green-500), var(--yellow-500), var(--blue-500), var(--orange-500)) 1;
 }
 
 .brand {
@@ -38,7 +39,7 @@
   place-items: center;
   overflow: hidden;
   color: white;
-  background: var(--green-600);
+  background: linear-gradient(135deg, var(--green-600), var(--blue-600));
   border-radius: 50%;
 }
 
@@ -63,7 +64,7 @@
 
 .nav-label {
   margin: 0 24px 10px;
-  color: var(--text-muted);
+  color: var(--blue-700);
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.04em;
@@ -93,14 +94,14 @@
 }
 
 .nav-item:hover {
-  color: var(--green-700);
-  background: var(--green-50);
+  color: var(--blue-700);
+  background: var(--blue-50);
 }
 
 .nav-item.active {
   color: var(--green-700);
-  background: var(--green-100);
-  border-left-color: var(--green-600);
+  background: linear-gradient(90deg, var(--green-100), #fff);
+  border-left-color: var(--orange-500);
   font-weight: 700;
 }
 
@@ -138,7 +139,8 @@
   justify-content: space-between;
   padding: 0 31px 0 24px;
   background: rgba(255, 255, 255, 0.96);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--green-500), var(--yellow-500), var(--blue-500), var(--orange-500), var(--red-500)) 1;
   backdrop-filter: blur(12px);
 }
 
@@ -174,8 +176,8 @@
 }
 
 .icon-button:hover {
-  color: var(--green-700);
-  background: var(--green-50);
+  color: var(--blue-700);
+  background: var(--blue-50);
 }
 
 .notification-button {
@@ -189,7 +191,7 @@
   right: 8px;
   width: 6px;
   height: 6px;
-  background: var(--amber-500);
+  background: var(--orange-500);
   border: 2px solid white;
   border-radius: 50%;
 }
@@ -199,8 +201,8 @@
   width: 40px;
   height: 40px;
   place-items: center;
-  color: var(--green-800);
-  background: var(--green-100);
+  color: white;
+  background: linear-gradient(135deg, var(--green-600), var(--blue-600));
   border-radius: 50%;
   font-size: 13px;
   font-weight: 800;
@@ -233,18 +235,30 @@
 }
 
 .welcome-banner {
+  position: relative;
   display: flex;
   min-height: 130px;
   align-items: center;
   justify-content: space-between;
   padding: 0 32px;
   color: white;
-  background:
-    linear-gradient(100deg, rgba(48, 151, 96, 0.96), rgba(26, 99, 62, 0.98)),
-    var(--green-700);
+  background: linear-gradient(110deg, #1b4332 0%, #2d6a4f 55%, #1f5f46 100%);
   border-radius: 17px;
-  box-shadow: 0 8px 22px rgba(31, 104, 65, 0.12);
+  box-shadow: 0 8px 22px rgba(27, 67, 50, 0.18);
   overflow: hidden;
+}
+
+.welcome-banner::after {
+  content: "";
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  width: 150px;
+  height: 150px;
+  background: url("./assets/logo.png") center / contain no-repeat;
+  opacity: 0.1;
+  pointer-events: none;
+  filter: brightness(0) invert(1);
 }
 
 .welcome-banner h2 {
@@ -297,13 +311,23 @@
 }
 
 .metric-icon.blue {
-  color: #2477b5;
-  background: #dceefb;
+  color: var(--blue-700);
+  background: var(--blue-100);
 }
 
 .metric-icon.orange {
-  color: #cf7d00;
-  background: #fff0d7;
+  color: var(--orange-700);
+  background: var(--orange-100);
+}
+
+.metric-icon.red {
+  color: var(--red-700);
+  background: var(--red-100);
+}
+
+.metric-icon.yellow {
+  color: var(--yellow-700);
+  background: var(--yellow-100);
 }
 
 .metric-card > div {
@@ -356,7 +380,9 @@
   min-height: 41px;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--green-500), var(--blue-500), var(--orange-500), var(--red-500)) 1;
 }
 
 .section-card-header h2 {
@@ -387,16 +413,26 @@
   color: var(--green-600);
   background: white;
   border: 1px solid var(--border-strong);
+  border-top-width: 4px;
   border-radius: 15px;
   text-align: center;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
+.shortcut-button.tone-green { border-top-color: var(--green-500); color: var(--green-700); background: linear-gradient(180deg, var(--green-50), #fff 55%); }
+.shortcut-button.tone-blue { border-top-color: var(--blue-500); color: var(--blue-700); background: linear-gradient(180deg, var(--blue-50), #fff 55%); }
+.shortcut-button.tone-orange { border-top-color: var(--orange-500); color: var(--orange-700); background: linear-gradient(180deg, var(--orange-50), #fff 55%); }
+.shortcut-button.tone-red { border-top-color: var(--red-500); color: var(--red-700); background: linear-gradient(180deg, var(--red-50), #fff 55%); }
+
 .shortcut-button:hover {
-  border-color: var(--green-400);
-  box-shadow: 0 10px 24px rgba(25, 113, 68, 0.1);
+  box-shadow: 0 10px 24px rgba(43, 47, 38, 0.1);
   transform: translateY(-2px);
 }
+
+.shortcut-button.tone-green:hover { border-color: var(--green-400); }
+.shortcut-button.tone-blue:hover { border-color: var(--blue-400); }
+.shortcut-button.tone-orange:hover { border-color: var(--orange-400); }
+.shortcut-button.tone-red:hover { border-color: var(--red-400); }
 
 .shortcut-button strong {
   margin-top: 4px;
@@ -657,7 +693,7 @@
 .eyebrow {
   display: block;
   margin-bottom: 4px;
-  color: var(--green-700);
+  color: var(--blue-700);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -715,11 +751,11 @@
 
 .button.primary {
   color: white;
-  background: var(--green-600);
+  background: var(--orange-500);
 }
 
 .button.primary:hover {
-  background: var(--green-700);
+  background: var(--orange-600);
 }
 
 .button.secondary {
@@ -729,8 +765,9 @@
 }
 
 .button.secondary:hover {
-  color: var(--green-700);
-  border-color: var(--green-400);
+  color: var(--blue-700);
+  border-color: var(--blue-400);
+  background: var(--blue-50);
 }
 
 .report-layout {
