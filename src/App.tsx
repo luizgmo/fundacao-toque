@@ -43,6 +43,7 @@ import { Atividades } from './features/atividades/Atividades'
 import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
 import { LoginScreen } from './features/auth/LoginScreen'
 import { TrocarSenha } from './features/auth/TrocarSenha'
+import { Evolucao } from './features/evolucao/Evolucao'
 import { useAuth } from './features/auth/AuthContext'
 import { subscribeToStudents } from './services/studentsService'
 import {
@@ -78,6 +79,7 @@ type Screen =
   | 'turmas'
   | 'oficinas'
   | 'atividades'
+  | 'evolucao'
 
 const validScreens: Screen[] = [
   'reports',
@@ -89,6 +91,7 @@ const validScreens: Screen[] = [
   'turmas',
   'oficinas',
   'atividades',
+  'evolucao',
 ]
 
 type NavItem = {
@@ -107,7 +110,7 @@ const mainNavigation: NavItem[] = [
 ]
 
 const pedagogicalNavigation: NavItem[] = [
-  { label: 'Evolução', icon: BarChart3 },
+  { label: 'Evolução', icon: BarChart3, screen: 'evolucao' },
   { label: 'Relatórios', icon: FileText, screen: 'reports' },
 ]
 
@@ -251,6 +254,7 @@ function Topbar({
     turmas: 'Turmas',
     oficinas: 'Oficinas e Atividades',
     atividades: 'Registro de Atividades',
+    evolucao: 'Evolução',
   }
 
   const initials = userProfile
@@ -603,7 +607,7 @@ const initialReport: ReportValues = {
   finalNotes: '',
 }
 
-function PedagogicalReport() {
+function PedagogicalReport({ initialStudentId }: { initialStudentId?: string | null }) {
   const { currentUser, userProfile } = useAuth()
   const [values, setValues] = useState<ReportValues>(initialReport)
   const [areas, setAreas] = useState({
@@ -634,13 +638,17 @@ function PedagogicalReport() {
       setStudents(list)
       setValues((current) => {
         if (list.length === 0) return current
-        const exists = list.some((s) => s.id === current.student)
-        if (!exists) return { ...current, student: list[0].id }
-        return current
+        const preferredId =
+          initialStudentId && list.some((s) => s.id === initialStudentId)
+            ? initialStudentId
+            : null
+        const targetId = preferredId || (list.some((s) => s.id === current.student) ? current.student : list[0].id)
+        if (targetId === current.student) return current
+        return { ...current, student: targetId }
       })
     })
     return () => unsub()
-  }, [])
+  }, [initialStudentId])
 
   // Histórico real do aluno selecionado (antes eram 2 fixos)
   useEffect(() => {
@@ -1096,6 +1104,9 @@ function App() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('aluno'),
   )
+  const [reportStudentId, setReportStudentId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('alunoRelatorio'),
+  )
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -1141,12 +1152,17 @@ function App() {
     }
     if (nextScreen !== 'reports') {
       url.searchParams.delete('aba')
+      url.searchParams.delete('alunoRelatorio')
+      setReportStudentId(null)
     }
     Object.entries(params).forEach(([key, value]) => {
       if (value) url.searchParams.set(key, value)
       else url.searchParams.delete(key)
     })
     window.history.replaceState({}, '', url)
+    if (Object.prototype.hasOwnProperty.call(params, 'alunoRelatorio')) {
+      setReportStudentId(params.alunoRelatorio || null)
+    }
     setScreen(nextScreen)
   }
 
@@ -1155,8 +1171,10 @@ function App() {
     url.searchParams.set('screen', 'student-detail')
     url.searchParams.set('aluno', id)
     url.searchParams.delete('aba')
+    url.searchParams.delete('alunoRelatorio')
     window.history.replaceState({}, '', url)
     setSelectedStudentId(id)
+    setReportStudentId(null)
     setScreen('student-detail')
   }
 
@@ -1220,14 +1238,22 @@ function App() {
             <DetalheAluno
               onBack={() => navigate('students')}
               onEdit={handleEditStudent}
-              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico' })}
+              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico', alunoRelatorio: selectedStudentId || '' })}
               studentId={selectedStudentId}
             />
           )}
           {screen === 'reports' && (
             <RelatoriosScreen
               isDirection={userProfile?.papel === 'direcao'}
-              pedagogicalContent={<PedagogicalReport />}
+              pedagogicalContent={<PedagogicalReport initialStudentId={reportStudentId} />}
+            />
+          )}
+          {screen === 'evolucao' && (
+            <Evolucao
+              onViewStudent={viewStudent}
+              onNovoRelatorio={(studentId) =>
+                navigate('reports', { aba: 'pedagogico', alunoRelatorio: studentId || '' })
+              }
             />
           )}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
