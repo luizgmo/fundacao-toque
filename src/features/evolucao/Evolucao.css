@@ -1,0 +1,173 @@
+.evolucao-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.evolucao-students-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.evolucao-student-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.evolucao-student-item:hover {
+  background: var(--surface);
+  border-color: var(--green-400);
+}
+
+.evolucao-student-avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: white;
+  background: var(--green-600);
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.evolucao-student-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.evolucao-student-info strong {
+  color: var(--navy-800);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.evolucao-student-turma {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.evolucao-student-count {
+  margin-left: auto;
+  color: var(--green-700);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.evolucao-student-arrow {
+  color: var(--text-muted);
+}
+
+.evolucao-detail-card {
+  margin-top: 20px;
+}
+
+.evolucao-section-title {
+  margin: 0 0 14px;
+  color: var(--navy-800);
+  font-size: 15px;
+}
+
+.evolucao-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.evolucao-timeline-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.evolucao-timeline-dot {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: white;
+  background: var(--green-600);
+  border-radius: 50%;
+  font-size: 14px;
+}
+
+.evolucao-timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.evolucao-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.evolucao-area {
+  color: var(--green-700);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.evolucao-date {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.evolucao-note {
+  margin: 0;
+  color: var(--navy-700);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.evolucao-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.evolucao-actions .button {
+  flex: 1;
+}
+
+.student-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+@media (max-width: 640px) {
+  .evolucao-student-item {
+    padding: 12px 14px;
+  }
+
+  .evolucao-actions {
+    flex-direction: column;
+  }
+}
