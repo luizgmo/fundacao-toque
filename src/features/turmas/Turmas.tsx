@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   Cloud,
   CloudSun,
   Eye,
   GraduationCap,
+  Link2,
   Palette,
   Pencil,
   Plus,
@@ -23,7 +25,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { Turma, TurmaPeriodo } from '../../types/turmas'
 import { PERIODO_LABELS } from '../../types/turmas'
 import type { Oficina, TurmaOficina } from '../../types/oficinas'
-import { getCategoria } from '../../types/oficinas'
+import { formatHorarios, getCategoria } from '../../types/oficinas'
 import type { Student } from '../alunos/students-data'
 import type { UserProfile } from '../../types/auth'
 import {
@@ -37,7 +39,12 @@ import type { TurmaInput } from '../../services/turmasService'
 import { subscribeToOficinas, subscribeToTurmaOficinas } from '../../services/oficinasService'
 import { subscribeToStudents } from '../../services/studentsService'
 import { getUsuarioNome, subscribeToUsuarios } from '../../services/usuariosService'
+import { failureMessage } from '../../lib/persistence'
+import { combineStatus, formatLoadedCount, useSubscription } from '../../lib/useSubscription'
+import { LoadError, LoadErrors } from '../../components/LoadError'
 import { useAuth } from '../auth/AuthContext'
+import { VinculoModal } from '../oficinas/VinculoModal'
+import type { VinculoModalAlvo } from '../oficinas/VinculoModal'
 import './Turmas.css'
 
 const periodoIcons: Record<TurmaPeriodo, LucideIcon> = {
@@ -63,12 +70,17 @@ function toggleListValue(list: string[], value: string) {
 export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void }) {
   const { userProfile } = useAuth()
 
-  const [turmas, setTurmas] = useState<Turma[]>([])
-  const [oficinas, setOficinas] = useState<Oficina[]>([])
-  const [vinculos, setVinculos] = useState<TurmaOficina[]>([])
-  const [studentsList, setStudentsList] = useState<Student[]>([])
-  const [usuarios, setUsuarios] = useState<UserProfile[]>([])
-  const [loading, setLoading] = useState(true)
+  // Estados separados de carregando / erro / dados para cada fonte.
+  const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
+  const oficinasSub = useSubscription<Oficina[]>(subscribeToOficinas, [])
+  const vinculosSub = useSubscription<TurmaOficina[]>(subscribeToTurmaOficinas, [])
+  const studentsSub = useSubscription<Student[]>((onData, onError) => subscribeToStudents(onData, onError), [])
+  const usuariosSub = useSubscription<UserProfile[]>(subscribeToUsuarios, [])
+  const turmas = turmasSub.data
+  const oficinas = oficinasSub.data
+  const vinculos = vinculosSub.data
+  const studentsList = studentsSub.data
+  const usuarios = usuariosSub.data
 
   const [search, setSearch] = useState('')
   const [periodoFilter, setPeriodoFilter] = useState<'todos' | TurmaPeriodo>('todos')
@@ -85,28 +97,8 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
   const [turmaToDelete, setTurmaToDelete] = useState<Turma | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [vinculoAlvo, setVinculoAlvo] = useState<VinculoModalAlvo | null>(null)
 
-  useEffect(() => {
-    const unsubs = [
-      subscribeToTurmas(
-        (data) => {
-          setTurmas(data)
-          setLoadError(null)
-          setLoading(false)
-        },
-        (err) => {
-          setLoadError('Não foi possível carregar as turmas do banco de dados: ' + err.message)
-          setLoading(false)
-        }
-      ),
-      subscribeToOficinas(setOficinas),
-      subscribeToTurmaOficinas(setVinculos),
-      subscribeToStudents(setStudentsList),
-      subscribeToUsuarios(setUsuarios),
-    ]
-    return () => unsubs.forEach((unsub) => unsub())
-  }, [])
 
   const alunosPorTurma = useMemo(() => {
     const map: Record<string, Student[]> = {}
@@ -116,16 +108,21 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
     return map
   }, [turmas, studentsList])
 
-  const oficinasPorTurma = useMemo(() => {
-    const map: Record<string, Oficina[]> = {}
-    turmas.forEach((t) => {
-      map[t.id] = vinculos
-        .filter((v) => v.turmaId === t.id && v.ativo)
-        .map((v) => oficinas.find((o) => o.id === v.oficinaId))
-        .filter((o): o is Oficina => Boolean(o))
+  // Vínculos turma-oficina: são a fonte da verdade para horários e responsáveis
+  // da oficina nesta turma. Inativos ficam no histórico.
+  const vinculosPorTurma = useMemo(() => {
+    const map: Record<string, { ativos: TurmaOficina[]; inativos: TurmaOficina[] }> = {}
+    vinculos.forEach((v) => {
+      const entry = (map[v.turmaId] ||= { ativos: [], inativos: [] })
+      ;(v.ativo ? entry.ativos : entry.inativos).push(v)
+    })
+    const nome = (v: TurmaOficina) => oficinas.find((o) => o.id === v.oficinaId)?.nome || ''
+    Object.values(map).forEach((entry) => {
+      entry.ativos.sort((a, b) => nome(a).localeCompare(nome(b), 'pt-BR'))
+      entry.inativos.sort((a, b) => nome(a).localeCompare(nome(b), 'pt-BR'))
     })
     return map
-  }, [turmas, vinculos, oficinas])
+  }, [vinculos, oficinas])
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase()
@@ -212,7 +209,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
       setShowForm(false)
     } catch (err) {
       console.error('Erro ao salvar turma:', err)
-      setFormError('Erro ao gravar turma no Firestore: ' + ((err as Error).message || 'Tente novamente.'))
+      setFormError(failureMessage(err, editingTurma ? 'atualizar a turma' : 'cadastrar a turma'))
     } finally {
       setSaving(false)
     }
@@ -220,21 +217,26 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
 
   const handleConfirmDelete = async () => {
     if (!turmaToDelete) return
+    // Os vínculos ativos são inativados junto; sem a lista atual, algum ficaria ativo.
+    if (vinculosSub.status !== 'ready') {
+      alert('Os vínculos da turma não foram carregados. Use “Tentar novamente” no aviso da página antes de inativar.')
+      return
+    }
     setDeleting(true)
     try {
-      await deleteTurma(turmaToDelete.id, userProfile?.uid || 'sistema')
+      await deleteTurma(turmaToDelete.id, vinculos, userProfile?.uid || 'sistema')
       showFeedback(`Turma ${turmaToDelete.nome} inativada com sucesso.`)
       setTurmaToDelete(null)
     } catch (err) {
       console.error('Erro ao inativar turma:', err)
-      alert('Erro ao inativar turma: ' + ((err as Error).message || 'Erro desconhecido.'))
+      alert(failureMessage(err, 'inativar a turma'))
     } finally {
       setDeleting(false)
     }
   }
 
   const alunosDaTurmaExcluida = turmaToDelete ? alunosPorTurma[turmaToDelete.id] || [] : []
-  const oficinasDaTurmaExcluida = turmaToDelete ? oficinasPorTurma[turmaToDelete.id] || [] : []
+  const oficinasDaTurmaExcluida = turmaToDelete ? vinculosPorTurma[turmaToDelete.id]?.ativos || [] : []
 
   return (
     <div className="page-container turmas-page">
@@ -251,12 +253,15 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
         </div>
       </div>
 
-      {loadError && (
-        <div className="feedback-banner warning">
-          <AlertCircle size={18} />
-          <span>{loadError}</span>
-        </div>
-      )}
+      <LoadErrors
+        impact="As contagens e nomes exibidos nas turmas podem estar incompletos."
+        sources={[
+          { what: 'as oficinas', ...oficinasSub },
+          { what: 'os vínculos turma-oficina', ...vinculosSub },
+          { what: 'os alunos', ...studentsSub },
+          { what: 'a equipe', ...usuariosSub },
+        ]}
+      />
 
       {actionFeedback && (
         <div className="feedback-banner success">
@@ -271,7 +276,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
             <GraduationCap size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.total}</strong>
+            <strong>{formatLoadedCount(totals.total, turmasSub.status)}</strong>
             <span>Turmas cadastradas</span>
           </div>
         </article>
@@ -280,7 +285,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
             <CheckCircle2 size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.ativas}</strong>
+            <strong>{formatLoadedCount(totals.ativas, turmasSub.status)}</strong>
             <span>Turmas ativas</span>
           </div>
         </article>
@@ -289,7 +294,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
             <Users size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.alunos}</strong>
+            <strong>{formatLoadedCount(totals.alunos, combineStatus(turmasSub.status, studentsSub.status))}</strong>
             <span>Alunos vinculados</span>
           </div>
         </article>
@@ -298,7 +303,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
             <Palette size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.vinculos}</strong>
+            <strong>{formatLoadedCount(totals.vinculos, combineStatus(turmasSub.status, vinculosSub.status))}</strong>
             <span>Oficinas nas turmas</span>
           </div>
         </article>
@@ -334,8 +339,10 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
         </div>
       </div>
 
-      {loading ? (
+      {turmasSub.status === 'loading' ? (
         <div className="form-card entity-empty">Carregando turmas do banco de dados...</div>
+      ) : turmasSub.status === 'error' ? (
+        <LoadError error={turmasSub.error} onRetry={turmasSub.retry} what="as turmas" />
       ) : filtered.length === 0 ? (
         <div className="form-card entity-empty">
           <GraduationCap size={32} />
@@ -358,7 +365,9 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
           {filtered.map((turma) => {
             const Icon = periodoIcons[turma.periodo]
             const alunos = alunosPorTurma[turma.id] || []
-            const turmaOficinas = oficinasPorTurma[turma.id] || []
+            const turmaVinculos = vinculosPorTurma[turma.id]?.ativos || []
+            const turmaVinculosInativos = vinculosPorTurma[turma.id]?.inativos || []
+            const vinculosStatus = combineStatus(vinculosSub.status, oficinasSub.status)
             const responsaveis = turma.idsUsuariosResponsaveis
               .map((uid) => getUsuarioNome(usuarios, uid))
               .join(', ')
@@ -387,17 +396,73 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
 
                 <div className="entity-tags">
                   <span className="entity-tag primary">
-                    {alunos.length} {alunos.length === 1 ? 'aluno' : 'alunos'}
+                    {studentsSub.status === 'ready'
+                      ? `${alunos.length} ${alunos.length === 1 ? 'aluno' : 'alunos'}`
+                      : studentsSub.status === 'loading'
+                        ? 'Alunos…'
+                        : 'Alunos indisponíveis'}
                   </span>
-                  {turmaOficinas.map((o) => (
-                    <span className="entity-tag" key={o.id}>
-                      {getCategoria(o.categoria).emoji} {o.nome}
+                  {turmaVinculos.length === 0 && (
+                    <span className="entity-tag muted">
+                      {vinculosStatus === 'ready'
+                        ? 'Sem oficinas vinculadas'
+                        : vinculosStatus === 'loading'
+                          ? 'Carregando oficinas…'
+                          : 'Oficinas indisponíveis'}
                     </span>
-                  ))}
-                  {turmaOficinas.length === 0 && (
-                    <span className="entity-tag muted">Sem oficinas vinculadas</span>
                   )}
                 </div>
+
+                {turmaVinculos.length > 0 && (
+                  <div className="oficina-vinculos">
+                    {turmaVinculos.map((v) => {
+                      const oficina = oficinas.find((o) => o.id === v.oficinaId)
+                      const responsaveisVinculo = v.idsUsuariosResponsaveis
+                        .map((uid) => getUsuarioNome(usuarios, uid))
+                        .join(', ')
+                      return (
+                        <div className="oficina-vinculo-row" key={v.id}>
+                          <div>
+                            <strong>
+                              {oficina ? `${getCategoria(oficina.categoria).emoji} ${oficina.nome}` : 'Oficina removida'}
+                              {oficina && !oficina.ativo ? ' (oficina inativa)' : ''}
+                            </strong>
+                            <span>
+                              <CalendarClock size={13} /> {formatHorarios(v.horarios)}
+                            </span>
+                            <span className="vinculo-responsaveis">
+                              <UserRoundCheck size={13} /> {responsaveisVinculo || 'Sem responsável no vínculo'}
+                            </span>
+                          </div>
+                          <button
+                            aria-label={`Editar vínculo com ${oficina?.nome || 'oficina'}`}
+                            className="icon-button"
+                            onClick={() => setVinculoAlvo({ tipo: 'editar', vinculo: v })}
+                            title="Editar horários e responsáveis"
+                            type="button"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {turmaVinculosInativos.length > 0 && (
+                  <details className="vinculo-historico">
+                    <summary>{turmaVinculosInativos.length} vínculo(s) inativo(s) no histórico</summary>
+                    <ul>
+                      {turmaVinculosInativos.map((v) => (
+                        <li key={v.id}>
+                          {oficinas.find((o) => o.id === v.oficinaId)?.nome || 'Oficina removida'} —{' '}
+                          {formatHorarios(v.horarios)}
+                          {v.inativadoEm ? ` (inativado em ${v.inativadoEm.split('-').reverse().join('/')})` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
 
                 <div className="entity-actions">
                   <button
@@ -406,6 +471,15 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
                     type="button"
                   >
                     <Eye size={16} /> Ver alunos
+                  </button>
+                  <button
+                    className="button secondary"
+                    disabled={!turma.ativo}
+                    onClick={() => setVinculoAlvo({ tipo: 'novo-na-turma', turmaId: turma.id })}
+                    title={turma.ativo ? 'Vincular uma oficina a esta turma' : 'Reative a turma para vincular oficinas'}
+                    type="button"
+                  >
+                    <Link2 size={16} /> Oficina
                   </button>
                   <div className="students-table-actions">
                     <button
@@ -576,6 +650,20 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
       )}
 
       {/* Modal Alunos da Turma */}
+      {vinculoAlvo && (
+        <VinculoModal
+          alvo={vinculoAlvo}
+          dadosStatus={combineStatus(turmasSub.status, oficinasSub.status, vinculosSub.status, usuariosSub.status)}
+          oficinas={oficinas}
+          onClose={() => setVinculoAlvo(null)}
+          onSaved={showFeedback}
+          turmas={turmas}
+          userId={userProfile?.uid || 'sistema'}
+          usuarios={usuarios}
+          vinculos={vinculos}
+        />
+      )}
+
       {turmaAlunos && (
         <div className="modal-backdrop" onClick={() => setTurmaAlunos(null)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
@@ -598,7 +686,11 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
             </header>
 
             <div className="modal-form">
-              {(alunosPorTurma[turmaAlunos.id] || []).length === 0 ? (
+              {studentsSub.status === 'error' ? (
+                <LoadError error={studentsSub.error} onRetry={studentsSub.retry} what="os alunos" />
+              ) : studentsSub.status === 'loading' ? (
+                <p className="entity-modal-empty">Carregando alunos…</p>
+              ) : (alunosPorTurma[turmaAlunos.id] || []).length === 0 ? (
                 <p className="entity-modal-empty">
                   Nenhum aluno vinculado. Para vincular, edite o cadastro do aluno e selecione esta
                   turma na etapa <strong>Vínculos</strong>.
@@ -654,6 +746,14 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
             </header>
 
             <div className="confirm-modal-body">
+              {studentsSub.status === 'error' && (
+                <LoadError
+                  error={studentsSub.error}
+                  impact="Não é possível confirmar quantos alunos estão vinculados a esta turma."
+                  onRetry={studentsSub.retry}
+                  what="os alunos"
+                />
+              )}
               {alunosDaTurmaExcluida.length > 0 ? (
                 <>
                   <p>
@@ -672,7 +772,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
                   </p>
                   <p className="confirm-modal-hint">
                     {oficinasDaTurmaExcluida.length > 0
-                      ? `Os vínculos com ${oficinasDaTurmaExcluida.length} oficina(s) serão desativados. `
+                      ? `Os vínculos com ${oficinasDaTurmaExcluida.length} oficina(s) serão inativados e deixam de aparecer na chamada e nas atividades. `
                       : ''}
                     Registros de atividade e chamadas já realizados são mantidos no histórico.
                   </p>

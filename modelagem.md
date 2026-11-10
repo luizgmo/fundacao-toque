@@ -175,11 +175,19 @@ ids_usuarios_responsaveis: array<string>       obrigatório
 ativo: boolean                           obrigatório
 horarios: array<map>                     obrigatório
   horários semanais desta oficina nesta turma
+inativado_em: string                      opcional
+  formato: YYYY-MM-DD; preenchido ao inativar o vínculo
+inativado_por: string                     opcional
 criado_em: Timestamp                     obrigatório
 atualizado_em: Timestamp                     obrigatório
 ```
 
 Representa o relacionamento entre uma turma e uma oficina.
+
+- O ID do documento é `{turma_id}__{oficina_id}` (exigido pelas regras na criação): existe no máximo um vínculo por par turma/oficina. Religar uma oficina a uma turma reativa o vínculo antigo, e chamadas, atividades e participantes que apontavam para ele continuam válidos.
+- Vínculos não são apagados, apenas inativados (`ativo: false`). Inativar a turma ou a oficina inativa os vínculos ativos dela na mesma gravação.
+- Só vínculos ativos, de oficina ativa, aparecem para novos registros de chamada (`sessoes_chamada.turma_oficina_id`) e de atividade (`registros_atividade.ids_turma_oficinas`).
+- Vínculo ativo exige ao menos um responsável e de 1 a 7 horários válidos; `turma_id` e `oficina_id` não podem ser alterados.
 
 Estrutura de cada item de `horarios`:
 
@@ -196,7 +204,9 @@ valido_ate: string                       opcional
   formato: YYYY-MM-DD
 ```
 
-Os horários ficam embutidos (1 a 3 itens por vínculo) em vez de coleção própria — evita fragmentação e consultas extras.
+Validações (app e regras): `dia_semana` de 1 (segunda) a 7 (domingo), `hora_inicio` e `hora_fim` em `HH:mm` com início antes do fim, e `valido_de` ≤ `valido_ate` quando ambos existirem. O app também impede horários sobrepostos no mesmo dia com vigências que se cruzam. Para mudar um horário sem perder o histórico, encerre o antigo com `valido_ate` e cadastre o novo com `valido_de`.
+
+Os horários ficam embutidos (1 a 7 itens por vínculo) em vez de coleção própria — evita fragmentação e consultas extras.
 
 ### `matriculas/{matricula_id}`
 

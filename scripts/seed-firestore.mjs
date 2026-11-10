@@ -167,9 +167,10 @@ const CLASS_B = 'seed-turma-tarde-1'
 const WORKSHOP_MUSIC = 'seed-oficina-musicalizacao'
 const WORKSHOP_DANCE = 'seed-oficina-danca'
 const WORKSHOP_GARDEN = 'seed-oficina-horta'
-const CW_MUSIC_A = 'seed-cw-music-manha'
-const CW_GARDEN_A = 'seed-cw-horta-manha'
-const CW_DANCE_B = 'seed-cw-dance-tarde'
+// Vínculos turma-oficina usam o ID determinístico turma__oficina (exigido pelas regras)
+const CW_MUSIC_A = `${CLASS_A}__${WORKSHOP_MUSIC}`
+const CW_GARDEN_A = `${CLASS_A}__${WORKSHOP_GARDEN}`
+const CW_DANCE_B = `${CLASS_B}__${WORKSHOP_DANCE}`
 const STUDENT_1 = 'seed-student-1'
 const STUDENT_2 = 'seed-student-2'
 const STUDENT_3 = 'seed-student-3'

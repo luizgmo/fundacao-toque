@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import {
   AlertCircle,
@@ -17,12 +17,13 @@ import {
 } from 'lucide-react'
 import type { RegistroAtividade, Anexo } from '../../types/atividades'
 import type { Oficina, TurmaOficina } from '../../types/oficinas'
-import { getCategoria, isoWeekday } from '../../types/oficinas'
+import { getCategoria, vinculoPrevistoEm, vinculosAtivosDaTurma } from '../../types/oficinas'
 import type { Turma } from '../../types/turmas'
 import { PERIODO_LABELS } from '../../types/turmas'
 import type { UserProfile } from '../../types/auth'
 import {
   MAX_FOTO_BYTES,
+  anexarFotosRegistro,
   createRegistroAtividade,
   deleteRegistroAtividade,
   getAnexosComUrl,
@@ -32,6 +33,10 @@ import { subscribeToOficinas, subscribeToTurmaOficinas } from '../../services/of
 import { subscribeToTurmas } from '../../services/turmasService'
 import { getUsuarioNome, subscribeToUsuarios } from '../../services/usuariosService'
 import { useAuth } from '../auth/AuthContext'
+import { failureMessage } from '../../lib/persistence'
+import { useSubscription } from '../../lib/useSubscription'
+import { LoadError, LoadErrors } from '../../components/LoadError'
+import type { ResultadoPersistencia } from '../../lib/persistence'
 import './Atividades.css'
 
 type FotoSelecionada = { file: File; previewUrl: string }
@@ -58,12 +63,20 @@ export function Atividades() {
   const { userProfile } = useAuth()
   const canDelete = userProfile?.papel === 'direcao'
 
-  const [turmas, setTurmas] = useState<Turma[]>([])
-  const [oficinas, setOficinas] = useState<Oficina[]>([])
-  const [vinculos, setVinculos] = useState<TurmaOficina[]>([])
-  const [usuarios, setUsuarios] = useState<UserProfile[]>([])
-  const [registros, setRegistros] = useState<RegistroAtividade[]>([])
-  const [loadingRegistros, setLoadingRegistros] = useState(true)
+  // Estados separados de carregando / erro / dados para cada fonte.
+  const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
+  const oficinasSub = useSubscription<Oficina[]>(subscribeToOficinas, [])
+  const vinculosSub = useSubscription<TurmaOficina[]>(subscribeToTurmaOficinas, [])
+  const usuariosSub = useSubscription<UserProfile[]>(subscribeToUsuarios, [])
+  const registrosSub = useSubscription<RegistroAtividade[]>(
+    (onData, onError) => subscribeToRegistrosAtividade(onData, onError),
+    []
+  )
+  const turmas = turmasSub.data
+  const oficinas = oficinasSub.data
+  const vinculos = vinculosSub.data
+  const usuarios = usuariosSub.data
+  const registros = registrosSub.data
 
   // Formulário
   const [turmaId, setTurmaId] = useState('')
@@ -77,38 +90,26 @@ export function Atividades() {
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'warning'; message: string } | null>(
     null
   )
+  // Registro já gravado cujas fotos não foram todas enviadas. Enquanto existir,
+  // o envio do formulário reenvia apenas as fotos pendentes para este registro.
+  const [registroPendente, setRegistroPendente] = useState<{ id: string; label: string } | null>(null)
 
   // Histórico
   const [historicoTurma, setHistoricoTurma] = useState('todas')
   const [registroDetalhe, setRegistroDetalhe] = useState<RegistroAtividade | null>(null)
   const [anexosDetalhe, setAnexosDetalhe] = useState<(Anexo & { url: string | null })[]>([])
   const [loadingAnexos, setLoadingAnexos] = useState(false)
+  const [anexosError, setAnexosError] = useState<unknown>(null)
   const [registroToDelete, setRegistroToDelete] = useState<RegistroAtividade | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => {
-    const unsubs = [
-      subscribeToTurmas(setTurmas),
-      subscribeToOficinas(setOficinas),
-      subscribeToTurmaOficinas(setVinculos),
-      subscribeToUsuarios(setUsuarios),
-      subscribeToRegistrosAtividade((data) => {
-        setRegistros(data)
-        setLoadingRegistros(false)
-      }),
-    ]
-    return () => unsubs.forEach((unsub) => unsub())
-  }, [])
 
   const turmasAtivas = turmas.filter((t) => t.ativo)
 
+  // Só vínculos ativos (com oficina ativa) recebem novos registros; os ids
+  // gravados em ids_turma_oficinas são os turma_oficina_id desses vínculos.
   const oficinasDaTurma = useMemo(
-    () =>
-      vinculos
-        .filter((v) => v.turmaId === turmaId && v.ativo)
-        .map((v) => ({ vinculo: v, oficina: oficinas.find((o) => o.id === v.oficinaId) }))
-        .filter((item): item is { vinculo: TurmaOficina; oficina: Oficina } => Boolean(item.oficina))
-        .sort((a, b) => a.oficina.nome.localeCompare(b.oficina.nome, 'pt-BR')),
+    () => vinculosAtivosDaTurma(vinculos, oficinas, turmaId),
     [vinculos, oficinas, turmaId]
   )
 
@@ -125,15 +126,13 @@ export function Atividades() {
     return vinculo ? oficinas.find((o) => o.id === vinculo.oficinaId) : undefined
   }
 
-  // Pré-marca as oficinas previstas para o dia da semana da data escolhida
+  // Pré-marca as oficinas previstas para o dia da semana da data escolhida,
+  // respeitando a vigência de cada horário
   const oficinasPrevistas = (novaTurmaId: string, novaData: string) => {
     if (!novaTurmaId || !novaData) return []
-    const dia = isoWeekday(novaData)
-    return vinculos
-      .filter(
-        (v) => v.turmaId === novaTurmaId && v.ativo && v.horarios.some((h) => h.diaSemana === dia)
-      )
-      .map((v) => v.id)
+    return vinculosAtivosDaTurma(vinculos, oficinas, novaTurmaId)
+      .filter(({ vinculo }) => vinculoPrevistoEm(vinculo, novaData))
+      .map(({ vinculo }) => vinculo.id)
   }
 
   const handleTurmaChange = (value: string) => {
@@ -181,6 +180,60 @@ export function Atividades() {
     setFotos([])
     setObservacoes('')
     setIdsTurmaOficinas(oficinasPrevistas(turmaId, dataAtividade))
+    setRegistroPendente(null)
+  }
+
+  // Mantém no formulário apenas as fotos que falharam e informa o que foi persistido.
+  const aplicarResultadoFotos = (
+    resultado: ResultadoPersistencia,
+    registro: { id: string; label: string },
+    enviadasAntes: FotoSelecionada[]
+  ) => {
+    if (resultado.status === 'salvo') {
+      resetForm()
+      setFeedback({
+        tone: 'success',
+        message:
+          resultado.enviados.length > 0
+            ? `${registro.label}: registro e ${resultado.enviados.length} foto(s) gravados no sistema.`
+            : `${registro.label}: registro gravado no sistema.`,
+      })
+      setTimeout(() => setFeedback(null), 3500)
+      return
+    }
+
+    const indicesComFalha = new Set(
+      resultado.falhas.map((f) => f.indice).filter((i): i is number => i !== undefined)
+    )
+    enviadasAntes.forEach((foto, index) => {
+      if (!indicesComFalha.has(index)) URL.revokeObjectURL(foto.previewUrl)
+    })
+    const pendentes = enviadasAntes.filter((_, index) => indicesComFalha.has(index))
+    if (pendentes.length > 0) {
+      setFotos(pendentes)
+      setRegistroPendente(registro)
+    } else {
+      // Nenhum arquivo a reenviar (ex.: só o contador falhou): o registro está
+      // gravado, então o formulário é limpo para não duplicá-lo num novo envio.
+      setFotos([])
+      setObservacoes('')
+      setIdsTurmaOficinas(oficinasPrevistas(turmaId, dataAtividade))
+      setRegistroPendente(null)
+    }
+
+    const enviadas = resultado.enviados.length
+      ? ` Fotos gravadas: ${resultado.enviados.join(', ')}.`
+      : ' Nenhuma foto foi gravada.'
+    const faltando = resultado.falhas.map((f) => `${f.nome} (${f.motivo})`).join('; ')
+    setFeedback({
+      tone: 'warning',
+      message:
+        `${registro.label}: o registro da atividade está salvo, mas o envio ficou incompleto.` +
+        `${enviadas} Não enviadas: ${faltando}.` +
+        (pendentes.length > 0
+          ? ' As fotos pendentes continuam no formulário: use “Reenviar fotos pendentes”.'
+          : ''),
+    })
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -202,9 +255,39 @@ export function Atividades() {
       return
     }
 
+    if (registroPendente) {
+      setSaving(true)
+      const enviadasAntes = fotos
+      try {
+        const resultado = await anexarFotosRegistro(
+          registroPendente.id,
+          enviadasAntes.map((f) => f.file),
+          userProfile?.uid || 'sistema'
+        )
+        aplicarResultadoFotos(resultado, registroPendente, enviadasAntes)
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    // Um vínculo pode ter sido inativado enquanto o formulário estava aberto:
+    // novos registros só podem referenciar vínculos ativos da turma.
+    const idsDisponiveis = new Set(oficinasDaTurma.map(({ vinculo }) => vinculo.id))
+    const indisponiveis = idsTurmaOficinas.filter((id) => !idsDisponiveis.has(id))
+    if (indisponiveis.length > 0) {
+      setIdsTurmaOficinas((current) => current.filter((id) => idsDisponiveis.has(id)))
+      setFormError(
+        `${indisponiveis.length} oficina(s) marcada(s) não estão mais ativas nesta turma e foram desmarcadas. Confira e salve novamente.`
+      )
+      return
+    }
+
     setSaving(true)
+    const enviadasAntes = fotos
+    const label = `Atividade de ${formatDateLabel(dataAtividade)} (${turmaNome(turmaId)})`
     try {
-      const { fotosComErro } = await createRegistroAtividade(
+      const resultado = await createRegistroAtividade(
         {
           dataAtividade,
           turmaId,
@@ -212,25 +295,14 @@ export function Atividades() {
           usuarioResponsavelId: responsavel,
           observacoesGerais: observacoes,
         },
-        fotos.map((f) => f.file),
+        enviadasAntes.map((f) => f.file),
         userProfile?.uid || 'sistema'
       )
-
-      if (fotosComErro.length > 0) {
-        setFeedback({
-          tone: 'warning',
-          message:
-            `Atividade registrada, mas ${fotosComErro.length} foto(s) não foram enviadas: ` +
-            `${fotosComErro.join(', ')}. Verifique a conexão e as regras do Firestore.`,
-        })
-      } else {
-        setFeedback({ tone: 'success', message: 'Atividade registrada com sucesso!' })
-        setTimeout(() => setFeedback(null), 3500)
-      }
-      resetForm()
+      aplicarResultadoFotos(resultado, { id: resultado.id, label }, enviadasAntes)
     } catch (err) {
+      // O registro principal não foi confirmado: nada foi salvo e o formulário fica intacto.
       console.error('Erro ao registrar atividade:', err)
-      setFormError('Erro ao gravar atividade no Firestore: ' + ((err as Error).message || 'Tente novamente.'))
+      setFormError(failureMessage(err, 'registrar a atividade'))
     } finally {
       setSaving(false)
     }
@@ -239,10 +311,14 @@ export function Atividades() {
   const openDetalhe = async (registro: RegistroAtividade) => {
     setRegistroDetalhe(registro)
     setAnexosDetalhe([])
+    setAnexosError(null)
     if (registro.totalAnexos === 0) return
     setLoadingAnexos(true)
     try {
       setAnexosDetalhe(await getAnexosComUrl(`registros_atividade/${registro.id}`))
+    } catch (err) {
+      console.warn('Erro ao carregar fotos do registro:', err)
+      setAnexosError(err)
     } finally {
       setLoadingAnexos(false)
     }
@@ -258,7 +334,7 @@ export function Atividades() {
       setRegistroToDelete(null)
     } catch (err) {
       console.error('Erro ao excluir registro:', err)
-      alert('Erro ao excluir registro: ' + ((err as Error).message || 'Erro desconhecido.'))
+      alert(failureMessage(err, 'excluir o registro de atividade'))
     } finally {
       setDeleting(false)
     }
@@ -273,6 +349,16 @@ export function Atividades() {
           <p>Registre as oficinas realizadas em cada turma e anexe fotos das atividades.</p>
         </div>
       </div>
+
+      <LoadErrors
+        impact="As opções de turma, oficina e responsável do formulário podem estar incompletas."
+        sources={[
+          { what: 'as turmas', ...turmasSub },
+          { what: 'as oficinas', ...oficinasSub },
+          { what: 'os vínculos turma-oficina', ...vinculosSub },
+          { what: 'a equipe', ...usuariosSub },
+        ]}
+      />
 
       {feedback && (
         <div className={'feedback-banner ' + feedback.tone}>
@@ -299,6 +385,7 @@ export function Atividades() {
             </div>
           )}
 
+          <fieldset disabled={Boolean(registroPendente)} style={{ display: 'contents' }}>
           <div className="atividades-form-grid">
             <label className="field">
               <span>Turma *</span>
@@ -387,6 +474,7 @@ export function Atividades() {
               value={observacoes}
             />
           </label>
+          </fieldset>
 
           <div className="field">
             <span>
@@ -418,9 +506,35 @@ export function Atividades() {
             )}
           </div>
 
+          {registroPendente && (
+            <p className="entity-modal-empty">
+              {registroPendente.label} já está salva. Os campos acima ficam bloqueados; apenas as
+              fotos pendentes serão reenviadas para este registro.
+            </p>
+          )}
           <button className="button primary atividades-submit" disabled={saving} type="submit">
-            <Save size={18} /> {saving ? 'Salvando registro...' : 'Salvar registro'}
+            <Save size={18} />{' '}
+            {registroPendente
+              ? saving
+                ? 'Reenviando fotos...'
+                : 'Reenviar fotos pendentes'
+              : saving
+                ? 'Salvando registro...'
+                : 'Salvar registro'}
           </button>
+          {registroPendente && (
+            <button
+              className="button secondary"
+              disabled={saving}
+              onClick={() => {
+                resetForm()
+                setFeedback(null)
+              }}
+              type="button"
+            >
+              Concluir sem as fotos pendentes
+            </button>
+          )}
         </form>
 
         <section className="section-card atividades-history">
@@ -443,11 +557,15 @@ export function Atividades() {
             </select>
           </div>
 
-          {loadingRegistros ? (
+          {registrosSub.status === 'loading' ? (
             <p className="entity-modal-empty atividades-history-empty">Carregando registros...</p>
+          ) : registrosSub.status === 'error' ? (
+            <LoadError error={registrosSub.error} onRetry={registrosSub.retry} what="o histórico de atividades" />
           ) : registrosFiltrados.length === 0 ? (
             <p className="entity-modal-empty atividades-history-empty">
-              Nenhuma atividade registrada ainda.
+              {registros.length === 0
+                ? 'Nenhuma atividade registrada ainda.'
+                : 'Nenhuma atividade registrada para esta turma.'}
             </p>
           ) : (
             <div className="atividades-timeline">
@@ -561,6 +679,12 @@ export function Atividades() {
                 <h4 className="atividade-modal-subtitle">Fotos ({registroDetalhe.totalAnexos})</h4>
                 {loadingAnexos ? (
                   <p className="entity-modal-empty">Carregando fotos...</p>
+                ) : anexosError ? (
+                  <LoadError
+                    error={anexosError}
+                    onRetry={() => void openDetalhe(registroDetalhe)}
+                    what="as fotos deste registro"
+                  />
                 ) : anexosDetalhe.length === 0 ? (
                   <p className="entity-modal-empty">Nenhuma foto anexada.</p>
                 ) : (

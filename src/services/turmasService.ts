@@ -5,10 +5,13 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
+import { confirmWrite } from '../lib/persistence'
 import { db } from '../lib/firebase'
 import type { Turma, TurmaPeriodo } from '../types/turmas'
+import type { TurmaOficina } from '../types/oficinas'
 import type { Student } from '../features/alunos/students-data'
 
 const TURMAS_COLLECTION = 'turmas'
@@ -37,7 +40,7 @@ export function studentBelongsToTurma(student: Student, turma: Turma) {
 // Inscrição em tempo real na coleção de turmas
 export function subscribeToTurmas(
   onSuccess: (turmas: Turma[]) => void,
-  onError?: (error: Error) => void
+  onError: (error: Error) => void
 ) {
   return onSnapshot(
     collection(db, TURMAS_COLLECTION),
@@ -51,8 +54,7 @@ export function subscribeToTurmas(
     },
     (err) => {
       console.warn('Erro ao escutar Firestore turmas:', err)
-      if (onError) onError(err)
-      else onSuccess([])
+      onError(err)
     }
   )
 }
@@ -79,7 +81,7 @@ function slugify(text: string) {
 export async function createTurma(input: TurmaInput, userId: string): Promise<string> {
   const id = `turma-${slugify(input.nome)}-${Date.now().toString().slice(-4)}`
 
-  await setDoc(doc(db, TURMAS_COLLECTION, id), {
+  await confirmWrite('cadastrar a turma', setDoc(doc(db, TURMAS_COLLECTION, id), {
     codigo: input.codigo.trim().toUpperCase(),
     nome: input.nome.trim(),
     periodo: input.periodo,
@@ -91,13 +93,13 @@ export async function createTurma(input: TurmaInput, userId: string): Promise<st
     criado_em: serverTimestamp(),
     atualizado_por: userId,
     atualizado_em: serverTimestamp(),
-  })
+  }))
 
   return id
 }
 
 export async function updateTurma(id: string, input: TurmaInput, userId: string): Promise<void> {
-  await updateDoc(doc(db, TURMAS_COLLECTION, id), {
+  await confirmWrite('atualizar a turma', updateDoc(doc(db, TURMAS_COLLECTION, id), {
     codigo: input.codigo.trim().toUpperCase(),
     nome: input.nome.trim(),
     periodo: input.periodo,
@@ -107,19 +109,47 @@ export async function updateTurma(id: string, input: TurmaInput, userId: string)
     ativo: input.ativo,
     atualizado_por: userId,
     atualizado_em: serverTimestamp(),
-  })
+  }))
 }
 
-// Inativar turma (em vez de excluir, para preservar histórico)
-export async function inactivateTurma(id: string, userId: string): Promise<void> {
-  await updateDoc(doc(db, TURMAS_COLLECTION, id), {
+// Inativar turma (em vez de excluir, para preservar histórico). Os vínculos
+// turma-oficina ativos são inativados no mesmo batch: ou tudo é confirmado, ou nada.
+export async function inactivateTurma(
+  id: string,
+  vinculosAtivos: TurmaOficina[],
+  userId: string
+): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, TURMAS_COLLECTION, id), {
     ativo: false,
     atualizado_por: userId,
     atualizado_em: serverTimestamp(),
   })
+  vinculosAtivos
+    .filter((v) => v.turmaId === id && v.ativo)
+    .forEach((v) => {
+      batch.update(doc(db, 'turma_oficinas', v.id), {
+        ativo: false,
+        inativado_em: todayISO(),
+        inativado_por: userId,
+        atualizado_por: userId,
+        atualizado_em: serverTimestamp(),
+      })
+    })
+  await confirmWrite('inativar a turma', batch.commit())
+}
+
+function todayISO() {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offset).toISOString().split('T')[0]
 }
 
 // Manter função deleteTurma para compatibilidade, mas agora inativa
-export async function deleteTurma(id: string, userId: string): Promise<void> {
-  return inactivateTurma(id, userId)
+export async function deleteTurma(
+  id: string,
+  vinculosAtivos: TurmaOficina[],
+  userId: string
+): Promise<void> {
+  return inactivateTurma(id, vinculosAtivos, userId)
 }

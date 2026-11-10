@@ -16,6 +16,7 @@ import {
   DEMO_SESSIONS_STORAGE_KEY,
   isDemoModeEnabled,
 } from '../lib/demoMode'
+import { confirmWrite } from '../lib/persistence'
 
 const SESSOES_COLLECTION = 'sessoes_chamada'
 const CONTATOS_COLLECTION = 'contatos_familia'
@@ -114,12 +115,12 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
 
   // Grava com o ID determinístico: YYYY-MM-DD_TurmaId_(TurmaOficinaId | geral)
   const sessionDocId = session.id.replace(/\//g, '-')
-  await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
+  await confirmWrite('salvar a chamada', setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData))
 }
 
 // Carrega sessão do Firestore (ou do armazenamento local no modo demonstração).
-// Retorna null quando a sessão não existe ou o banco está inacessível — nunca
-// devolve uma chamada fictícia em nome do Firestore.
+// Retorna null somente quando a sessão não existe. Falhas de consulta são
+// propagadas: "não consegui ler" não pode virar "chamada ainda não feita".
 export async function getAttendanceFromFirestore(sessionId: string): Promise<AttendanceSession | null> {
   if (isDemoModeEnabled()) {
     const sessions = readDemoSessions()
@@ -127,35 +128,31 @@ export async function getAttendanceFromFirestore(sessionId: string): Promise<Att
   }
 
   const cleanId = sessionId.replace(/\//g, '-')
-  try {
-    const snap = await getDoc(doc(db, SESSOES_COLLECTION, cleanId))
-    if (snap.exists()) {
-      const data = snap.data()
-      const records: Record<string, { status: AttendanceStatus; observation: string }> = {}
+  const snap = await getDoc(doc(db, SESSOES_COLLECTION, cleanId))
+  if (snap.exists()) {
+    const data = snap.data()
+    const records: Record<string, { status: AttendanceStatus; observation: string }> = {}
 
-      const presencas = data.presencas || {}
-      const observacoes = data.observacoes || {}
+    const presencas = data.presencas || {}
+    const observacoes = data.observacoes || {}
 
-      Object.keys(presencas).forEach((studentId) => {
-        records[studentId] = {
-          status: presencas[studentId] as AttendanceStatus,
-          observation: observacoes[studentId] || '',
-        }
-      })
-
-      return {
-        id: sessionId,
-        date: data.data_chamada,
-        turmaId: data.turma_id,
-        scope: data.escopo || 'turma',
-        oficinaName: data.oficina_nome || undefined,
-        registeredBy: data.registrado_por || 'Sistema',
-        registeredAt: data.atualizado_em ? new Date().toISOString() : '',
-        records,
+    Object.keys(presencas).forEach((studentId) => {
+      records[studentId] = {
+        status: presencas[studentId] as AttendanceStatus,
+        observation: observacoes[studentId] || '',
       }
+    })
+
+    return {
+      id: sessionId,
+      date: data.data_chamada,
+      turmaId: data.turma_id,
+      scope: data.escopo || 'turma',
+      oficinaName: data.oficina_nome || undefined,
+      registeredBy: data.registrado_por || 'Sistema',
+      registeredAt: data.atualizado_em ? new Date().toISOString() : '',
+      records,
     }
-  } catch (err) {
-    console.warn('Erro ao carregar sessão do Firestore:', err)
   }
 
   return null
@@ -174,9 +171,13 @@ export interface SaveOccurrenceInput {
   guardianSnapshot: { nome: string; parentesco: string; canal: string; contato: string }
 }
 
-// Salva contato com a família / ocorrência no Firestore (ou localmente no modo demonstração)
-export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Promise<string> {
-  const contactId = `contato-${input.studentId}-${Date.now()}`
+// Salva contato com a família / ocorrência no Firestore (ou localmente no modo demonstração).
+// O ID só é devolvido depois da confirmação do servidor. `contactId` permite que a
+// tela reutilize o mesmo ID numa nova tentativa, evitando registros duplicados.
+export async function saveOccurrenceToFirestore(
+  input: SaveOccurrenceInput,
+  contactId = `contato-${input.studentId}-${Date.now()}`
+): Promise<string> {
   const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
 
   if (isDemoModeEnabled()) {
@@ -216,14 +217,18 @@ export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Pro
     criado_em: serverTimestamp(),
   }
 
-  await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
+  await confirmWrite(
+    'registrar a ocorrência / contato com a família',
+    setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
+  )
   return contactId
 }
 
 // Escuta ocorrências de um aluno em tempo real (ou localmente no modo demonstração)
 export function subscribeStudentOccurrences(
   studentId: string,
-  onUpdate: (contacts: ContactEntry[]) => void
+  onUpdate: (contacts: ContactEntry[]) => void,
+  onError: (error: Error) => void
 ) {
   if (isDemoModeEnabled()) {
     const contacts = readDemoContacts()
@@ -280,6 +285,7 @@ export function subscribeStudentOccurrences(
     },
     (err) => {
       console.warn('Erro ao escutar contatos no Firestore:', err)
+      onError(err)
     }
   )
 }

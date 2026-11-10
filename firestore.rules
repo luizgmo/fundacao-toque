@@ -121,9 +121,65 @@ service cloud.firestore {
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
 
+    // Vínculo turma-oficina: fonte da verdade de horários e responsáveis.
+    // ID determinístico turma__oficina impede dois vínculos para o mesmo par;
+    // vínculos não são apagados, apenas inativados (histórico preservado).
+    function isHora(v) {
+      return v is string && v.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+
+    function isDataOpcional(h, campo) {
+      return !(campo in h) || h[campo] == null ||
+        (h[campo] is string && h[campo].matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'));
+    }
+
+    function horarioValido(h) {
+      return h is map &&
+        h.keys().hasAll(['dia_semana', 'hora_inicio', 'hora_fim']) &&
+        h.keys().hasOnly(['dia_semana', 'hora_inicio', 'hora_fim', 'valido_de', 'valido_ate']) &&
+        h.dia_semana is int && h.dia_semana >= 1 && h.dia_semana <= 7 &&
+        isHora(h.hora_inicio) && isHora(h.hora_fim) && h.hora_inicio < h.hora_fim &&
+        isDataOpcional(h, 'valido_de') && isDataOpcional(h, 'valido_ate') &&
+        (h.get('valido_de', null) == null || h.get('valido_ate', null) == null ||
+          h.valido_de <= h.valido_ate);
+    }
+
+    function horariosValidos(hs) {
+      return hs is list && hs.size() >= 1 && hs.size() <= 7 &&
+        horarioValido(hs[0]) &&
+        (hs.size() < 2 || horarioValido(hs[1])) &&
+        (hs.size() < 3 || horarioValido(hs[2])) &&
+        (hs.size() < 4 || horarioValido(hs[3])) &&
+        (hs.size() < 5 || horarioValido(hs[4])) &&
+        (hs.size() < 6 || horarioValido(hs[5])) &&
+        (hs.size() < 7 || horarioValido(hs[6]));
+    }
+
+    function vinculoValido(data) {
+      return data.turma_id is string && data.oficina_id is string &&
+        data.ativo is bool &&
+        data.ids_usuarios_responsaveis is list &&
+        data.ids_usuarios_responsaveis.size() <= 20 &&
+        // Vínculo ativo exige responsáveis e horários válidos; um vínculo antigo
+        // pode ser inativado mesmo que tenha sido gravado antes desta validação.
+        (data.ativo == false || (
+          data.ids_usuarios_responsaveis.size() >= 1 &&
+          horariosValidos(data.horarios)
+        ));
+    }
+
     match /turma_oficinas/{classWorkshopId} {
       allow read: if canUseSystem();
-      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+      allow create: if canUseSystem() &&
+        vinculoValido(request.resource.data) &&
+        classWorkshopId == request.resource.data.turma_id + '__' + request.resource.data.oficina_id &&
+        exists(/databases/$(database)/documents/turmas/$(request.resource.data.turma_id)) &&
+        exists(/databases/$(database)/documents/oficinas/$(request.resource.data.oficina_id));
+      allow update: if canUseSystem() &&
+        vinculoValido(request.resource.data) &&
+        request.resource.data.turma_id == resource.data.turma_id &&
+        request.resource.data.oficina_id == resource.data.oficina_id;
+      allow delete: if false;
     }
 
     match /matriculas/{enrollmentId} {

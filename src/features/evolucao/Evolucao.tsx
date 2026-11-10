@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   BarChart3,
   FileText,
@@ -6,9 +6,8 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
-import type { Student } from '../alunos/students-data'
-import { subscribeToStudents } from '../../services/studentsService'
-import type { StudentsSource } from '../../services/studentsService'
+import { useStudents } from '../alunos/useStudents'
+import { LoadError } from '../../components/LoadError'
 import { DataNotice } from '../../components/DataNotice'
 import './Evolucao.css'
 
@@ -18,22 +17,11 @@ type Props = {
 }
 
 export function Evolucao({ onViewStudent, onNovoRelatorio }: Props) {
-  const [allStudents, setAllStudents] = useState<Student[]>([])
-  const [source, setSource] = useState<StudentsSource | 'loading'>('loading')
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const studentsSub = useStudents()
+  const allStudents = studentsSub.data
+  const source = studentsSub.source
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const unsub = subscribeToStudents(
-      (data) => {
-        setAllStudents(data)
-        setLoadError(null)
-      },
-      (err) => setLoadError(err.message),
-      (nextSource) => setSource(nextSource)
-    )
-    return () => unsub()
-  }, [])
 
   if (!selectedStudentId) {
     return (
@@ -62,11 +50,8 @@ export function Evolucao({ onViewStudent, onNovoRelatorio }: Props) {
           <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
         )}
 
-        {(source === 'error' || loadError) && (
-          <DataNotice kind="error">
-            <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
-            {loadError ? `Detalhes: ${loadError}` : 'Verifique a conexão e as permissões de acesso.'}
-          </DataNotice>
+        {studentsSub.status === 'error' && (
+          <LoadError error={studentsSub.error} onRetry={studentsSub.retry} what="os alunos" />
         )}
 
         <div className="form-card">

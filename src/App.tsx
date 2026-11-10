@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -48,11 +48,14 @@ import {
   getTarefasDeHoje,
   getUltimasAtualizacoes,
 } from './services/dashboardService'
-import type { AlunoFaltaRecorrente, TimelineItem } from './services/dashboardService'
+import type { AlunoFaltaRecorrente, DashboardMetrics, Metrica, TarefaDoDia, UltimasAtualizacoes } from './services/dashboardService'
 import type { UserProfile, UserRole } from './types/auth'
 import { ROLE_LABELS } from './types/auth'
 import type { Student } from './features/alunos/students-data'
 import { DataNotice } from './components/DataNotice'
+import { LoadError } from './components/LoadError'
+import { useQuery } from './lib/useSubscription'
+import { describeLoadError } from './lib/persistence'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
@@ -349,49 +352,28 @@ function Dashboard({
     return text.charAt(0).toUpperCase() + text.slice(1)
   }, [])
 
-  const [metrics, setMetrics] = useState({ alunosAtivos: 0, turmasAtivas: 0, oficinasAtivas: 0, frequenciaMedia: null as number | null })
-  const [loadingMetrics, setLoadingMetrics] = useState(true)
-  const [faltas, setFaltas] = useState<AlunoFaltaRecorrente[]>([])
-  const [timeline, setTimeline] = useState<TimelineItem[]>([])
-  const [tarefas, setTarefas] = useState<{ titulo: string; prazo: string; feito: boolean }[]>([])
-  const [dashboardError, setDashboardError] = useState('')
+  // Cada seção tem seus próprios estados (carregando, erro, vazio, dados) e
+  // nova tentativa independente. Falhas de consulta nunca aparecem como zero.
+  const metricsQuery = useQuery<DashboardMetrics | null>(getDashboardMetrics, null)
+  const faltasQuery = useQuery<AlunoFaltaRecorrente[]>(() => getAlunosFaltasRecorrentes(5), [])
+  const timelineQuery = useQuery<UltimasAtualizacoes>(() => getUltimasAtualizacoes(6), { items: [], fontesComFalha: [] })
+  const tarefasQuery = useQuery<TarefaDoDia[]>(getTarefasDeHoje, [])
 
-  useEffect(() => {
-    let mounted = true
-    async function load() {
-      setLoadingMetrics(true)
-      setDashboardError('')
-      try {
-        const [m, f, t, tasks] = await Promise.all([
-          getDashboardMetrics(),
-          getAlunosFaltasRecorrentes(5),
-          getUltimasAtualizacoes(6),
-          getTarefasDeHoje(),
-        ])
-        if (!mounted) return
-        setMetrics({
-          alunosAtivos: m.alunosAtivos,
-          turmasAtivas: m.turmasAtivas,
-          oficinasAtivas: m.oficinasAtivas,
-          frequenciaMedia: m.frequenciaMedia,
-        })
-        setFaltas(f)
-        setTimeline(t)
-        setTarefas(tasks)
-      } catch (err) {
-        console.warn('Erro ao carregar dashboard do Firestore:', err)
-        if (mounted) setDashboardError('Não foi possível carregar os dados do banco. Verifique a conexão/permissões.')
-      } finally {
-        if (mounted) setLoadingMetrics(false)
-      }
-    }
-    load()
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const metrics = metricsQuery.data
+  const faltas = faltasQuery.data
+  const timeline = timelineQuery.data.items
+  const tarefas = tarefasQuery.data
+  const metricasComFalha = metrics
+    ? (Object.values(metrics) as Metrica<unknown>[]).filter((m) => !m.ok)
+    : []
+  const tarefasComFalha = tarefas.filter((t) => t.feito === null)
+  const pendentes = tarefas.filter((t) => t.feito === false).length
 
-  const pendentes = tarefas.filter((t) => !t.feito).length
+  const metricValue = (m: Metrica<number> | undefined, format = (n: number) => String(n)) => {
+    if (metricsQuery.status === 'loading') return '…'
+    if (!m || !m.ok) return 'Erro'
+    return format(m.valor)
+  }
 
   const shortcuts = [
     { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen, tone: 'green' },
@@ -422,21 +404,39 @@ function Dashboard({
         <Sparkles aria-hidden="true" size={60} strokeWidth={1.5} />
       </section>
 
-      {dashboardError && (
-        <p style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '0.6rem 0.9rem' }}>
-          {dashboardError}
-        </p>
+      {metricsQuery.status === 'error' && (
+        <LoadError error={metricsQuery.error} onRetry={metricsQuery.retry} what="os indicadores do painel" />
+      )}
+      {metricasComFalha.length > 0 && (
+        <LoadError
+          error={(metricasComFalha[0] as { erro: Error }).erro}
+          impact="Os indicadores marcados com “Erro” não foram calculados."
+          onRetry={metricsQuery.retry}
+          what={`${metricasComFalha.length} indicador(es) do painel`}
+        />
       )}
 
       <section aria-label="Resumo do sistema" className="metrics-grid">
-        <MetricCard icon={Users} label="Alunos ativos" tone="green" value={loadingMetrics ? '…' : String(metrics.alunosAtivos)} />
-        <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value={loadingMetrics ? '…' : String(metrics.turmasAtivas)} />
-        <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value={loadingMetrics ? '…' : String(metrics.oficinasAtivas)} />
+        <MetricCard icon={Users} label="Alunos ativos" tone="green" value={metricValue(metrics?.alunosAtivos)} />
+        <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value={metricValue(metrics?.turmasAtivas)} />
+        <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value={metricValue(metrics?.oficinasAtivas)} />
         <MetricCard
           icon={TrendingUp}
-          label="Frequência média (mês)"
+          label={
+            metrics?.frequenciaMedia.ok && metrics.frequenciaMedia.valor === null
+              ? 'Frequência média (sem chamadas registradas)'
+              : 'Frequência média (mês)'
+          }
           tone="yellow"
-          value={loadingMetrics ? '…' : metrics.frequenciaMedia === null ? '—' : `${metrics.frequenciaMedia}%`}
+          value={
+            metricsQuery.status === 'loading'
+              ? '…'
+              : !metrics?.frequenciaMedia.ok
+                ? 'Erro'
+                : metrics.frequenciaMedia.valor === null
+                  ? '—'
+                  : `${metrics.frequenciaMedia.valor}%`
+          }
         />
       </section>
 
@@ -469,17 +469,34 @@ function Dashboard({
         </SectionCard>
 
         <SectionCard
-          action={<span className="status-pill warning">{pendentes} pendentes</span>}
+          action={
+            tarefasQuery.status === 'ready' && (
+              <span className="status-pill warning">
+                {pendentes} pendentes{tarefasComFalha.length ? ` · ${tarefasComFalha.length} não verificada(s)` : ''}
+              </span>
+            )
+          }
           className="tasks-card"
           title="Tarefas de hoje"
         >
+          {tarefasQuery.status === 'error' && (
+            <LoadError error={tarefasQuery.error} onRetry={tarefasQuery.retry} what="as tarefas de hoje" />
+          )}
+          {tarefasComFalha.length > 0 && (
+            <LoadError
+              error={tarefasComFalha[0].erro}
+              impact="Essas tarefas não foram marcadas como pendentes nem feitas."
+              onRetry={tarefasQuery.retry}
+              what={`${tarefasComFalha.length} verificação(ões) de tarefa`}
+            />
+          )}
           <div className="task-list">
-            {tarefas.length === 0 && (
+            {tarefasQuery.status === 'loading' && (
               <article className="task-item">
                 <Clock3 className="task-icon amber" size={21} />
                 <div>
-                  <strong>{loadingMetrics ? 'Carregando tarefas…' : 'Nenhuma tarefa encontrada'}</strong>
-                  <span>Verifique os registros de hoje</span>
+                  <strong>Carregando tarefas…</strong>
+                  <span>Verificando os registros de hoje</span>
                 </div>
               </article>
             )}
@@ -492,8 +509,11 @@ function Dashboard({
                   <strong>{tarefa.titulo}</strong>
                   <span><Clock3 size={13} /> {tarefa.prazo}</span>
                 </div>
-                <span className={'status-pill ' + (tarefa.feito ? 'success' : 'danger')}>
-                  {tarefa.feito ? 'Feito' : 'Pendente'}
+                <span
+                  className={'status-pill ' + (tarefa.feito === null ? 'warning' : tarefa.feito ? 'success' : 'danger')}
+                  title={tarefa.erro ? describeLoadError(tarefa.erro) : undefined}
+                >
+                  {tarefa.feito === null ? 'Não verificado' : tarefa.feito ? 'Feito' : 'Pendente'}
                 </span>
               </article>
             ))}
@@ -506,17 +526,23 @@ function Dashboard({
           action={<span className="status-pill warning">3+ faltas</span>}
           title="Alunos com faltas recorrentes"
         >
+          {faltasQuery.status === 'error' ? (
+            <LoadError error={faltasQuery.error} onRetry={faltasQuery.retry} what="os alunos com faltas recorrentes" />
+          ) : (
           <div className="absence-alert">
             <AlertTriangle size={21} />
             <div>
               <strong>
-                {faltas.length === 0
+                {faltasQuery.status === 'loading'
+                  ? 'Verificando faltas recentes…'
+                  : faltas.length === 0
                   ? 'Nenhum aluno com 3+ faltas consecutivas'
                   : `${faltas.length} aluno${faltas.length === 1 ? '' : 's'} precisa${faltas.length === 1 ? '' : 'm'} de contato com a família`}
               </strong>
               <span>Verifique os registros de contato e as ausências recentes.</span>
             </div>
           </div>
+          )}
           <div className="student-alert-list">
             {faltas.map((aluno) => (
               <div className="student-alert-row" key={aluno.alunoId}>
@@ -528,20 +554,31 @@ function Dashboard({
                 <button onClick={() => onNavigate('frequencia')} type="button">Ver chamadas</button>
               </div>
             ))}
-            {faltas.length === 0 && !loadingMetrics && (
+            {faltas.length === 0 && faltasQuery.status === 'ready' && (
               <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Sem alertas no momento. Bom trabalho!</p>
             )}
           </div>
         </SectionCard>
 
         <SectionCard title="Últimas atualizações">
+          {timelineQuery.status === 'error' && (
+            <LoadError error={timelineQuery.error} onRetry={timelineQuery.retry} what="as últimas atualizações" />
+          )}
+          {timelineQuery.data.fontesComFalha.length > 0 && (
+            <DataNotice kind="error">
+              Lista incompleta: não foi possível consultar {timelineQuery.data.fontesComFalha.join(', ')}.{' '}
+              <button className="text-button" onClick={timelineQuery.retry} type="button">
+                Tentar novamente
+              </button>
+            </DataNotice>
+          )}
           <div className="timeline">
-            {timeline.length === 0 && (
+            {timelineQuery.status !== 'error' && timeline.length === 0 && (
               <article>
                 <span className="timeline-dot"><Activity size={15} /></span>
                 <div>
-                  <small>{loadingMetrics ? 'Carregando…' : 'Sem movimentações'}</small>
-                  <p>{loadingMetrics ? 'Buscando dados do banco…' : 'Nenhuma atividade, chamada ou relatório recente.'}</p>
+                  <small>{timelineQuery.status === 'loading' ? 'Carregando…' : 'Sem movimentações'}</small>
+                  <p>{timelineQuery.status === 'loading' ? 'Buscando dados do banco…' : 'Nenhuma atividade, chamada ou relatório recente.'}</p>
                 </div>
               </article>
             )}
