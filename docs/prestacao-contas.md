@@ -23,7 +23,7 @@ na subcoleção `anexos/{id}/chunks`, e reconstruídas na prévia, impressão e 
 
 A opção **Imprimir** abre uma versão HTML em nova janela e também não salva arquivo no servidor.
 
-Uma foto só é incluída quando todos os alunos com matrícula identificada na turma na data da atividade têm `uso_imagem_autorizado == true`. Sem roster histórico ou autorização comprovável, a foto é omitida antes de gerar URL de download e a prévia informa a quantidade. A Fundação confirmou a manutenção desta política conservadora em 10/11/2026; confirmação genérica da Direção não libera fotos sem autorização comprovada.
+Uma foto só é incluída quando todos os alunos com matrícula identificada na turma na data da atividade têm `uso_imagem_autorizado == true`. Sem roster histórico ou autorização comprovável, a foto é omitida antes de gerar URL de download. O mesmo critério é aplicado na prévia, no PDF e na impressão, com aviso listando os alunos bloqueados, a contagem de fotos omitidas e a ação necessária. A autorização considerada é a persistida em `alunos.uso_imagem_autorizado` (com a data em `alunos.consentimento_imagem_em`); nenhum checkbox visual da tela substitui esse registro. A Fundação confirmou a manutenção desta política conservadora em 10/11/2026; confirmação genérica da Direção não libera fotos sem autorização comprovada.
 
 ## Migração de turmas legadas
 

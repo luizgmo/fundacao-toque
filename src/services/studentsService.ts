@@ -17,6 +17,26 @@ import { DEMO_STUDENTS_STORAGE_KEY, isDemoModeEnabled } from '../lib/demoMode'
 
 const ALUNOS_COLLECTION = 'alunos'
 
+// Converte Timestamp do Firestore (ou Date/ISO) para ISO-8601.
+function timestampToISO(value: unknown): string | undefined {
+  if (!value) return undefined
+  if (typeof value === 'string') return value
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'object') {
+    const withToDate = value as { toDate?: () => Date }
+    if (typeof withToDate.toDate === 'function') {
+      try {
+        return withToDate.toDate().toISOString()
+      } catch {
+        return undefined
+      }
+    }
+    const seconds = (value as { seconds?: number }).seconds
+    if (typeof seconds === 'number') return new Date(seconds * 1000).toISOString()
+  }
+  return undefined
+}
+
 // Converte documento Firestore para a interface Student da UI
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function docToStudent(id: string, data: any): Student {
@@ -45,6 +65,9 @@ export function docToStudent(id: string, data: any): Student {
     cid: data.cid || (Array.isArray(data.codigos_cid) ? data.codigos_cid.join(', ') : '—'),
     status,
     observacoes: data.observacoes || '',
+    usoImagemAutorizado: data.uso_imagem_autorizado === true,
+    consentimentoImagemEm: timestampToISO(data.consentimento_imagem_em),
+    tratamentoDadosAutorizado: data.tratamento_dados_autorizado === true,
     responsavelNome: data.responsavel_nome || data.responsavelNome || '—',
     parentesco: data.responsavel_parentesco || data.parentesco || 'Mãe',
     telefone: data.responsavel_telefone || data.telefone || '',
@@ -293,6 +316,9 @@ export async function createStudent(input: StudentInput): Promise<string> {
     birthDate: formattedBirth,
     sexo: input.sexo,
     status: input.status || 'Ativo',
+    usoImagemAutorizado: Boolean(input.lgpdImagem),
+    consentimentoImagemEm: input.lgpdImagem ? new Date().toISOString() : undefined,
+    tratamentoDadosAutorizado: Boolean(input.lgpdDados),
     turma: input.turmas[0] || 'Turma A',
     turmaId: input.turmaId,
     turmaTurno: input.turmaTurno || 'Manhã (8h–12h)',
@@ -336,6 +362,7 @@ export async function createStudent(input: StudentInput): Promise<string> {
     sexo: input.sexo,
     status: (input.status || 'Ativo').toLowerCase(),
     uso_imagem_autorizado: Boolean(input.lgpdImagem),
+    consentimento_imagem_em: input.lgpdImagem ? serverTimestamp() : null,
     tratamento_dados_autorizado: Boolean(input.lgpdDados),
     observacoes: input.observacoes || '',
     turma: input.turmas[0] || 'Turma A',
@@ -420,6 +447,16 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
         turma: input.turmas && input.turmas.length > 0 ? input.turmas[0] : st.turma,
         turmaId: input.turmaId !== undefined ? input.turmaId : st.turmaId,
         turmaTurno: input.turmaTurno !== undefined ? input.turmaTurno : st.turmaTurno,
+        usoImagemAutorizado:
+          input.lgpdImagem !== undefined ? input.lgpdImagem : st.usoImagemAutorizado,
+        consentimentoImagemEm:
+          input.lgpdImagem === true && !st.usoImagemAutorizado
+            ? new Date().toISOString()
+            : input.lgpdImagem === false
+              ? undefined
+              : st.consentimentoImagemEm,
+        tratamentoDadosAutorizado:
+          input.lgpdDados !== undefined ? input.lgpdDados : st.tratamentoDadosAutorizado,
         deficiencia: input.deficiencia !== undefined ? input.deficiencia : st.deficiencia,
         cid: input.cid !== undefined ? input.cid : st.cid,
         observacoes: input.observacoes !== undefined ? input.observacoes : st.observacoes,
@@ -468,7 +505,20 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
   if (!guardianPrincipal && input.email !== undefined) updateData.responsavel_email = input.email
   if (input.endereco !== undefined) updateData.responsavel_endereco = input.endereco
   if (input.grauDependencia !== undefined) updateData.grau_dependencia = input.grauDependencia
-  if (input.lgpdImagem !== undefined) updateData.uso_imagem_autorizado = input.lgpdImagem
+  if (input.lgpdImagem !== undefined) {
+    updateData.uso_imagem_autorizado = input.lgpdImagem
+    if (!input.lgpdImagem) {
+      // Revogação: a data do consentimento deixa de existir.
+      updateData.consentimento_imagem_em = null
+    } else {
+      const atual = await getDoc(doc(db, ALUNOS_COLLECTION, id))
+      const atualData = atual.data()
+      // Só registra nova data quando o consentimento está sendo concedido agora.
+      if (!atualData?.uso_imagem_autorizado || !atualData?.consentimento_imagem_em) {
+        updateData.consentimento_imagem_em = serverTimestamp()
+      }
+    }
+  }
   if (input.lgpdDados !== undefined) updateData.tratamento_dados_autorizado = input.lgpdDados
   if (input.status !== undefined) updateData.status = input.status.toLowerCase()
 

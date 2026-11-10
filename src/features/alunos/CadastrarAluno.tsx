@@ -90,6 +90,13 @@ function toggleListValue(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 }
 
+function formatConsentimentoISO(value?: string): string | null {
+  if (!value) return null
+  const data = new Date(value)
+  if (Number.isNaN(data.getTime())) return null
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(data)
+}
+
 function studentToForm(st: Student): AlunoForm {
   let dateFormatted = ''
   if (st.birthDate) {
@@ -247,8 +254,13 @@ export function CadastrarAluno({
   const [autorizacaoImagemFile, setAutorizacaoImagemFile] = useState<File | null>(null)
   const [outroFile, setOutroFile] = useState<File | null>(null)
   const [outroLabel, setOutroLabel] = useState('')
-  const [lgpdImagem, setLgpdImagem] = useState(true)
-  const [lgpdDados, setLgpdDados] = useState(true)
+  // Autorização inicia desmarcada e reflete o consentimento persistido ao editar.
+  const [lgpdImagem, setLgpdImagem] = useState(() =>
+    Boolean(initialStudent?.usoImagemAutorizado)
+  )
+  const [lgpdDados, setLgpdDados] = useState(() =>
+    Boolean(initialStudent?.tratamentoDadosAutorizado)
+  )
   const [draftMessage, setDraftMessage] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -554,8 +566,8 @@ export function CadastrarAluno({
     setAutorizacaoImagemFile(null)
     setOutroFile(null)
     setOutroLabel('')
-    setLgpdImagem(true)
-    setLgpdDados(true)
+    setLgpdImagem(Boolean(initialStudent?.usoImagemAutorizado))
+    setLgpdDados(Boolean(initialStudent?.tratamentoDadosAutorizado))
     setDraftMessage('')
     setSubmitted(false)
     setSaveError(null)
@@ -924,6 +936,11 @@ export function CadastrarAluno({
               error={uploadError['autorizacao_imagem']}
               placeholder="Selecione um arquivo para anexar"
             />
+            <p className="upload-note">
+              O arquivo é vinculado aos documentos do aluno como evidência do termo assinado. Ele
+              não registra o consentimento automaticamente: marque a autorização na seção LGPD
+              abaixo.
+            </p>
 
             <label className="field field-wide">
               <span>Outro documento <em>(opcional)</em></span>
@@ -972,6 +989,24 @@ export function CadastrarAluno({
                 Conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), é necessária a
                 autorização expressa do responsável para tratamento de dados pessoais e imagem do
                 aluno.
+              </p>
+              {initialStudent?.usoImagemAutorizado && (
+                <p className="lgpd-status">
+                  <Check size={14} /> Consentimento de imagem registrado
+                  {formatConsentimentoISO(initialStudent.consentimentoImagemEm)
+                    ? ` em ${formatConsentimentoISO(initialStudent.consentimentoImagemEm)}`
+                    : ' (data não registrada — cadastro legado)'}.
+                </p>
+              )}
+              {initialStudent && !initialStudent.usoImagemAutorizado && (
+                <p className="lgpd-status pendente">
+                  <AlertCircle size={14} /> Sem consentimento de imagem registrado. As fotos deste
+                  aluno serão omitidas dos relatórios de prestação de contas.
+                </p>
+              )}
+              <p className="lgpd-status info">
+                O consentimento só é válido quando a opção abaixo é marcada e o cadastro é salvo. A
+                data e a hora do registro são gravadas no aluno.
               </p>
               <label className="lgpd-checkbox">
                 <input
@@ -1184,8 +1219,24 @@ export function CadastrarAluno({
                     </dd>
                   </div>
                   <div>
-                    <dt>LGPD</dt>
-                    <dd>{lgpdImagem && lgpdDados ? 'Autorizado' : 'Pendente'}</dd>
+                    <dt>Uso de imagem</dt>
+                    <dd>{lgpdImagem ? 'Autorizado' : 'Não autorizado'}</dd>
+                  </div>
+                  <div>
+                    <dt>Registro do consentimento</dt>
+                    <dd>
+                      {lgpdImagem
+                        ? initialStudent?.usoImagemAutorizado &&
+                          initialStudent.consentimentoImagemEm
+                          ? formatConsentimentoISO(initialStudent.consentimentoImagemEm) ||
+                            'Data não registrada'
+                          : 'Será registrado ao salvar'
+                        : 'Não registrado'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Dados pessoais</dt>
+                    <dd>{lgpdDados ? 'Autorizado' : 'Não autorizado'}</dd>
                   </div>
                 </dl>
               </div>

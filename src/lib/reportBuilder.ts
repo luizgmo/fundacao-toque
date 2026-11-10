@@ -14,6 +14,7 @@ import type {
   RelatorioTurmaOficinaRaw,
   RelatorioTurmaRaw,
   RelatorioUsuarioRaw,
+  RestricaoImagemTurma,
 } from '../types/relatorios'
 
 export interface BuildPrestacaoContasInput {
@@ -338,6 +339,24 @@ export function buildPrestacaoContasReport(
     roster.filter((aluno) => normalizeKey(aluno.status) === 'ativo').forEach((aluno) => alunosAtivosSet.add(aluno.id))
   }
 
+  // Turmas com aluno ativo sem consentimento persistido de imagem.
+  // A autorização só é válida quando `uso_imagem_autorizado` está gravado no aluno.
+  const restricoesPorTurma = new Map<string, RestricaoImagemTurma>()
+  for (const turma of turmasSelecionadasUnicas) {
+    const alunosSemAutorizacao = (rosterPorTurma.get(turma.id) || [])
+      .filter((aluno) => aluno.usoImagemAutorizado !== true)
+      .map((aluno) => aluno.nome)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    if (alunosSemAutorizacao.length > 0) {
+      restricoesPorTurma.set(turma.id, {
+        turmaId: turma.id,
+        turmaNome: turma.nome,
+        alunosSemAutorizacao,
+        fotosBloqueadas: 0,
+      })
+    }
+  }
+
   // ==== Frequência ====
   const contagemPorTurma = new Map<string, ContagemPresenca>()
   const contagemPorAluno = new Map<string, ContagemPresenca>()
@@ -539,7 +558,27 @@ export function buildPrestacaoContasReport(
     const fotosDaAtividade = (anexosPorAtividade.get(atividade.id) || [])
       .filter((anexo) => anexo.tipoAnexo === 'imagem')
       .sort((a, b) => a.nomeArquivo.localeCompare(b.nomeArquivo, 'pt-BR'))
-    if (fotosDaAtividade.length > 0 && !todosAutorizadosNaData) fotosOmitidasPorAutorizacao += fotosDaAtividade.length
+
+    if (fotosDaAtividade.length > 0 && !todosAutorizadosNaData) {
+      // Fotos de turmas com aluno sem autorização não entram na prévia, no PDF
+      // nem na impressão; o bloqueio é contabilizado e exibido no relatório.
+      fotosOmitidasPorAutorizacao += fotosDaAtividade.length
+      let restricaoDaTurma = restricoesPorTurma.get(turma.id)
+      if (!restricaoDaTurma) {
+        restricaoDaTurma = {
+          turmaId: turma.id,
+          turmaNome: turma.nome,
+          alunosSemAutorizacao: rosterDaData
+            .filter((aluno) => aluno.usoImagemAutorizado !== true)
+            .map((aluno) => aluno.nome)
+            .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+          fotosBloqueadas: 0,
+        }
+        restricoesPorTurma.set(turma.id, restricaoDaTurma)
+      }
+      restricaoDaTurma.fotosBloqueadas += fotosDaAtividade.length
+    }
+
     const fotos: RelatorioFoto[] = (todosAutorizadosNaData ? fotosDaAtividade : [])
       .map((anexo) => {
         if (!anexo.url) fotosSemUrl += 1
@@ -606,19 +645,12 @@ export function buildPrestacaoContasReport(
     })
 
   // ==== Restrições de imagem (LGPD) ====
-  const restricoes = turmasSelecionadasUnicas
-    .map((turma) => {
-      const alunosSemAutorizacao = (rosterPorTurma.get(turma.id) || [])
-        .filter((aluno) => aluno.usoImagemAutorizado !== true)
-        .map((aluno) => aluno.nome)
-        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      return {
-        turmaId: turma.id,
-        turmaNome: turma.nome,
-        alunosSemAutorizacao,
-      }
-    })
-    .filter((item) => item.alunosSemAutorizacao.length > 0)
+  const todasRestricoes = Array.from(restricoesPorTurma.values())
+  const restricoes = todasRestricoes.filter((item) => item.alunosSemAutorizacao.length > 0)
+  const totalFotosBloqueadas = todasRestricoes.reduce(
+    (soma, item) => soma + item.fotosBloqueadas,
+    0
+  )
 
   // ==== Resumo ====
   let presentes = 0
@@ -667,6 +699,7 @@ export function buildPrestacaoContasReport(
     fotosOmitidasPorAutorizacao,
     restricaoImagem: {
       possuiAlunoSemAutorizacao: restricoes.length > 0,
+      fotosBloqueadas: totalFotosBloqueadas,
       turmas: restricoes,
     },
     avisos,

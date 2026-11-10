@@ -56,7 +56,6 @@ function criarFiltrosIniciais(): PrestacaoContasFiltros {
     turmaIds: [],
     tipo: 'consolidado',
     incluirFotos: true,
-    confirmacaoImagem: false,
   }
 }
 
@@ -94,7 +93,6 @@ export function PrestacaoContas() {
   const [turmasErro, setTurmasErro] = useState<string | null>(null)
   const [data, setData] = useState<RelatorioPrestacaoDados | null>(null)
   const [carregandoDados, setCarregandoDados] = useState(false)
-  const [lgpdConfirmado, setLgpdConfirmado] = useState(false)
   const [processando, setProcessando] = useState(false)
   const [progresso, setProgresso] = useState<PdfProgress | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
@@ -126,14 +124,11 @@ export function PrestacaoContas() {
   const possuiRestricaoImagem = Boolean(
     data && secaoFotosAtiva(data.filtros) && data.restricaoImagem.possuiAlunoSemAutorizacao
   )
-  // A prévia já omite as fotos sem autorização comprovada antes de gerar URLs.
-  const bloqueioLgpd = false
-  const podeExportar = Boolean(data) && !bloqueioLgpd && !processando
+  const podeExportar = Boolean(data) && !processando
 
   const atualizarFiltros = (patch: Partial<PrestacaoContasFiltros>) => {
-    setFiltros((atual) => ({ ...atual, ...patch, confirmacaoImagem: false }))
+    setFiltros((atual) => ({ ...atual, ...patch }))
     setData(null)
-    setLgpdConfirmado(false)
     setProgresso(null)
     setFeedback(null)
   }
@@ -168,17 +163,23 @@ export function PrestacaoContas() {
 
     setCarregandoDados(true)
     setFeedback(null)
-    setLgpdConfirmado(false)
     setData(null)
 
     try {
       const relatorio = await loadPrestacaoContasData(filtros)
       setData(relatorio)
-      if (secaoFotosAtiva(relatorio.filtros) && (relatorio.fotosOmitidasPorAutorizacao || 0) > 0) {
+      if (
+        secaoFotosAtiva(relatorio.filtros) &&
+        (relatorio.restricaoImagem.possuiAlunoSemAutorizacao ||
+          (relatorio.fotosOmitidasPorAutorizacao || 0) > 0)
+      ) {
+        const fotosBloqueadas = relatorio.restricaoImagem.fotosBloqueadas
         setFeedback({
           tone: 'warning',
           message:
-            `Prévia carregada. ${relatorio.fotosOmitidasPorAutorizacao} foto(s) sem autorização comprovada foram omitidas; apenas imagens elegíveis podem ser exportadas.`,
+            fotosBloqueadas > 0
+              ? `Prévia carregada com ${fotosBloqueadas} foto(s) omitida(s): há alunos sem autorização de uso de imagem nas turmas selecionadas. Veja abaixo os nomes e a ação necessária.`
+              : 'Prévia carregada. Há alunos sem autorização de uso de imagem: as fotos dessas turmas não entram no PDF nem na impressão. Veja abaixo a ação necessária.',
         })
       } else {
         setFeedback({
@@ -199,21 +200,9 @@ export function PrestacaoContas() {
     }
   }
 
-  const prepararDadosExportacao = (): RelatorioPrestacaoDados | null => {
-    if (!data) return null
-    return {
-      ...data,
-      filtros: {
-        ...data.filtros,
-        confirmacaoImagem: lgpdConfirmado,
-      },
-    }
-  }
-
   const baixarPdf = async () => {
-    if (!data || bloqueioLgpd || processando) return
-    const dados = prepararDadosExportacao()
-    if (!dados) return
+    if (!data || processando) return
+    const dados = data
 
     setProcessando(true)
     setProgresso(null)
@@ -247,9 +236,8 @@ export function PrestacaoContas() {
   }
 
   const imprimir = () => {
-    if (!data || bloqueioLgpd) return
-    const dados = prepararDadosExportacao()
-    if (!dados) return
+    if (!data) return
+    const dados = data
 
     try {
       printPrestacaoContas(dados)
@@ -512,16 +500,28 @@ export function PrestacaoContas() {
             <ShieldAlert size={22} />
           </div>
           <div className="prestacao-lgpd-copy">
-            <strong>
-              Fotos sem autorização comprovada foram omitidas
-            </strong>
+            <strong>Fotos omitidas por falta de autorização de uso de imagem</strong>
             <p>
-              A exportação contém somente fotos de atividades com matrícula histórica identificada e autorização registrada para todos os alunos vinculados à turma naquela data. A regra institucional ainda precisa ser confirmada.
+              {data.restricaoImagem.fotosBloqueadas > 0
+                ? `${data.restricaoImagem.fotosBloqueadas} foto(s) das turmas abaixo não foram incluídas na prévia, no PDF nem na impressão.`
+                : 'Nenhuma foto dessas turmas foi encontrada no período, mas o impedimento permanece registrado.'}{' '}
+              A exportação considera apenas fotos de atividades com matrícula histórica
+              identificada e autorização registrada para todos os alunos vinculados à turma naquela
+              data. O consentimento só é válido quando está gravado no cadastro do aluno — a
+              confirmação visual desta tela não substitui essa autorização.
+            </p>
+            <p className="prestacao-lgpd-acao">
+              <strong>Ação necessária:</strong> edite o cadastro dos alunos abaixo, marque a
+              autorização de uso de imagem e salve. Se houver termo assinado, anexe-o em
+              Documentos. Depois, gere a prévia novamente.
             </p>
             <div className="prestacao-lgpd-turmas">
               {data.restricaoImagem.turmas.map((turma) => (
                 <span key={turma.turmaId}>
-                  <strong>{turma.turmaNome}</strong> · {turma.alunosSemAutorizacao.join(', ')}
+                  <strong>{turma.turmaNome}</strong>: {turma.alunosSemAutorizacao.join(', ')}
+                  {turma.fotosBloqueadas > 0
+                    ? ` — ${turma.fotosBloqueadas} foto(s) omitida(s)`
+                    : ''}
                 </span>
               ))}
             </div>
@@ -533,13 +533,11 @@ export function PrestacaoContas() {
         <div className="prestacao-preview-coluna">
           {data ? (
             <>
-              <PrestacaoContasPreview confirmacaoImagem={lgpdConfirmado} data={data} />
+              <PrestacaoContasPreview data={data} />
               <div className="prestacao-exportacao">
                 <div>
                   <strong>Exportar relatório</strong>
-                  <span>
-                    Arquivo: {buildReportFileName(prepararDadosExportacao()?.filtros || filtros)}
-                  </span>
+                  <span>Arquivo: {buildReportFileName(data.filtros)}</span>
                 </div>
                 <div className="prestacao-exportacao-acoes">
                   <button
@@ -561,12 +559,6 @@ export function PrestacaoContas() {
                   </button>
                 </div>
               </div>
-              {bloqueioLgpd && (
-                <p className="prestacao-bloqueio">
-                  <ShieldAlert size={15} /> Confirme o uso de imagem para liberar o PDF e a
-                  impressão.
-                </p>
-              )}
             </>
           ) : (
             <section className="prestacao-vazia section-card">
@@ -606,9 +598,11 @@ export function PrestacaoContas() {
           {data && data.resumo.totalFotos === 0 && secaoFotosAtiva(data.filtros) && (
             <div className="prestacao-aside-nota">
               <ImageOff size={17} />
-              <p>{(data.fotosOmitidasPorAutorizacao || 0) > 0
-                ? `Nenhuma foto elegível para exportação. ${data.fotosOmitidasPorAutorizacao} foto(s) foram omitidas por autorização não comprovada.`
-                : 'Nenhuma foto foi encontrada para o período e as turmas selecionadas.'}</p>
+              <p>
+                {data.restricaoImagem.fotosBloqueadas > 0
+                  ? 'As fotos do período foram omitidas por falta de autorização de uso de imagem.'
+                  : 'Nenhuma foto foi encontrada para o período e as turmas selecionadas.'}
+              </p>
             </div>
           )}
         </aside>

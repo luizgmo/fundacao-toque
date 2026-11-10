@@ -33,7 +33,6 @@ const filtrosBase: PrestacaoContasFiltros = {
   turmaIds: [],
   tipo: 'consolidado',
   incluirFotos: true,
-  confirmacaoImagem: false,
 }
 
 const turmas: RelatorioTurmaRaw[] = [
@@ -318,7 +317,7 @@ describe('buildPrestacaoContasReport', () => {
     expect(atividade1?.oficinas).toEqual(['Musicalização'])
   })
 
-  it('conta fotos pelos anexos reais, ignorando documentos e total_anexos', () => {
+  it('conta fotos pelos anexos reais e omite fotos de turma sem autorização', () => {
     const relatorio = buildPrestacaoContasReport(criarInput())
     const atividade1 = relatorio.atividades.find((atividade) => atividade.id === 'atividade-1')
 
@@ -326,6 +325,10 @@ describe('buildPrestacaoContasReport', () => {
     expect(atividade1?.fotos).toHaveLength(0)
     expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-3'])
     expect(relatorio.fotosOmitidasPorAutorizacao).toBe(2)
+    expect(relatorio.restricaoImagem.fotosBloqueadas).toBe(2)
+    expect(relatorio.avisos).toContain(
+      '2 foto(s) omitida(s): não foi possível comprovar autorização de imagem para todos os alunos vinculados à turma na data da atividade.'
+    )
   })
 
   it('ordena atividades por data e ignora registros de turma inexistente ou fora do período', () => {
@@ -345,8 +348,26 @@ describe('buildPrestacaoContasReport', () => {
         turmaId: 'turma-a',
         turmaNome: 'Turma A',
         alunosSemAutorizacao: ['Bruno Alves'],
+        fotosBloqueadas: 2,
       },
     ])
+  })
+
+  it('inclui fotos quando todos os alunos ativos têm autorização persistida', () => {
+    const relatorio = buildPrestacaoContasReport(
+      criarInput({
+        alunos: alunos.map((aluno) =>
+          aluno.id === 'aluno-bruno'
+            ? { ...aluno, usoImagemAutorizado: true }
+            : aluno
+        ),
+      })
+    )
+
+    expect(relatorio.restricaoImagem.possuiAlunoSemAutorizacao).toBe(false)
+    expect(relatorio.restricaoImagem.fotosBloqueadas).toBe(0)
+    expect(relatorio.resumo.totalFotos).toBe(3)
+    expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-2', 'foto-1', 'foto-3'])
   })
 
   it('filtra por turma selecionada', () => {
@@ -401,7 +422,7 @@ describe('buildPrestacaoContasReport', () => {
     expect(relatorio.avisos.some((aviso) => aviso.includes('foto(s) sem arquivo'))).toBe(false)
   })
 
-  it('emite avisos de integridade para turma inexistente, chamada órfã e foto sem URL', () => {
+  it('emite avisos de integridade para turma inexistente, chamada órfã e fotos omitidas', () => {
     const relatorio = buildPrestacaoContasReport(criarInput())
 
     expect(relatorio.avisos).toEqual(

@@ -13,8 +13,6 @@ export interface PrestacaoContasFiltros {
   turmaIds: string[]
   tipo: TipoRelatorioPrestacao
   incluirFotos: boolean
-  /** Confirmação explícita de responsabilidade sobre o uso de imagem (LGPD). */
-  confirmacaoImagem: boolean
 }
 
 export interface RelatorioAlunoFrequencia {
@@ -76,6 +74,8 @@ export interface RestricaoImagemTurma {
   turmaId: string
   turmaNome: string
   alunosSemAutorizacao: string[]
+  /** Fotos da turma que deixaram de ser incluídas por falta de autorização. */
+  fotosBloqueadas: number
 }
 
 export interface RelatorioPrestacaoResumo {
@@ -103,6 +103,7 @@ export interface RelatorioPrestacaoDados {
   fotosOmitidasPorAutorizacao?: number
   restricaoImagem: {
     possuiAlunoSemAutorizacao: boolean
+    fotosBloqueadas: number
     turmas: RestricaoImagemTurma[]
   }
   avisos: string[]
