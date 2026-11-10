@@ -84,7 +84,8 @@ service cloud.firestore {
       // Subcoleção do aluno: ficha médica 1:1 — dados sensíveis (LGPD); ajustar com a Fundação.
       match /ficha_medica/{fichaId} {
         allow read: if isDirection() || isPedagogue();
-        allow create, update, delete: if isDirection();
+        allow create: if isDirection() || isAdministrative();
+        allow update, delete: if isDirection() || isPedagogue();
       }
 
       // Subcoleção: responsáveis do aluno

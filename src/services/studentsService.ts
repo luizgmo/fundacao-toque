@@ -38,10 +38,8 @@ export function docToStudent(id: string, data: any): Student {
     turma: data.turma || 'Turma A',
     turmaId: data.turma_id || undefined,
     turmaTurno: data.turma_turno || data.turmaTurno || 'Manhã (8h–12h)',
-    deficiencia:
-      data.deficiencia ||
-      (Array.isArray(data.tipos_deficiencia) ? data.tipos_deficiencia.join(', ') : 'Não informada'),
-    cid: data.cid || (Array.isArray(data.codigos_cid) ? data.codigos_cid.join(', ') : '—'),
+    deficiencia: 'Não informada',
+    cid: '—',
     status,
     observacoes: data.observacoes || '',
     responsavelNome: data.responsavel_nome || data.responsavelNome || '—',
@@ -49,7 +47,7 @@ export function docToStudent(id: string, data: any): Student {
     telefone: data.responsavel_telefone || data.telefone || '',
     email: data.responsavel_email || data.email || '',
     oficinas: Array.isArray(data.oficinas) ? data.oficinas : [],
-    grauDependencia: data.grau_dependencia || undefined,
+    grauDependencia: undefined,
     documentos: Array.isArray(data.documentos)
       ? data.documentos
       : [
@@ -147,7 +145,19 @@ export async function getStudentById(id: string): Promise<Student | null> {
   try {
     const snap = await getDoc(doc(db, ALUNOS_COLLECTION, id))
     if (snap.exists()) {
-      return docToStudent(snap.id, snap.data())
+      const student = docToStudent(snap.id, snap.data())
+      try {
+        const health = await getDoc(doc(db, ALUNOS_COLLECTION, id, 'ficha_medica', 'geral'))
+        if (health.exists()) {
+          const data = health.data()
+          student.deficiencia = Array.isArray(data.tipos_deficiencia) ? data.tipos_deficiencia.join(', ') : 'Não informada'
+          student.cid = Array.isArray(data.codigos_cid) ? data.codigos_cid.join(', ') : '—'
+          student.grauDependencia = typeof data.grau_dependencia === 'string' ? data.grau_dependencia : undefined
+        }
+      } catch {
+        // Papéis sem acesso médico recebem os dados cadastrais sem os campos restritos.
+      }
+      return student
     }
   } catch (err) {
     console.warn('Erro ao buscar aluno por ID no Firestore:', err)
@@ -305,8 +315,6 @@ export async function createStudent(input: StudentInput): Promise<string> {
     status: (input.status || 'Ativo').toLowerCase(),
     uso_imagem_autorizado: Boolean(input.lgpdImagem),
     tratamento_dados_autorizado: Boolean(input.lgpdDados),
-    tipos_deficiencia: input.deficiencia ? [input.deficiencia] : [],
-    codigos_cid: input.cid ? [input.cid] : [],
     observacoes: input.observacoes || '',
     turma: input.turmas[0] || 'Turma A',
     turma_id: input.turmaId || null,
@@ -323,7 +331,6 @@ export async function createStudent(input: StudentInput): Promise<string> {
     responsavel_email: principal.email || '',
     responsavel_principal_id: principalEntry.ref.id,
     responsavel_endereco: input.endereco || '',
-    grau_dependencia: input.grauDependencia || '',
     ficha_medica_nome: input.fichaMedica || '',
     ficha_matricula_nome: input.fichaMatricula || '',
     faltas_consecutivas: 0,
@@ -411,8 +418,6 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
     }
     if (input.nascimento !== undefined) updateData.data_nascimento = input.nascimento
     if (input.sexo !== undefined) updateData.sexo = input.sexo
-    if (input.deficiencia !== undefined) updateData.tipos_deficiencia = [input.deficiencia]
-    if (input.cid !== undefined) updateData.codigos_cid = [input.cid]
     if (input.observacoes !== undefined) updateData.observacoes = input.observacoes
     if (input.turmas && input.turmas.length > 0) updateData.turma = input.turmas[0]
     if (input.turmaId !== undefined) updateData.turma_id = input.turmaId
@@ -434,7 +439,6 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
     if (input.cpf !== undefined) updateData.responsavel_cpf = input.cpf
     if (input.rg !== undefined) updateData.responsavel_rg = input.rg
     if (input.endereco !== undefined) updateData.responsavel_endereco = input.endereco
-    if (input.grauDependencia !== undefined) updateData.grau_dependencia = input.grauDependencia
     if (input.lgpdImagem !== undefined) updateData.uso_imagem_autorizado = input.lgpdImagem
     if (input.lgpdDados !== undefined) updateData.tratamento_dados_autorizado = input.lgpdDados
     if (input.status !== undefined) updateData.status = input.status.toLowerCase()
@@ -442,6 +446,14 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
   }
   const batch = writeBatch(db)
   batch.update(doc(db, ALUNOS_COLLECTION, id), updateData)
+  if (input.deficiencia !== undefined || input.cid !== undefined || input.grauDependencia !== undefined) {
+    const medicalRef = doc(db, ALUNOS_COLLECTION, id, 'ficha_medica', 'geral')
+    const medicalData: DocumentData = { atualizado_em: serverTimestamp() }
+    if (input.deficiencia !== undefined) medicalData.tipos_deficiencia = input.deficiencia ? [input.deficiencia] : []
+    if (input.cid !== undefined) medicalData.codigos_cid = input.cid ? [input.cid] : []
+    if (input.grauDependencia !== undefined) medicalData.grau_dependencia = input.grauDependencia || null
+    batch.set(medicalRef, medicalData, { merge: true })
+  }
   if (guardians) {
     const existing = await getDocs(collection(db, ALUNOS_COLLECTION, id, 'responsaveis'))
     const keepIds = new Set(guardians.filter((g) => g.id).map((g) => g.id!))

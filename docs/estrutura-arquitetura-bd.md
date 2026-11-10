@@ -348,7 +348,7 @@ Arquivo `firestore.rules` — nega tudo por padrão. **A matriz abaixo é a prop
 | usuarios | próprio perfil mínimo; Direção lista/consulta equipe | Direção; usuário não altera seu papel/ativo; exclusão negada |
 | usuarios_publicos | diretório mínimo (nome, papel e ativo) para papéis ativos | Direção provisiona/sincroniza; exclusão negada |
 | alunos | papéis ativos | Direção/Administrativo criam e excluem; três papéis atualizam |
-| ficha_medica | Direção + Pedagogia | Direção |
+| ficha_medica | Direção + Pedagogia | Direção/Pedagogia editam; Administrativo pode criar no cadastro inicial |
 | responsáveis / documentos | papéis ativos | Direção/Administrativo |
 | turmas, oficinas, turma_oficinas, matriculas | papéis ativos | Direção, Pedagogia ou Administrativo |
 | aluno_oficinas | papéis ativos | Direção/Pedagogia |
