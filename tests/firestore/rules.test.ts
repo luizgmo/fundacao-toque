@@ -36,6 +36,8 @@ beforeEach(async () => {
       setDoc(doc(db, 'usuarios/inativo-1'), { papel: 'direcao', ativo: false }),
       setDoc(doc(db, 'alunos/aluno-1'), { nome_completo: 'Aluno fictício', responsavel_principal_id: 'principal-1' }),
       setDoc(doc(db, 'alunos/aluno-1/responsaveis/principal-1'), { nome_completo: 'Principal', parentesco: 'Mãe', telefone: '0000', ativo: true, principal: true }),
+      setDoc(doc(db, 'alunos/aluno-1/documentos/ficha-medica'), { tipo_documento: 'ficha_medica', data_url: 'data:application/pdf;base64,AA==', tamanho_bytes: 1 }),
+      setDoc(doc(db, 'alunos/aluno-1/documentos/matricula'), { tipo_documento: 'ficha_matricula', data_url: 'data:application/pdf;base64,AA==', tamanho_bytes: 1 }),
       setDoc(doc(db, 'registros_atividade/atividade-1'), { turma_id: 'turma-1' }),
       setDoc(doc(db, 'relatorios_pedagogicos/rascunho-1'), { status: 'rascunho', aluno_id: 'aluno-1' }),
       setDoc(doc(db, 'relatorios_pedagogicos/concluido-1'), { status: 'concluido', aluno_id: 'aluno-1' }),
@@ -66,6 +68,13 @@ describe('Firestore security rules', () => {
     for (const uid of ['direcao-1', 'pedagogia-1', 'admin-1']) {
       await assertSucceeds(getDoc(doc(firestore(uid), 'alunos/aluno-1')))
     }
+  })
+
+  it('restringe documentos médicos à Direção e Pedagogia', async () => {
+    await assertSucceeds(getDoc(doc(firestore('direcao-1'), 'alunos/aluno-1/documentos/ficha-medica')))
+    await assertSucceeds(getDoc(doc(firestore('pedagogia-1'), 'alunos/aluno-1/documentos/ficha-medica')))
+    await assertFails(getDoc(doc(firestore('admin-1'), 'alunos/aluno-1/documentos/ficha-medica')))
+    await assertSucceeds(getDoc(doc(firestore('admin-1'), 'alunos/aluno-1/documentos/matricula')))
   })
 
   it('impede autoelevação, reativação, criação arbitrária e exclusão de perfil', async () => {
