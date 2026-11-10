@@ -459,6 +459,10 @@ async function main() {
       alunoId,
       turmaId: turma.id,
       dataInicio: minDateByClass.get(turma.id) || todayISO(),
+      dataInicioEstimativa: true,
+      origemDataInicio: minDateByClass.has(turma.id)
+        ? 'menor_data_atividade_turma'
+        : 'data_execucao_migracao',
     })
   }
 
@@ -559,6 +563,8 @@ async function main() {
       aluno_id: item.alunoId,
       turma_id: item.turmaId,
       data_inicio: item.dataInicio,
+      data_inicio_estimativa: item.dataInicioEstimativa,
+      origem_data_inicio: item.origemDataInicio,
       data_fim: null,
       status: 'ativo',
       criado_por: ator,
@@ -566,7 +572,9 @@ async function main() {
       atualizado_por: ator,
       atualizado_em: now,
     })
-    console.log(`Matrícula criada: ${item.alunoId} -> ${item.turmaId}`)
+    console.log(
+      `Matrícula criada: ${item.alunoId} -> ${item.turmaId} (início estimado: ${item.dataInicio}; origem: ${item.origemDataInicio})`
+    )
   }
 
   console.log('\nMigração concluída.')
