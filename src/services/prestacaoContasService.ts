@@ -28,7 +28,7 @@ const OFICINAS_COLLECTION = 'oficinas'
 const TURMA_OFICINAS_COLLECTION = 'turma_oficinas'
 const ATIVIDADES_COLLECTION = 'registros_atividade'
 const SESSOES_COLLECTION = 'sessoes_chamada'
-const USUARIOS_COLLECTION = 'usuarios'
+const USUARIOS_PUBLICOS_COLLECTION = 'usuarios_publicos'
 
 const QUERY_CONCURRENCY = 5
 
@@ -88,11 +88,16 @@ function mapAluno(id: string, data: DocumentData): RelatorioAlunoRaw {
   }
 }
 
-function mapMatricula(data: DocumentData): RelatorioMatriculaRaw {
+function mapMatricula(id: string, data: DocumentData): RelatorioMatriculaRaw {
   return {
+    id,
     alunoId: stringValue(data.aluno_id),
     turmaId: stringValue(data.turma_id),
     status: stringValue(data.status),
+    dataInicio: stringValue(data.data_inicio) || null,
+    dataFim: stringValue(data.data_fim) || null,
+    dataInicioEstimada: data.data_inicio_estimativa === true,
+    origemDataInicio: stringValue(data.origem_data_inicio) || null,
   }
 }
 
@@ -179,7 +184,7 @@ export async function loadPrestacaoContasData(
       getDocs(collection(db, MATRICULAS_COLLECTION)),
       getDocs(collection(db, OFICINAS_COLLECTION)),
       getDocs(collection(db, TURMA_OFICINAS_COLLECTION)),
-      getDocs(collection(db, USUARIOS_COLLECTION)),
+      getDocs(query(collection(db, USUARIOS_PUBLICOS_COLLECTION), where('ativo', '==', true))),
     ])
 
     const atividadesQuery = query(
@@ -202,7 +207,7 @@ export async function loadPrestacaoContasData(
 
     const turmas = turmasSnapshot.docs.map((item) => mapTurma(item.id, item.data()))
     const alunos = alunosSnapshot.docs.map((item) => mapAluno(item.id, item.data()))
-    const matriculas = matriculasSnapshot.docs.map((item) => mapMatricula(item.data()))
+    const matriculas = matriculasSnapshot.docs.map((item) => mapMatricula(item.id, item.data()))
     const oficinas = oficinasSnapshot.docs.map((item) => mapOficina(item.id, item.data()))
     const turmaOficinas = turmaOficinasSnapshot.docs.map((item) =>
       mapTurmaOficina(item.id, item.data())
@@ -228,16 +233,6 @@ export async function loadPrestacaoContasData(
               const data = anexoDoc.data()
               const tipoAnexo = data.tipo_anexo === 'documento' ? 'documento' : 'imagem'
               const caminhoStorage = stringValue(data.caminho_storage)
-              let url: string | null = null
-
-              if (deveCarregarUrls && tipoAnexo === 'imagem' && caminhoStorage) {
-                try {
-                  url = await getDownloadURL(ref(storage, caminhoStorage))
-                } catch (error) {
-                  console.warn('Não foi possível obter a URL da foto do relatório:', error)
-                }
-              }
-
               return {
                 id: anexoDoc.id,
                 atividadeId: atividade.id,
@@ -245,7 +240,7 @@ export async function loadPrestacaoContasData(
                 caminhoStorage,
                 nomeArquivo: stringValue(data.nome_arquivo_original, 'foto'),
                 legenda: stringValue(data.legenda),
-                url,
+                url: null,
               }
             })
           )
@@ -259,7 +254,7 @@ export async function loadPrestacaoContasData(
 
     anexosPorAtividade.forEach((lista) => anexos.push(...lista))
 
-    const relatorio = buildPrestacaoContasReport({
+    const buildInput = {
       filtros,
       geradoEm: new Date().toISOString(),
       turmas,
@@ -271,7 +266,24 @@ export async function loadPrestacaoContasData(
       anexos,
       sessoes,
       usuarios,
-    })
+    }
+    let relatorio = buildPrestacaoContasReport(buildInput)
+
+    // Primeiro aplica matrícula histórica e política conservadora de autorização;
+    // somente fotos elegíveis geram URL de download do Storage.
+    if (deveCarregarUrls && relatorio.fotos.length > 0) {
+      const elegiveis = new Set(relatorio.fotos.map((foto) => foto.id))
+      const anexosComUrl = await mapWithConcurrency(anexos, QUERY_CONCURRENCY, async (anexo) => {
+        if (anexo.tipoAnexo !== 'imagem' || !elegiveis.has(anexo.id) || !anexo.caminhoStorage) return anexo
+        try {
+          return { ...anexo, url: await getDownloadURL(ref(storage, anexo.caminhoStorage)) }
+        } catch (error) {
+          console.warn('Não foi possível obter URL de foto elegível:', anexo.id, error)
+          return anexo
+        }
+      })
+      relatorio = buildPrestacaoContasReport({ ...buildInput, anexos: anexosComUrl })
+    }
 
     if (anexosComFalha > 0) {
       relatorio.avisos.push(

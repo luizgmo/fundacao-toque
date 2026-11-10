@@ -10,8 +10,9 @@ Relatório consolidado por período para financiadores, prefeituras e editais. A
 - `alunos`, `matriculas`, `turmas`, `turma_oficinas`, `oficinas` e `usuarios`;
 - autorização de uso de imagem (`alunos.uso_imagem_autorizado`).
 
-Justificativas contam como comparecimento no percentual de frequência. Vínculos por matrícula ativa
-têm prioridade, com fallback para `alunos.turma_id` e `alunos.turma` em dados legados.
+Justificativas entram no numerador (`presentes + justificados`) e no denominador dos registros válidos. A Fundação confirmou a manutenção dessa regra em 10/11/2026. A unidade do indicador (chamada de turma ou oficina) ainda deve ser documentada separadamente.
+
+Matrículas com `data_inicio`/`data_fim` são avaliadas pela vigência do período, inclusive as encerradas e de alunos hoje inativos. Campos legados de turma são usados quando não há matrícula conhecida. Matrícula ativa sem datas é tratada como legado no período e sinalizada; a migração não comprova as datas históricas de entrada.
 
 ## Geração e download
 
@@ -21,8 +22,7 @@ PDFs gerados**. O relatório deve ser baixado e arquivado pela própria Direçã
 
 A opção **Imprimir** abre uma versão HTML em nova janela e também não salva arquivo no servidor.
 
-Se as turmas selecionadas tiverem alunos sem autorização de uso de imagem, a prévia é exibida com
-alerta e o PDF/impressão ficam bloqueados até a confirmação explícita da Direção.
+Uma foto só é incluída quando todos os alunos com matrícula identificada na turma na data da atividade têm `uso_imagem_autorizado == true`. Sem roster histórico ou autorização comprovável, a foto é omitida antes de gerar URL de download e a prévia informa a quantidade. A Fundação confirmou a manutenção desta política conservadora em 10/11/2026; confirmação genérica da Direção não libera fotos sem autorização comprovada.
 
 ## Migração de turmas legadas
 
@@ -37,15 +37,14 @@ npm run migrate:turmas
 APPLY=1 npm run migrate:turmas
 ```
 
-O script lê os dados via Firestore REST com a conta do Firebase CLI, grava um backup dos
-documentos lidos em `/tmp/opencode/migracao-turmas-*.json` e não cria alunos nem turmas
+O script lê os dados via Firestore REST com a conta do Firebase CLI, grava um backup parcial dos
+documentos retornados pelas máscaras em `/tmp/opencode/migracao-turmas-*.json` e não cria alunos nem turmas
 que não estejam referenciados nos dados existentes. Ele pode ser executado novamente sem
 duplicar registros.
 
 ## Implantação
 
-A prestação de contas **não exige regras nem índices novos** no Firestore e funciona em plano
-gratuito sem Cloud Storage. O PDF é gerado localmente e baixado pelo navegador.
+A prestação depende das permissões de leitura das coleções necessárias e de Storage para obter fotos. A necessidade final de índices deve ser confirmada contra as consultas integradas em homologação. O PDF é gerado localmente e baixado pelo navegador.
 
 As fotos de atividades continuam vindo do Storage, quando o bucket existir. Nesse caso:
 

@@ -568,7 +568,11 @@ function carregarHtmlImage(src: string): Promise<HTMLImageElement> {
 
 async function carregarImagem(url: string): Promise<ImagemPdf | null> {
   try {
-    const response = await fetch(url, { mode: 'cors' })
+    const controller = new AbortController()
+    const timeout = globalThis.setTimeout(() => controller.abort(), 15000)
+    const response = await fetch(url, { mode: 'cors', signal: controller.signal }).finally(() => {
+      globalThis.clearTimeout(timeout)
+    })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const blob = await response.blob()
     let dataUrl = await blobToDataUrl(blob)

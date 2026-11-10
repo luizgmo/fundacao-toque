@@ -263,11 +263,11 @@ describe('buildPrestacaoContasReport', () => {
       totalAtividades: 2,
       totalOficinasRealizadas: 2,
       totalSessoes: 3,
-      totalFotos: 3,
-      frequenciaMedia: 80,
+      totalFotos: 1,
+      frequenciaMedia: 75,
       presentes: 3,
       ausentes: 1,
-      justificados: 1,
+      justificados: 0,
     })
   })
 
@@ -292,14 +292,13 @@ describe('buildPrestacaoContasReport', () => {
 
     expect(turmaB).toMatchObject({
       sessoes: 1,
-      registros: 2,
+      registros: 1,
       presentes: 1,
       ausentes: 0,
-      justificados: 1,
+      justificados: 0,
       percentual: 100,
     })
     expect(turmaB?.alunos).toEqual([
-      expect.objectContaining({ alunoNome: 'Bruno Alves', justificados: 1, percentual: 100 }),
       expect.objectContaining({ alunoNome: 'Carla Oliveira', presentes: 1, percentual: 100 }),
     ])
 
@@ -323,13 +322,10 @@ describe('buildPrestacaoContasReport', () => {
     const relatorio = buildPrestacaoContasReport(criarInput())
     const atividade1 = relatorio.atividades.find((atividade) => atividade.id === 'atividade-1')
 
-    expect(relatorio.resumo.totalFotos).toBe(3)
-    expect(atividade1?.fotos).toHaveLength(2)
-    expect(atividade1?.fotos.map((foto) => foto.nomeArquivo)).toEqual([
-      'instrumentos.jpg',
-      'roda.jpg',
-    ])
-    expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-2', 'foto-1', 'foto-3'])
+    expect(relatorio.resumo.totalFotos).toBe(1)
+    expect(atividade1?.fotos).toHaveLength(0)
+    expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-3'])
+    expect(relatorio.fotosOmitidasPorAutorizacao).toBe(2)
   })
 
   it('ordena atividades por data e ignora registros de turma inexistente ou fora do período', () => {
@@ -364,7 +360,7 @@ describe('buildPrestacaoContasReport', () => {
       totalAtividades: 1,
       totalFotos: 1,
       totalSessoes: 1,
-      alunosAtendidos: 2,
+      alunosAtendidos: 1,
       totalTurmas: 1,
       frequenciaMedia: 100,
     })
@@ -401,7 +397,7 @@ describe('buildPrestacaoContasReport', () => {
       criarInput({ filtros: { ...filtrosBase, tipo: 'frequencia', incluirFotos: false } })
     )
 
-    expect(relatorio.resumo.totalFotos).toBe(3)
+    expect(relatorio.resumo.totalFotos).toBe(1)
     expect(relatorio.avisos.some((aviso) => aviso.includes('foto(s) sem arquivo'))).toBe(false)
   })
 
@@ -412,9 +408,33 @@ describe('buildPrestacaoContasReport', () => {
       expect.arrayContaining([
         '1 atividade(s) descartada(s) por turma não identificada.',
         '1 chamada(s) descartada(s) por turma não identificada.',
-        '1 foto(s) sem arquivo acessível no Storage; o PDF mostrará um espaço reservado.',
+        '1 registro(s) de presença não contabilizado(s): a matrícula histórica não corresponde à turma na data da chamada.',
+        '2 foto(s) omitida(s): não foi possível comprovar autorização de imagem para todos os alunos vinculados à turma na data da atividade.',
       ])
     )
+  })
+
+  it('usa vigência histórica das matrículas, sem somar turma atual nem aluno hoje inativo', () => {
+    const relatorio = buildPrestacaoContasReport(criarInput({
+      alunos: [
+        { ...alunos[0], status: 'inativo', turmaId: 'turma-b' },
+        { ...alunos[1], status: 'inativo', turmaId: 'turma-b' },
+      ],
+      matriculas: [
+        { id: 'm-antiga', alunoId: 'aluno-ana', turmaId: 'turma-a', status: 'encerrada', dataInicio: '2026-01-01', dataFim: '2026-09-15' },
+        { id: 'm-atual', alunoId: 'aluno-ana', turmaId: 'turma-b', status: 'ativo', dataInicio: '2026-09-16' },
+      ],
+      sessoes: [
+        { ...sessoes[0], data: '2026-09-10', turmaId: 'turma-a', presencas: { 'aluno-ana': 'presente' } },
+        { ...sessoes[0], id: 'sessao-transf', data: '2026-09-20', turmaId: 'turma-b', presencas: { 'aluno-ana': 'presente' } },
+      ],
+      atividades: [],
+      anexos: [],
+    }))
+
+    expect(relatorio.turmas.find((turma) => turma.turmaId === 'turma-a')?.alunos[0]).toMatchObject({ alunoId: 'aluno-ana', sessoes: 1 })
+    expect(relatorio.turmas.find((turma) => turma.turmaId === 'turma-b')?.alunos[0]).toMatchObject({ alunoId: 'aluno-ana', sessoes: 1 })
+    expect(relatorio.turmas.find((turma) => turma.turmaId === 'turma-b')?.alunos.some((aluno) => aluno.alunoId === 'aluno-bruno')).toBe(false)
   })
 
   it('avisa quando uma turma selecionada não existe', () => {

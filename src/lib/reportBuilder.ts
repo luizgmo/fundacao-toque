@@ -250,6 +250,12 @@ export function buildPrestacaoContasReport(
   const alunosById = new Map(input.alunos.map((aluno) => [aluno.id, aluno]))
   const matriculasPorTurmaDesconhecida = new Set<string>()
   const membrosPorAluno = new Map<string, Set<string>>()
+  const matriculasValidasPorAluno = new Map<string, RelatorioMatriculaRaw[]>()
+  const alunosComMatriculaConhecida = new Set(
+    input.matriculas
+      .filter((matricula) => !['cancelada', 'cancelado', 'rascunho', 'excluida', 'excluido'].includes(normalizeKey(matricula.status)))
+      .map((matricula) => matricula.alunoId)
+  )
 
   function adicionarVinculo(alunoId: string, turmaId: string) {
     if (!alunosById.has(alunoId) || !turmasById.has(turmaId)) return
@@ -258,18 +264,57 @@ export function buildPrestacaoContasReport(
     membrosPorAluno.set(alunoId, atuais)
   }
 
+  function matriculaValidaNoPeriodo(matricula: RelatorioMatriculaRaw) {
+    const status = normalizeKey(matricula.status)
+    if (['cancelada', 'cancelado', 'rascunho', 'excluida', 'excluido'].includes(status)) return false
+    if (matricula.dataInicioEstimada) return false
+    // Sem datas, só o vínculo ativo pode ser usado como legado; não inventamos vigência.
+    if (!matricula.dataInicio && !matricula.dataFim) return status === 'ativo'
+    if (matricula.dataInicio && matricula.dataInicio > filtros.periodoFim) return false
+    if (matricula.dataFim && matricula.dataFim < filtros.periodoInicio) return false
+    return true
+  }
+
+  function matriculaValidaNaData(matricula: RelatorioMatriculaRaw, data: string) {
+    const status = normalizeKey(matricula.status)
+    if (['cancelada', 'cancelado', 'rascunho', 'excluida', 'excluido'].includes(status)) return false
+    if (matricula.dataInicioEstimada) return false
+    if (!matricula.dataInicio && !matricula.dataFim) return status === 'ativo'
+    return (!matricula.dataInicio || matricula.dataInicio <= data) &&
+      (!matricula.dataFim || matricula.dataFim >= data)
+  }
+
   for (const matricula of input.matriculas) {
-    if (normalizeKey(matricula.status) !== 'ativo') continue
+    if (!matriculaValidaNoPeriodo(matricula)) continue
     if (!turmasById.has(matricula.turmaId)) {
       matriculasPorTurmaDesconhecida.add(matricula.turmaId)
       continue
     }
     adicionarVinculo(matricula.alunoId, matricula.turmaId)
+    const lista = matriculasValidasPorAluno.get(matricula.alunoId) || []
+    lista.push(matricula)
+    matriculasValidasPorAluno.set(matricula.alunoId, lista)
   }
 
   for (const aluno of input.alunos) {
+    // Campos turma_id/turma são apenas fallback quando não há vínculo histórico.
+    if (alunosComMatriculaConhecida.has(aluno.id)) continue
     const turma = resolveTurma(aluno.turmaId) || resolveTurma(aluno.turmaNome)
     if (turma) adicionarVinculo(aluno.id, turma.id)
+  }
+
+  if (input.matriculas.some((matricula) => !matricula.dataInicio && !matricula.dataFim && normalizeKey(matricula.status) === 'ativo')) {
+    avisos.push('Há matrículas sem datas de vigência; os vínculos ativos legados foram tratados como vigentes no período solicitado.')
+  }
+  const matriculasComDataEstimada = input.matriculas.filter((matricula) => matricula.dataInicioEstimada).length
+  if (matriculasComDataEstimada > 0) {
+    avisos.push(`${matriculasComDataEstimada} matrícula(s) têm data de início estimada pela migração e foram excluídas da atribuição histórica por período.`)
+  }
+
+  function alunoVinculadoNaData(alunoId: string, turmaId: string, data: string) {
+    const matriculasDoAluno = input.matriculas.filter((matricula) => matricula.alunoId === alunoId)
+    if (matriculasDoAluno.length === 0) return membrosPorAluno.get(alunoId)?.has(turmaId) === true
+    return matriculasDoAluno.some((matricula) => matricula.turmaId === turmaId && matriculaValidaNaData(matricula, data))
   }
 
   if (matriculasPorTurmaDesconhecida.size > 0) {
@@ -278,16 +323,19 @@ export function buildPrestacaoContasReport(
     )
   }
 
-  const alunosAtivos = input.alunos.filter((aluno) => normalizeKey(aluno.status) === 'ativo')
+  const alunosAtivos = input.alunos
   const rosterPorTurma = new Map<string, RelatorioAlunoRaw[]>()
   const alunosAtivosSet = new Set<string>()
 
   for (const turma of turmasSelecionadasUnicas) {
     const roster = alunosAtivos
-      .filter((aluno) => membrosPorAluno.get(aluno.id)?.has(turma.id))
+      .filter((aluno) => (matriculasValidasPorAluno.get(aluno.id) || []).some((matricula) => matricula.turmaId === turma.id) ||
+        ((matriculasValidasPorAluno.get(aluno.id) || []).length === 0 && membrosPorAluno.get(aluno.id)?.has(turma.id)))
+      .filter((aluno) => normalizeKey(aluno.status) === 'ativo' ||
+        (matriculasValidasPorAluno.get(aluno.id) || []).some((matricula) => Boolean(matricula.dataInicio || matricula.dataFim)))
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     rosterPorTurma.set(turma.id, roster)
-    roster.forEach((aluno) => alunosAtivosSet.add(aluno.id))
+    roster.filter((aluno) => normalizeKey(aluno.status) === 'ativo').forEach((aluno) => alunosAtivosSet.add(aluno.id))
   }
 
   // ==== Frequência ====
@@ -297,6 +345,7 @@ export function buildPrestacaoContasReport(
   const alunosDesconhecidos = new Set<string>()
   let sessoesTurmaDesconhecida = 0
   let statusInvalidos = 0
+  let registrosSemVinculoNaData = 0
 
   const sessoesValidas: { sessao: RelatorioSessaoRaw; turma: RelatorioTurmaRaw }[] = []
 
@@ -321,8 +370,13 @@ export function buildPrestacaoContasReport(
         statusInvalidos += 1
         continue
       }
-      alunosComRegistro.add(alunoId)
       if (!alunosById.has(alunoId)) alunosDesconhecidos.add(alunoId)
+
+      if (alunosComMatriculaConhecida.has(alunoId) && !alunoVinculadoNaData(alunoId, turma.id, sessao.data)) {
+        registrosSemVinculoNaData += 1
+        continue
+      }
+      alunosComRegistro.add(alunoId)
 
       incrementarStatus(turmaContagem, status)
 
@@ -346,6 +400,9 @@ export function buildPrestacaoContasReport(
     avisos.push(
       `${alunosDesconhecidos.size} aluno(s) com frequência registrada não está(ão) no cadastro.`
     )
+  }
+  if (registrosSemVinculoNaData > 0) {
+    avisos.push(`${registrosSemVinculoNaData} registro(s) de presença não contabilizado(s): a matrícula histórica não corresponde à turma na data da chamada.`)
   }
 
   function montarAlunosDaTurma(turma: RelatorioTurmaRaw): RelatorioAlunoFrequencia[] {
@@ -418,6 +475,7 @@ export function buildPrestacaoContasReport(
   let atividadesTurmaDesconhecida = 0
   let vinculosOficinaAusentes = 0
   let fotosSemUrl = 0
+  let fotosOmitidasPorAutorizacao = 0
 
   function resolverOficinas(ids: string[]): string[] {
     const nomes = new Set<string>()
@@ -476,9 +534,13 @@ export function buildPrestacaoContasReport(
     const oficinas = resolverOficinas(atividade.idsTurmaOficinas || [])
     totalOficinasRealizadas += oficinas.length
 
-    const fotos: RelatorioFoto[] = (anexosPorAtividade.get(atividade.id) || [])
+    const rosterDaData = input.alunos.filter((aluno) => alunoVinculadoNaData(aluno.id, turma.id, atividade.data))
+    const todosAutorizadosNaData = rosterDaData.length > 0 && rosterDaData.every((aluno) => aluno.usoImagemAutorizado === true)
+    const fotosDaAtividade = (anexosPorAtividade.get(atividade.id) || [])
       .filter((anexo) => anexo.tipoAnexo === 'imagem')
       .sort((a, b) => a.nomeArquivo.localeCompare(b.nomeArquivo, 'pt-BR'))
+    if (fotosDaAtividade.length > 0 && !todosAutorizadosNaData) fotosOmitidasPorAutorizacao += fotosDaAtividade.length
+    const fotos: RelatorioFoto[] = (todosAutorizadosNaData ? fotosDaAtividade : [])
       .map((anexo) => {
         if (!anexo.url) fotosSemUrl += 1
         return {
@@ -529,6 +591,9 @@ export function buildPrestacaoContasReport(
     avisos.push(
       `${fotosSemUrl} foto(s) sem arquivo acessível no Storage; o PDF mostrará um espaço reservado.`
     )
+  }
+  if (fotosOmitidasPorAutorizacao > 0 && secaoFotosAtiva(filtros)) {
+    avisos.push(`${fotosOmitidasPorAutorizacao} foto(s) omitida(s): não foi possível comprovar autorização de imagem para todos os alunos vinculados à turma na data da atividade.`)
   }
 
   const fotosRelatorio = atividadesRelatorio
@@ -599,6 +664,7 @@ export function buildPrestacaoContasReport(
     turmas: turmasRelatorio,
     atividades: atividadesRelatorio,
     fotos: fotosRelatorio,
+    fotosOmitidasPorAutorizacao,
     restricaoImagem: {
       possuiAlunoSemAutorizacao: restricoes.length > 0,
       turmas: restricoes,

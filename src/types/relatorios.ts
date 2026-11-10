@@ -55,6 +55,8 @@ export interface RelatorioFoto {
   legenda: string
   caminhoStorage: string
   url: string | null
+  /** Fotos são omitidas quando a autorização histórica do roster não é comprovável. */
+  restricaoImagem?: string
 }
 
 export interface RelatorioAtividade {
@@ -98,6 +100,7 @@ export interface RelatorioPrestacaoDados {
   turmas: RelatorioTurmaFrequencia[]
   atividades: RelatorioAtividade[]
   fotos: RelatorioFoto[]
+  fotosOmitidasPorAutorizacao?: number
   restricaoImagem: {
     possuiAlunoSemAutorizacao: boolean
     turmas: RestricaoImagemTurma[]
@@ -125,9 +128,14 @@ export interface RelatorioAlunoRaw {
 }
 
 export interface RelatorioMatriculaRaw {
+  id?: string
   alunoId: string
   turmaId: string
   status: string
+  dataInicio?: string | null
+  dataFim?: string | null
+  dataInicioEstimada?: boolean
+  origemDataInicio?: string | null
 }
 
 export interface RelatorioOficinaRaw {
