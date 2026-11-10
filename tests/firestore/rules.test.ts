@@ -219,4 +219,68 @@ describe('Firestore security rules', () => {
     })
   })
 
+
+  describe('sessoes_chamada', () => {
+    const geral = (extra: Record<string, unknown> = {}) => ({
+      data_chamada: '2026-11-10', turma_id: 'turma-1', escopo: 'turma', turma_oficina_id: null,
+      presencas: { 'aluno-1': 'presente', 'aluno-2': 'justificado' }, observacoes: { 'aluno-2': 'Atestado' },
+      registrado_por: 'Pedagogia', versao: 1,
+      ...extra,
+    })
+    const oficina = (extra: Record<string, unknown> = {}) =>
+      geral({ escopo: 'oficina', turma_oficina_id: 'turma-1__oficina-1', ...extra })
+
+    it('cria a sessão geral e a de oficina como documentos distintos com ID determinístico', async () => {
+      const db = firestore('admin-1')
+      await assertSucceeds(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_geral'), geral()))
+      await assertSucceeds(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_turma-1__oficina-1'), oficina()))
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/chamada-aleatoria'), geral()))
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_geral-2'), geral()))
+    })
+
+    it('rejeita contexto inconsistente e status desconhecido', async () => {
+      const db = firestore('admin-1')
+      const id = 'sessoes_chamada/2026-11-10_turma-1_geral'
+      await assertFails(setDoc(doc(db, id), geral({ turma_oficina_id: 'turma-1__oficina-1' })))
+      await assertFails(setDoc(doc(db, id), geral({ presencas: { 'aluno-1': 'atrasado' } })))
+      await assertFails(setDoc(doc(db, id), geral({ versao: 2 })))
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-x_geral'), geral({ turma_id: 'turma-x' })))
+      // vínculo de outra turma não serve para a chamada desta turma
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_legado-sem-horario'),
+        oficina({ turma_oficina_id: 'legado-sem-horario', turma_id: 'turma-2' })))
+    })
+
+    it('exige vínculo ativo da mesma turma para criar chamada de oficina', async () => {
+      const db = firestore('admin-1')
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await updateDoc(doc(context.firestore(), 'turma_oficinas/turma-1__oficina-1'), { ativo: false })
+      })
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_turma-1__oficina-1'), oficina()))
+    })
+
+    it('atualiza só com a versão seguinte e sem mudar o contexto; apagar só a Direção', async () => {
+      const ref = 'sessoes_chamada/2026-11-10_turma-1_geral'
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), ref), geral())
+      })
+      const db = firestore('pedagogia-1')
+      await assertFails(setDoc(doc(db, ref), geral({ versao: 1 })))
+      await assertFails(setDoc(doc(db, ref), geral({ versao: 3 })))
+      await assertFails(setDoc(doc(db, ref), geral({ versao: 2, data_chamada: '2026-11-11' })))
+      await assertFails(setDoc(doc(db, ref), oficina({ versao: 2 })))
+      await assertSucceeds(setDoc(doc(db, ref), geral({ versao: 2, presencas: { 'aluno-1': 'ausente' } })))
+      await assertFails(deleteDoc(doc(db, ref)))
+      await assertSucceeds(deleteDoc(doc(firestore('direcao-1'), ref)))
+    })
+
+    it('aceita atualizar sessão antiga sem campo versao', async () => {
+      const ref = 'sessoes_chamada/legada'
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const { versao: _versao, ...semVersao } = geral()
+        await setDoc(doc(context.firestore(), ref), semVersao)
+      })
+      await assertSucceeds(setDoc(doc(firestore('admin-1'), ref), geral({ versao: 1 })))
+    })
+  })
+
 })

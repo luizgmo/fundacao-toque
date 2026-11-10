@@ -366,12 +366,26 @@ presencas: map                             obrigatório
   chave: aluno_id; valores: presente | ausente | justificado
 observacoes: map                           opcional
   chave: aluno_id; observação individual na chamada
+oficina_nome: string                       opcional
+  nome da oficina no momento da chamada (exibição)
 registrado_por: string                       obrigatório
+versao: number                              obrigatório
+  1 na criação; +1 a cada salvamento
 atualizado_em: Timestamp                     obrigatório
 criado_em: Timestamp                     obrigatório
 ```
 
-Quando `escopo` for `oficina`, o campo `turma_oficina_id` será obrigatório.
+Quando `escopo` for `oficina`, o campo `turma_oficina_id` será obrigatório; quando for `turma`, ele fica `null`.
+
+**Regra da chamada (uma sessão por contexto):**
+
+- O ID do documento é determinístico: `{data_chamada}_{turma_id}_geral` para a chamada geral da turma e `{data_chamada}_{turma_id}_{turma_oficina_id}` para a chamada de uma oficina. As regras exigem esse formato na criação, então o mesmo contexto nunca gera uma segunda sessão.
+- A chamada geral e a de cada oficina são documentos distintos: salvar uma nunca altera a outra.
+- Contexto imutável: `data_chamada`, `turma_id`, `escopo` e `turma_oficina_id` não mudam depois de criados. Só a Direção pode apagar uma sessão.
+- A tela sempre lê a sessão salva antes de permitir salvar. A gravação é uma transação que confere `versao`: se outra pessoa salvou depois da leitura, nada é gravado e a tela pede para recarregar. As regras exigem `versao` = anterior + 1 (sessões antigas sem o campo contam como 0).
+- Chamada de oficina só pode ser criada para vínculo ativo da mesma turma.
+- Alunos elegíveis: na chamada geral, os alunos ativos da turma; na de oficina, os participantes do vínculo (`aluno_oficinas`) vigentes na data. Reabrir a sessão também mostra quem já foi registrado nela, mesmo que não seja mais elegível, e esses registros são mantidos ao salvar.
+- Fora do modo demonstração, só vale a sessão do banco: não há sessões fixas de fallback.
 
 **As presenças ficam EMBUTIDAS nesta sessão** — um documento por chamada (dia/turma ou dia/oficina). Uma única leitura monta a tela de chamada inteira, sem coleção auxiliar. O histórico de faltas de um aluno é obtido lendo as sessões da(s) turma(s) dele e extraindo `presencas[aluno_id]`.
 

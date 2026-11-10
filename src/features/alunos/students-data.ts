@@ -237,10 +237,15 @@ export type AttendanceSession = {
   date: string
   turmaId: string
   scope: 'turma' | 'oficina'
+  // ID do vínculo turma_oficinas quando scope = 'oficina'
+  turmaOficinaId?: string
   oficinaName?: string
   registeredBy: string
   registeredAt: string
   records: Record<string, { status: AttendanceStatus; observation: string }>
+  // Versão gravada (incrementada a cada salvamento). Usada para não sobrescrever
+  // uma chamada salva por outra pessoa depois que esta tela a carregou.
+  versao?: number
 }
 
 // Sessões fictícias do modo demonstração (nunca usadas como fallback real).
