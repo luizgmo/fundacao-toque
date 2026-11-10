@@ -309,3 +309,8 @@
     justify-content: flex-end;
   }
 }
+.guardian-editor-list { display: grid; gap: 1rem; }
+.guardian-editor-card { padding: 1rem; border: 1px solid var(--border-color, #d8dee8); border-radius: 12px; background: var(--surface-soft, #f8fafc); }
+.guardian-editor-card > header { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; }
+.guardian-editor-card > header label { display: inline-flex; align-items: center; gap: .35rem; margin-right: auto; }
+@media (max-width: 600px) { .guardian-editor-card > header { flex-wrap: wrap; } }

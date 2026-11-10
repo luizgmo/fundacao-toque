@@ -216,3 +216,7 @@
     grid-template-columns: 1fr;
   }
 }
+.guardian-profile-card { padding: .85rem 0; border-bottom: 1px solid var(--border-color, #e5e7eb); }
+.guardian-primary-badge, .guardian-inactive-badge { display: inline-flex; margin-left: .5rem; padding: .15rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.guardian-primary-badge { color: #14532d; background: #dcfce7; }
+.guardian-inactive-badge { color: #475569; background: #e2e8f0; }

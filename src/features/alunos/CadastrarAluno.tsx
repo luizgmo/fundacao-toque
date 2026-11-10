@@ -17,9 +17,9 @@ import {
   X,
   AlertCircle,
 } from 'lucide-react'
-import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
-import type { Student, StudentStatus } from './students-data'
-import { createStudent, updateStudent } from '../../services/studentsService'
+import { maskPhone, maskCID } from '../../lib/masks'
+import type { Guardian, Student, StudentStatus } from './students-data'
+import { createStudent, getStudentGuardians, updateStudent } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
 import type { Turma } from '../../types/turmas'
@@ -80,6 +80,7 @@ type AlunoForm = {
   oficinas: string[]
   grauDependencia: string
   status: StudentStatus
+  responsaveis: Guardian[]
 }
 
 const initialForm: AlunoForm = {
@@ -101,6 +102,7 @@ const initialForm: AlunoForm = {
   oficinas: [],
   grauDependencia: '',
   status: 'Ativo',
+  responsaveis: [{ nome: '', parentesco: 'Mãe', telefone: '', telefoneAlternativo: '', email: '', principal: true, ativo: true }],
 }
 
 function toggleListValue(list: string[], value: string) {
@@ -145,6 +147,7 @@ function studentToForm(st: Student): AlunoForm {
     oficinas: oficinasIds,
     grauDependencia: '',
     status: st.status,
+    responsaveis: st.responsaveis?.length ? st.responsaveis : [{ nome: st.responsavelNome || '', parentesco: st.parentesco || 'Outro', telefone: st.telefone || '', telefoneAlternativo: '', email: st.email || '', principal: true, ativo: true }],
   }
 }
 
@@ -158,6 +161,7 @@ export function CadastrarAluno({
   onSaveSuccess?: (studentId: string) => void
 }) {
   const isEditing = Boolean(initialStudent)
+  const initialStudentId = initialStudent?.id
 
   const [step, setStep] = useState<WizardStep>(1)
   const [form, setForm] = useState<AlunoForm>(() =>
@@ -173,6 +177,7 @@ export function CadastrarAluno({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [firestoreTurmas, setFirestoreTurmas] = useState<Turma[]>([])
+  const [guardianLoadStatus, setGuardianLoadStatus] = useState<'loading' | 'ready' | 'error'>(initialStudent ? 'loading' : 'ready')
 
   useEffect(() => {
     const unsubscribe = subscribeToTurmas(setFirestoreTurmas)
@@ -204,6 +209,24 @@ export function CadastrarAluno({
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  useEffect(() => {
+    if (!initialStudentId) return
+    let active = true
+    getStudentGuardians(initialStudentId).then((guardians) => {
+      if (active) {
+        if (guardians.length) updateField('responsaveis', guardians)
+        setGuardianLoadStatus('ready')
+      }
+    }).catch((error) => {
+      console.warn('Não foi possível carregar responsáveis:', error)
+      if (active) {
+        setGuardianLoadStatus('error')
+        setSaveError('Não foi possível carregar os responsáveis salvos. Tente novamente.')
+      }
+    })
+    return () => { active = false }
+  }, [initialStudentId])
+
   const pickFile = (setter: (name: string) => void) => (event: ChangeEvent<HTMLInputElement>) => {
     setter(event.target.files?.[0]?.name ?? '')
   }
@@ -232,16 +255,17 @@ export function CadastrarAluno({
         return false
       }
     } else if (currentStep === 2) {
-      if (!form.responsavelNome.trim()) {
-        setSaveError('Por favor, informe o nome do responsável.')
+      if (guardianLoadStatus !== 'ready') {
+        setSaveError(guardianLoadStatus === 'loading' ? 'Aguarde o carregamento dos responsáveis.' : 'Não foi possível carregar os responsáveis. Tente novamente antes de salvar.')
         return false
       }
-      if (!form.parentesco) {
-        setSaveError('Por favor, selecione o parentesco do responsável.')
+      const activeGuardians = form.responsaveis.filter((guardian) => guardian.ativo)
+      if (!activeGuardians.length || activeGuardians.some((guardian) => !guardian.nome.trim() || !guardian.telefone.trim())) {
+        setSaveError('Informe nome e telefone de cada responsável ativo.')
         return false
       }
-      if (!form.telefonePrincipal.trim()) {
-        setSaveError('Por favor, informe o telefone principal de contato.')
+      if (activeGuardians.filter((guardian) => guardian.principal).length !== 1) {
+        setSaveError('Selecione exatamente um responsável principal ativo.')
         return false
       }
     } else if (currentStep === 4) {
@@ -278,6 +302,7 @@ export function CadastrarAluno({
     setSaveError(null)
 
     try {
+      const principal = form.responsaveis.find((guardian) => guardian.principal && guardian.ativo)!
       const selectedTurmaOptions = selectedTurmas
         .map((t) => turmasOptions.find((opt) => opt.id === t))
         .filter((opt): opt is TurmaOption => Boolean(opt))
@@ -296,14 +321,12 @@ export function CadastrarAluno({
         deficiencia: form.deficiencia,
         cid: form.cid,
         observacoes: form.observacoes,
-        responsavelNome: form.responsavelNome.trim(),
-        parentesco: form.parentesco,
-        cpf: form.cpf,
-        rg: form.rg,
-        telefonePrincipal: form.telefonePrincipal,
-        telefoneSecundario: form.telefoneSecundario,
-        email: form.email,
-        endereco: form.endereco,
+        responsavelNome: principal.nome.trim(),
+        parentesco: principal.parentesco,
+        responsaveis: form.responsaveis,
+        telefonePrincipal: principal.telefone,
+        telefoneSecundario: principal.telefoneAlternativo,
+        email: principal.email,
         turmas: selectedTurmasLabels.length > 0 ? selectedTurmasLabels : ['Turma A'],
         turmaId: turmaPrincipal?.id,
         turmaTurno: turmaPrincipal?.turno,
@@ -325,9 +348,9 @@ export function CadastrarAluno({
         setSubmitted(true)
         if (onSaveSuccess) onSaveSuccess(newId)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar aluno:', err)
-      setSaveError('Erro ao gravar dados no Firestore: ' + (err.message || 'Tente novamente.'))
+      setSaveError('Erro ao gravar dados no Firestore: ' + (err instanceof Error ? err.message : 'Tente novamente.'))
     } finally {
       setSaving(false)
     }
@@ -529,105 +552,24 @@ export function CadastrarAluno({
                 <UsersRound size={21} />
               </span>
               <div>
-                <h3>Responsável e contato</h3>
-                <p>Dados de quem responde legalmente pelo aluno.</p>
+                <h3>Responsáveis e contatos</h3>
+                <p>Cadastre os contatos da família e marque quem é o principal.</p>
               </div>
             </div>
-
-            <div className="form-grid">
-              <label className="field field-wide">
-                <span>Nome do responsável *</span>
-                <input
-                  onChange={(event) => updateField('responsavelNome', event.target.value)}
-                  required
-                  value={form.responsavelNome}
-                />
-              </label>
-              <label className="field">
-                <span>Parentesco *</span>
-                <select
-                  onChange={(event) => updateField('parentesco', event.target.value)}
-                  required
-                  value={form.parentesco}
-                >
-                  <option>Mãe</option>
-                  <option>Pai</option>
-                  <option>Avó/Avô</option>
-                  <option>Tio/Tia</option>
-                  <option>Responsável legal</option>
-                  <option>Outro</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>
-                  CPF do responsável <em>(com máscara)</em>
-                </span>
-                <input
-                  maxLength={14}
-                  onChange={(event) => updateField('cpf', maskCPF(event.target.value))}
-                  placeholder="000.000.000-00"
-                  value={form.cpf}
-                />
-              </label>
-              <label className="field">
-                <span>
-                  RG <em>(com máscara)</em>
-                </span>
-                <input
-                  maxLength={12}
-                  onChange={(event) => updateField('rg', maskRG(event.target.value))}
-                  placeholder="00.000.000-0"
-                  value={form.rg}
-                />
-              </label>
-              <label className="field">
-                <span>Telefone principal *</span>
-                <input
-                  maxLength={15}
-                  onChange={(event) =>
-                    updateField('telefonePrincipal', maskPhone(event.target.value))
-                  }
-                  placeholder="(16) 99999-9999"
-                  required
-                  type="tel"
-                  value={form.telefonePrincipal}
-                />
-              </label>
-              <label className="field">
-                <span>
-                  Telefone secundário <em>(opcional)</em>
-                </span>
-                <input
-                  maxLength={15}
-                  onChange={(event) =>
-                    updateField('telefoneSecundario', maskPhone(event.target.value))
-                  }
-                  placeholder="(16) 99999-9999"
-                  type="tel"
-                  value={form.telefoneSecundario}
-                />
-              </label>
-              <label className="field">
-                <span>
-                  E-mail <em>(opcional)</em>
-                </span>
-                <input
-                  onChange={(event) => updateField('email', event.target.value)}
-                  placeholder="email@exemplo.com"
-                  type="email"
-                  value={form.email}
-                />
-              </label>
-              <label className="field field-wide">
-                <span>
-                  Endereço completo <em>(opcional)</em>
-                </span>
-                <input
-                  onChange={(event) => updateField('endereco', event.target.value)}
-                  placeholder="Rua, número, bairro, cidade"
-                  value={form.endereco}
-                />
-              </label>
+            <div className="guardian-editor-list">
+              {form.responsaveis.map((guardian, index) => (
+                <section className="guardian-editor-card" key={guardian.id || `novo-${index}`}>
+                  <header><strong>Responsável {index + 1}</strong>{!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}<label><input type="radio" name="responsavel-principal" checked={guardian.principal && guardian.ativo} disabled={!guardian.ativo} onChange={() => updateField('responsaveis', form.responsaveis.map((item, i) => ({ ...item, principal: i === index })))} /> Principal</label>{guardian.id ? <button className="button secondary" disabled={guardian.ativo && form.responsaveis.filter((item) => item.ativo).length <= 1} onClick={() => updateField('responsaveis', form.responsaveis.map((item, i) => ({ ...item, ativo: i === index ? !item.ativo : item.ativo, principal: i === index ? false : item.principal || (guardian.principal && item.ativo) })))} type="button">{guardian.ativo ? 'Inativar' : 'Reativar'}</button> : <button className="button secondary" disabled={form.responsaveis.length === 1} onClick={() => updateField('responsaveis', form.responsaveis.filter((_, i) => i !== index))} type="button">Remover</button>}</header>
+                  <div className="form-grid">
+                    <label className="field field-wide"><span>Nome completo *</span><input required value={guardian.nome} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, nome: e.target.value } : item))} /></label>
+                    <label className="field"><span>Parentesco *</span><select value={guardian.parentesco} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, parentesco: e.target.value } : item))}><option>Mãe</option><option>Pai</option><option>Avó/Avô</option><option>Tio/Tia</option><option>Responsável legal</option><option>Outro</option></select></label>
+                    <label className="field"><span>Telefone *</span><input maxLength={15} required type="tel" value={guardian.telefone} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, telefone: maskPhone(e.target.value) } : item))} /></label>
+                    <label className="field"><span>Telefone alternativo</span><input maxLength={15} type="tel" value={guardian.telefoneAlternativo} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, telefoneAlternativo: maskPhone(e.target.value) } : item))} /></label>
+                    <label className="field field-wide"><span>E-mail</span><input type="email" value={guardian.email} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, email: e.target.value } : item))} /></label>
+                  </div>
+                </section>
+              ))}
+              <button className="button secondary" type="button" onClick={() => updateField('responsaveis', [...form.responsaveis, { nome: '', parentesco: 'Outro', telefone: '', telefoneAlternativo: '', email: '', principal: false, ativo: true }])}>Adicionar responsável</button>
             </div>
           </div>
         )}
@@ -829,27 +771,15 @@ export function CadastrarAluno({
 
               <div className="review-card">
                 <h4>
-                  <UsersRound size={16} /> Responsável
+                  <UsersRound size={16} /> Responsáveis
                 </h4>
                 <dl>
-                  <div>
-                    <dt>Nome</dt>
-                    <dd>{form.responsavelNome || '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Parentesco</dt>
-                    <dd>{form.parentesco || '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Telefone</dt>
-                    <dd>{form.telefonePrincipal || '—'}</dd>
-                  </div>
-                  {form.cpf && (
+                  {form.responsaveis.filter((guardian) => guardian.ativo).map((guardian, index) => (
                     <div>
-                      <dt>CPF</dt>
-                      <dd>{form.cpf}</dd>
+                      <dt key={`guardian-name-${index}`}>{guardian.nome}{guardian.principal ? ' · Principal' : ''}</dt>
+                      <dd key={`guardian-contact-${index}`}>{guardian.parentesco} · {guardian.telefone}</dd>
                     </div>
-                  )}
+                  ))}
                 </dl>
               </div>
 

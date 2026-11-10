@@ -13,6 +13,7 @@ export type EvolutionEntry = {
 }
 
 export type ContactEntry = {
+  id?: string
   faltaDate: string
   contactDate: string
   type: string
@@ -20,6 +21,21 @@ export type ContactEntry = {
   note: string
   reason?: string
   status?: string
+  guardianId?: string
+  guardianName?: string
+  guardianRelationship?: string
+  guardianContact?: string
+}
+
+export type Guardian = {
+  id?: string
+  nome: string
+  parentesco: string
+  telefone: string
+  telefoneAlternativo: string
+  email: string
+  principal: boolean
+  ativo: boolean
 }
 
 export type DocumentEntry = {
@@ -44,6 +60,7 @@ export type Student = {
   parentesco: string
   telefone: string
   email: string
+  responsaveis?: Guardian[]
   oficinas: string[]
   grauDependencia?: string
   documentos: DocumentEntry[]

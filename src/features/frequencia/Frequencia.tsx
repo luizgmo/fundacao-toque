@@ -19,9 +19,9 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import type { AttendanceStatus, ContactEntry, Student } from '../alunos/students-data'
+import type { AttendanceStatus, ContactEntry, Guardian, Student } from '../alunos/students-data'
 import { addContactToStudent, getAttendanceSession, saveAttendanceSession, students as defaultStudents } from '../alunos/students-data'
-import { subscribeToStudents } from '../../services/studentsService'
+import { getStudentGuardians, subscribeToStudents } from '../../services/studentsService'
 import {
   getAttendanceFromFirestore,
   saveAttendanceToFirestore,
@@ -94,6 +94,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
   // Modal contact / occurrence state
   const [selectedStudentForContact, setSelectedStudentForContact] = useState<Student | null>(null)
+  const [contactGuardians, setContactGuardians] = useState<Guardian[]>([])
+  const [contactGuardiansStudentId, setContactGuardiansStudentId] = useState('')
+  const [selectedGuardianId, setSelectedGuardianId] = useState('')
   const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
   const [contactType, setContactType] = useState<string>('WhatsApp')
   const [contactResponsible, setContactResponsible] = useState<string>(
@@ -109,6 +112,23 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
   // Search filter for attendance list
   const [studentSearch, setStudentSearch] = useState<string>('')
+
+  useEffect(() => {
+    if (!selectedStudentForContact) return
+    let active = true
+    getStudentGuardians(selectedStudentForContact.id).then((list) => {
+      if (!active) return
+      const eligible = list.filter((guardian) => guardian.ativo)
+      setContactGuardians(eligible)
+      setContactGuardiansStudentId(selectedStudentForContact.id)
+      setSelectedGuardianId(eligible.find((guardian) => guardian.principal)?.id || eligible[0]?.id || '')
+    }).catch((error) => {
+      console.error('Erro ao carregar responsáveis para contato:', error)
+      if (active) setContactGuardians([])
+    })
+    return () => { active = false }
+  }, [selectedStudentForContact?.id])
+  const eligibleContactGuardians = contactGuardiansStudentId === selectedStudentForContact?.id ? contactGuardians : []
 
   // Filter students by selected Turma
   const turmaStudents = useMemo(() => {
@@ -271,7 +291,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // Handle submit contact log / occurrence integrado ao Firestore
   const handleSubmitContact = async (e: FormEvent) => {
     e.preventDefault()
-    if (!selectedStudentForContact) return
+    if (!selectedStudentForContact || !selectedGuardianId) return
+    const guardian = eligibleContactGuardians.find((item) => item.id === selectedGuardianId)
+    if (!guardian?.id) return
     setSavingContact(true)
 
     const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
@@ -286,6 +308,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         reason: contactReason,
         status: contactStatus,
         note: contactNote,
+        guardianId: guardian.id,
+        guardianSnapshot: { nome: guardian.nome, parentesco: guardian.parentesco, canal: contactType, contato: guardian.telefone },
       })
 
       const newContact: ContactEntry = {
@@ -296,6 +320,10 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         reason: contactReason,
         status: contactStatus,
         note: contactNote,
+        guardianId: guardian.id,
+        guardianName: guardian.nome,
+        guardianRelationship: guardian.parentesco,
+        guardianContact: guardian.telefone,
       }
 
       addContactToStudent(selectedStudentForContact.id, newContact)
@@ -864,21 +892,29 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                   </select>
                 </label>
 
+                <label className="field field-wide">
+                  <span>Familiar contatado *</span>
+                  <select required value={selectedGuardianId} onChange={(e) => setSelectedGuardianId(e.target.value)}>
+                    <option value="">Selecione quem foi contatado</option>
+                    {eligibleContactGuardians.map((guardian) => <option key={guardian.id} value={guardian.id}>{guardian.nome} · {guardian.parentesco}{guardian.principal ? ' · Principal' : ''}</option>)}
+                  </select>
+                  {!eligibleContactGuardians.length && <small>Este aluno não possui responsáveis ativos cadastrados.</small>}
+                </label>
                 <div className="family-info-box field-wide">
                   <div className="family-info-row">
                     <span>
                       <User size={14} /> Responsável Cadastrado:
                     </span>
                     <strong>
-                      {selectedStudentForContact.responsavelNome} (
-                      {selectedStudentForContact.parentesco})
+                      {eligibleContactGuardians.find((item) => item.id === selectedGuardianId)?.nome || 'Selecione um familiar'} (
+                      {eligibleContactGuardians.find((item) => item.id === selectedGuardianId)?.parentesco || '—'})
                     </strong>
                   </div>
                   <div className="family-info-row">
                     <span>
                       <Phone size={14} /> Telefone:
                     </span>
-                    <strong>{maskPhone(selectedStudentForContact.telefone)}</strong>
+                    <strong>{maskPhone(eligibleContactGuardians.find((item) => item.id === selectedGuardianId)?.telefone || '')}</strong>
                   </div>
                 </div>
 
@@ -906,7 +942,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                       <div className="history-item-row" key={index}>
                         <div className="history-item-meta">
                           <strong>{c.contactDate}</strong> — <small>{c.type}</small> por{' '}
-                          <em>{c.responsible}</em> (Falta de {c.faltaDate})
+                          <em>{c.responsible}</em> · familiar: <strong>{c.guardianName || 'Responsável não identificado no registro original'}</strong>{c.guardianContact ? ` (${c.guardianContact})` : ''} (Falta de {c.faltaDate})
                           {c.status && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', opacity: 0.85 }}>[{c.status}]</span>}
                         </div>
                         {c.reason && (
@@ -929,7 +965,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                 >
                   Cancelar
                 </button>
-                <button className="button primary" disabled={savingContact} type="submit">
+                <button className="button primary" disabled={savingContact || !selectedGuardianId} type="submit">
                   <Save size={18} /> {savingContact ? 'Gravando Ocorrência...' : 'Salvar Ocorrência e Contato'}
                 </button>
               </footer>

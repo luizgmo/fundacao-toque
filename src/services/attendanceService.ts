@@ -117,6 +117,8 @@ export interface SaveOccurrenceInput {
   reason: string
   status: string
   note: string
+  guardianId: string
+  guardianSnapshot: { nome: string; parentesco: string; canal: string; contato: string }
 }
 
 // Salva contato com a família / ocorrência no Firestore (com fallback local)
@@ -135,14 +137,13 @@ export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Pro
     status_ocorrencia: input.status,
     observacoes: input.note,
     usuario_responsavel: input.responsible,
+    usuario_responsavel_nome: input.responsible,
+    responsavel_id: input.guardianId,
+    responsavel_snapshot: input.guardianSnapshot,
     criado_em: serverTimestamp(),
   }
 
-  try {
-    await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
-  } catch (firestoreErr) {
-    console.warn('Ocorrência gravada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
-  }
+  await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
   return contactId
 }
 
@@ -160,9 +161,15 @@ export function subscribeStudentOccurrences(
     q,
     (snapshot) => {
       const list: ContactEntry[] = []
-      snapshot.forEach((snap) => {
+      const orderedDocs = [...snapshot.docs].sort((a, b) => {
+        const left = a.data().contatado_em?.toMillis?.() || 0
+        const right = b.data().contatado_em?.toMillis?.() || 0
+        return right - left
+      })
+      orderedDocs.forEach((snap) => {
         const d = snap.data()
         list.push({
+          id: snap.id,
           faltaDate: (d.datas_faltas_relacionadas && d.datas_faltas_relacionadas[0]) || '—',
           contactDate: d.data_formatada || new Intl.DateTimeFormat('pt-BR').format(new Date()),
           type: d.meio_contato || 'Telefone',
@@ -170,6 +177,10 @@ export function subscribeStudentOccurrences(
           reason: d.motivo_ocorrencia || '',
           status: d.status_ocorrencia || 'Aberta',
           note: d.observacoes || '',
+          guardianId: d.responsavel_id || undefined,
+          guardianName: d.responsavel_snapshot?.nome || 'Responsável não identificado no registro original',
+          guardianRelationship: d.responsavel_snapshot?.parentesco || '',
+          guardianContact: d.responsavel_snapshot?.contato || '',
         })
       })
       onUpdate(list)

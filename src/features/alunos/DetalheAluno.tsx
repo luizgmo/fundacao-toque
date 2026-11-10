@@ -15,8 +15,8 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { calculateAge, findStudent } from './students-data'
-import type { Student, ContactEntry } from './students-data'
-import { getStudentById } from '../../services/studentsService'
+import type { Student, ContactEntry, Guardian } from './students-data'
+import { getStudentById, getStudentGuardians } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
 import './DetalheAluno.css'
 
@@ -44,7 +44,8 @@ export function DetalheAluno({
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('visao')
   const [student, setStudent] = useState<Student | null>(() => findStudent(studentId) || null)
-  const [dbContacts, setDbContacts] = useState<ContactEntry[]>([])
+  const [contactState, setContactState] = useState<{ studentId: string; items: ContactEntry[] }>({ studentId, items: [] })
+  const [guardianState, setGuardianState] = useState<{ studentId: string; items: Guardian[]; loaded: boolean; error: boolean }>({ studentId, items: [], loaded: false, error: false })
 
   useEffect(() => {
     let isMounted = true
@@ -55,9 +56,13 @@ export function DetalheAluno({
     })
 
     const unsubOccurrences = subscribeStudentOccurrences(studentId, (contacts) => {
-      if (isMounted && contacts.length > 0) {
-        setDbContacts(contacts)
-      }
+      if (isMounted) setContactState({ studentId, items: contacts })
+    })
+    getStudentGuardians(studentId).then((result) => {
+      if (isMounted) setGuardianState({ studentId, items: result, loaded: true, error: false })
+    }).catch((error) => {
+      console.warn('Erro ao carregar responsáveis:', error)
+      if (isMounted) setGuardianState({ studentId, items: [], loaded: true, error: true })
     })
 
     return () => {
@@ -80,7 +85,10 @@ export function DetalheAluno({
   }
 
   // Combina contatos do Firestore com contatos locais sem duplicação
-  const allContacts = dbContacts.length > 0 ? dbContacts : student.contacts
+  const dbContacts = contactState.studentId === studentId ? contactState.items : []
+  const guardians = guardianState.studentId === studentId ? guardianState.items : []
+  const guardiansLoading = guardianState.studentId !== studentId || !guardianState.loaded
+  const allContacts = dbContacts.length ? dbContacts : student.contacts
 
   return (
     <div className="page-container student-detail-page">
@@ -182,19 +190,16 @@ export function DetalheAluno({
                 </p>
               </div>
               <div>
-                <h3>Responsável</h3>
-                <p>
-                  <strong>Nome:</strong> {student.responsavelNome}
-                </p>
-                <p>
-                  <strong>Parentesco:</strong> {student.parentesco}
-                </p>
-                <p>
-                  <strong>Telefone:</strong> {student.telefone}
-                </p>
-                <p>
-                  <strong>E-mail:</strong> {student.email || 'Não informado'}
-                </p>
+                <h3>Responsáveis</h3>
+                {guardiansLoading ? <p>Carregando responsáveis…</p> : guardians.length ? guardians.map((guardian) => (
+                  <article className="guardian-profile-card" key={guardian.id}>
+                    <p><strong>{guardian.nome}</strong>{guardian.principal && <span className="guardian-primary-badge">Principal</span>}{!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}</p>
+                    <p><strong>Parentesco:</strong> {guardian.parentesco}</p>
+                    <p><strong>Telefone:</strong> {guardian.telefone || 'Não informado'}</p>
+                    <p><strong>Telefone alternativo:</strong> {guardian.telefoneAlternativo || 'Não informado'}</p>
+                    <p><strong>E-mail:</strong> {guardian.email || 'Não informado'}</p>
+                  </article>
+                )) : <><p><strong>{student.responsavelNome}</strong> <span className="guardian-primary-badge">Principal · legado</span></p><p><strong>Parentesco:</strong> {student.parentesco}</p><p><strong>Telefone:</strong> {student.telefone || 'Não informado'}</p><p><strong>E-mail:</strong> {student.email || 'Não informado'}</p></>}
               </div>
             </div>
 
@@ -379,6 +384,7 @@ export function DetalheAluno({
                     <p>
                       {contact.note} <em>— {contact.responsible}</em>
                     </p>
+                    <p><strong>Familiar contatado:</strong> {contact.guardianName || 'Responsável não identificado no registro original'}{contact.guardianRelationship ? ` · ${contact.guardianRelationship}` : ''}{contact.guardianContact ? ` · ${contact.guardianContact}` : ''}</p>
                   </div>
                 </article>
               ))}
