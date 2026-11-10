@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,8 +14,11 @@ import {
 } from 'lucide-react'
 import { calculateAge } from './students-data'
 import type { Student } from './students-data'
-import { subscribeToStudents, inactivateStudent } from '../../services/studentsService'
-import type { StudentsSource } from '../../services/studentsService'
+import { failureMessage } from '../../lib/persistence'
+import { inactivateStudent } from '../../services/studentsService'
+import { formatLoadedCount, useSubscription } from '../../lib/useSubscription'
+import { LoadError } from '../../components/LoadError'
+import { useStudents } from './useStudents'
 import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
 import type { Turma } from '../../types/turmas'
 import { DataNotice } from '../../components/DataNotice'
@@ -33,12 +36,13 @@ export function ListarAlunos({
   onViewStudent: (id: string) => void
   onEditStudent: (student: Student) => void
 }) {
-  const [studentsList, setStudentsList] = useState<Student[]>([])
-  const [source, setSource] = useState<StudentsSource | 'loading'>('loading')
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const studentsSub = useStudents()
+  const studentsList = studentsSub.data
+  const source = studentsSub.source
   const [search, setSearch] = useState('')
   const [turma, setTurma] = useState(TODAS_TURMAS)
-  const [turmas, setTurmas] = useState<Turma[]>([])
+  const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
+  const turmas = turmasSub.data
   const [status, setStatus] = useState(statusOptions[0])
 
   // Delete modal states
@@ -46,20 +50,6 @@ export function ListarAlunos({
   const [deleting, setDeleting] = useState(false)
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
 
-  // Escuta dados do Firestore em tempo real
-  useEffect(() => subscribeToTurmas(setTurmas), [])
-
-  useEffect(() => {
-    const unsubscribe = subscribeToStudents(
-      (data) => {
-        setStudentsList(data)
-        setLoadError(null)
-      },
-      (err) => setLoadError(err.message),
-      (nextSource) => setSource(nextSource)
-    )
-    return () => unsubscribe()
-  }, [])
 
   const filtered = useMemo(() => {
     return studentsList.filter((student) => {
@@ -91,7 +81,7 @@ export function ListarAlunos({
       setTimeout(() => setActionFeedback(null), 3500)
     } catch (err) {
       console.error('Erro ao inativar aluno:', err)
-      alert('Erro ao inativar aluno: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
+      alert(failureMessage(err, 'inativar o aluno'))
     } finally {
       setDeleting(false)
     }
@@ -123,11 +113,16 @@ export function ListarAlunos({
         <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
       )}
 
-      {(source === 'error' || loadError) && (
-        <DataNotice kind="error">
-          <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
-          {loadError ? `Detalhes: ${loadError}` : 'Verifique a conexão e as permissões de acesso.'}
-        </DataNotice>
+      {studentsSub.status === 'error' && (
+        <LoadError error={studentsSub.error} onRetry={studentsSub.retry} what="os alunos" />
+      )}
+      {turmasSub.status === 'error' && (
+        <LoadError
+          error={turmasSub.error}
+          impact="O filtro por turma não está disponível."
+          onRetry={turmasSub.retry}
+          what="as turmas"
+        />
       )}
 
       {actionFeedback && (
@@ -157,7 +152,7 @@ export function ListarAlunos({
             <Users size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.total}</strong>
+            <strong>{formatLoadedCount(totals.total, studentsSub.status)}</strong>
             <span>Total de alunos</span>
           </div>
         </article>
@@ -166,7 +161,7 @@ export function ListarAlunos({
             <UserCheck size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.ativos}</strong>
+            <strong>{formatLoadedCount(totals.ativos, studentsSub.status)}</strong>
             <span>Ativos</span>
           </div>
         </article>
@@ -175,7 +170,7 @@ export function ListarAlunos({
             <UserX size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.inativos}</strong>
+            <strong>{formatLoadedCount(totals.inativos, studentsSub.status)}</strong>
             <span>Inativos</span>
           </div>
         </article>

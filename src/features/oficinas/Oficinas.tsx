@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
@@ -17,21 +17,14 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import type {
-  AlunoOficina,
-  HorarioOficina,
-  Oficina,
-  TurmaOficina,
-} from '../../types/oficinas'
+import type { AlunoOficina, Oficina, TurmaOficina } from '../../types/oficinas'
 import {
   CATEGORIAS_OFICINA,
-  DIAS_SEMANA,
   NIVEIS_SUPORTE,
   formatHorarios,
   getCategoria,
 } from '../../types/oficinas'
 import type { Turma } from '../../types/turmas'
-import { PERIODO_LABELS } from '../../types/turmas'
 import type { UserProfile } from '../../types/auth'
 import type { Student } from '../alunos/students-data'
 import {
@@ -47,15 +40,13 @@ import type { AlunoOficinaSelecao, OficinaInput } from '../../services/oficinasS
 import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
 import { subscribeToStudents } from '../../services/studentsService'
 import { getUsuarioNome, subscribeToUsuarios } from '../../services/usuariosService'
+import { failureMessage } from '../../lib/persistence'
+import { combineStatus, formatLoadedCount, useSubscription } from '../../lib/useSubscription'
+import { LoadError, LoadErrors } from '../../components/LoadError'
 import { useAuth } from '../auth/AuthContext'
+import { VinculoModal } from './VinculoModal'
+import type { VinculoModalAlvo } from './VinculoModal'
 import './Oficinas.css'
-
-type VinculoForm = {
-  selected: boolean
-  dias: number[]
-  horaInicio: string
-  horaFim: string
-}
 
 type OficinaForm = {
   nome: string
@@ -63,7 +54,6 @@ type OficinaForm = {
   descricao: string
   idsUsuariosResponsaveis: string[]
   ativo: boolean
-  vinculos: Record<string, VinculoForm>
 }
 
 const emptyForm: OficinaForm = {
@@ -72,12 +62,15 @@ const emptyForm: OficinaForm = {
   descricao: '',
   idsUsuariosResponsaveis: [],
   ativo: true,
-  vinculos: {},
 }
 
-const emptyVinculo: VinculoForm = { selected: false, dias: [], horaInicio: '', horaFim: '' }
-
 type SelecaoAluno = { selected: boolean; nivelSuporte: string; consideracoesPedagogicas: string }
+
+function formatDataBR(data?: string) {
+  if (!data) return ''
+  const [y, m, d] = data.split('-')
+  return `${d}/${m}/${y}`
+}
 
 function toggleListValue<T>(list: T[], value: T) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
@@ -87,13 +80,19 @@ export function Oficinas() {
   const { userProfile } = useAuth()
   const canAssignStudents = userProfile?.papel === 'direcao' || userProfile?.papel === 'pedagogia'
 
-  const [oficinas, setOficinas] = useState<Oficina[]>([])
-  const [turmas, setTurmas] = useState<Turma[]>([])
-  const [vinculos, setVinculos] = useState<TurmaOficina[]>([])
-  const [alunoOficinas, setAlunoOficinas] = useState<AlunoOficina[]>([])
-  const [studentsList, setStudentsList] = useState<Student[]>([])
-  const [usuarios, setUsuarios] = useState<UserProfile[]>([])
-  const [loading, setLoading] = useState(true)
+  // Estados separados de carregando / erro / dados para cada fonte.
+  const oficinasSub = useSubscription<Oficina[]>(subscribeToOficinas, [])
+  const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
+  const vinculosSub = useSubscription<TurmaOficina[]>(subscribeToTurmaOficinas, [])
+  const alunoOficinasSub = useSubscription<AlunoOficina[]>(subscribeToAlunoOficinas, [])
+  const studentsSub = useSubscription<Student[]>((onData, onError) => subscribeToStudents(onData, onError), [])
+  const usuariosSub = useSubscription<UserProfile[]>(subscribeToUsuarios, [])
+  const oficinas = oficinasSub.data
+  const turmas = turmasSub.data
+  const vinculos = vinculosSub.data
+  const alunoOficinas = alunoOficinasSub.data
+  const studentsList = studentsSub.data
+  const usuarios = usuariosSub.data
 
   const [search, setSearch] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState('todas')
@@ -112,33 +111,15 @@ export function Oficinas() {
   const [savingAlunos, setSavingAlunos] = useState(false)
   const [alunosError, setAlunosError] = useState<string | null>(null)
 
+  // Modal de vínculo turma-oficina (criar / editar / inativar)
+  const [vinculoAlvo, setVinculoAlvo] = useState<VinculoModalAlvo | null>(null)
+
   // Modal exclusão
   const [oficinaToDelete, setOficinaToDelete] = useState<Oficina | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [partialWarning, setPartialWarning] = useState<string | null>(null)
 
-  useEffect(() => {
-    const unsubs = [
-      subscribeToOficinas(
-        (data) => {
-          setOficinas(data)
-          setLoadError(null)
-          setLoading(false)
-        },
-        (err) => {
-          setLoadError('Não foi possível carregar as oficinas do banco de dados: ' + err.message)
-          setLoading(false)
-        }
-      ),
-      subscribeToTurmas(setTurmas),
-      subscribeToTurmaOficinas(setVinculos),
-      subscribeToAlunoOficinas(setAlunoOficinas),
-      subscribeToStudents(setStudentsList),
-      subscribeToUsuarios(setUsuarios),
-    ]
-    return () => unsubs.forEach((unsub) => unsub())
-  }, [])
 
   const vinculosAtivosPorOficina = useMemo(() => {
     const map: Record<string, TurmaOficina[]> = {}
@@ -149,6 +130,17 @@ export function Oficinas() {
       })
     return map
   }, [vinculos, turmas])
+
+  // Vínculos inativados: não recebem novos registros, mas ficam visíveis no histórico
+  const vinculosInativosPorOficina = useMemo(() => {
+    const map: Record<string, TurmaOficina[]> = {}
+    vinculos
+      .filter((v) => !v.ativo)
+      .forEach((v) => {
+        map[v.oficinaId] = [...(map[v.oficinaId] || []), v]
+      })
+    return map
+  }, [vinculos])
 
   const alunosAtivosPorVinculo = useMemo(() => {
     const map: Record<string, AlunoOficina[]> = {}
@@ -202,15 +194,6 @@ export function Oficinas() {
   }
 
   const openEdit = (oficina: Oficina) => {
-    const vinculosForm: Record<string, VinculoForm> = {}
-    ;(vinculosAtivosPorOficina[oficina.id] || []).forEach((v) => {
-      vinculosForm[v.turmaId] = {
-        selected: true,
-        dias: v.horarios.map((h) => h.diaSemana),
-        horaInicio: v.horarios[0]?.horaInicio || '',
-        horaFim: v.horarios[0]?.horaFim || '',
-      }
-    })
     setEditingOficina(oficina)
     setForm({
       nome: oficina.nome,
@@ -218,7 +201,6 @@ export function Oficinas() {
       descricao: oficina.descricao,
       idsUsuariosResponsaveis: oficina.idsUsuariosResponsaveis,
       ativo: oficina.ativo,
-      vinculos: vinculosForm,
     })
     setFormError(null)
     setShowForm(true)
@@ -227,19 +209,6 @@ export function Oficinas() {
   const updateField = <K extends keyof OficinaForm>(field: K, value: OficinaForm[K]) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
-
-  const updateVinculo = (turmaId: string, patch: Partial<VinculoForm>) => {
-    setForm((current) => ({
-      ...current,
-      vinculos: {
-        ...current.vinculos,
-        [turmaId]: { ...(current.vinculos[turmaId] || emptyVinculo), ...patch },
-      },
-    }))
-  }
-
-  // Turmas exibidas no formulário: ativas + as já vinculadas (mesmo se inativas)
-  const turmasDoFormulario = turmas.filter((t) => t.ativo || form.vinculos[t.id]?.selected)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -254,50 +223,28 @@ export function Oficinas() {
       return
     }
 
-    const selecionados = Object.entries(form.vinculos).filter(([, v]) => v.selected)
-    for (const [turmaId, v] of selecionados) {
-      if (v.dias.length === 0 || !v.horaInicio || !v.horaFim) {
-        setFormError(`Informe os dias e o horário da oficina na ${turmaNome(turmaId)}.`)
-        return
-      }
-      if (v.horaFim <= v.horaInicio) {
-        setFormError(`O horário de término deve ser após o início na ${turmaNome(turmaId)}.`)
-        return
-      }
-    }
-
     const payload: OficinaInput = {
       nome: form.nome,
       categoria: form.categoria,
       descricao: form.descricao,
       idsUsuariosResponsaveis: form.idsUsuariosResponsaveis,
       ativo: form.ativo,
-      vinculos: selecionados.map(([turmaId, v]) => ({
-        turmaId,
-        horarios: [...v.dias]
-          .sort((a, b) => a - b)
-          .map<HorarioOficina>((dia) => ({
-            diaSemana: dia,
-            horaInicio: v.horaInicio,
-            horaFim: v.horaFim,
-          })),
-      })),
     }
 
     setSaving(true)
     try {
       const userId = userProfile?.uid || 'sistema'
       if (editingOficina) {
-        await updateOficina(editingOficina.id, payload, vinculos, userId)
+        await updateOficina(editingOficina.id, payload, userId)
         showFeedback(`Oficina ${form.nome} atualizada com sucesso.`)
       } else {
         await createOficina(payload, userId)
-        showFeedback(`Oficina ${form.nome} cadastrada com sucesso.`)
+        showFeedback(`Oficina ${form.nome} cadastrada. Use “Vincular turma” no card para definir turmas, horários e responsáveis.`)
       }
       setShowForm(false)
     } catch (err) {
       console.error('Erro ao salvar oficina:', err)
-      setFormError('Erro ao gravar oficina no Firestore: ' + ((err as Error).message || 'Tente novamente.'))
+      setFormError(failureMessage(err, editingOficina ? 'atualizar a oficina' : 'cadastrar a oficina'))
     } finally {
       setSaving(false)
     }
@@ -350,23 +297,40 @@ export function Oficinas() {
         consideracoesPedagogicas: s.consideracoesPedagogicas,
       }))
 
+    // A lista atual de participantes define quem será incluído ou removido.
+    if (alunoOficinasSub.status !== 'ready') {
+      setAlunosError(
+        'Os participantes atuais da oficina não foram carregados. Use “Tentar novamente” no aviso da página antes de salvar.'
+      )
+      return
+    }
+
     setSavingAlunos(true)
     setAlunosError(null)
     try {
-      await saveAlunosDaOficina(
+      const { resumosNaoAtualizados } = await saveAlunosDaOficina(
         vinculoAlunos.id,
         oficina?.nome || '',
         selecionados,
         alunoOficinas,
         userProfile?.uid || 'sistema'
       )
-      showFeedback(
-        `Participantes de ${oficina?.nome} na ${turmaNome(vinculoAlunos.turmaId)} atualizados.`
-      )
+      const titulo = `Participantes de ${oficina?.nome} na ${turmaNome(vinculoAlunos.turmaId)}`
+      if (resumosNaoAtualizados.length > 0) {
+        const nomes = resumosNaoAtualizados
+          .map((r) => `${studentsList.find((st) => st.id === r.alunoId)?.name || r.alunoId} (${r.motivo})`)
+          .join('; ')
+        setPartialWarning(
+          `${titulo}: vínculos salvos no sistema, mas o resumo de oficinas no cadastro destes alunos não foi atualizado: ${nomes}. ` +
+            'A participação está registrada; ajuste o campo de oficinas no cadastro do aluno, se necessário.'
+        )
+      } else {
+        showFeedback(`${titulo} confirmados no banco de dados.`)
+      }
       setVinculoAlunos(null)
     } catch (err) {
       console.error('Erro ao vincular alunos:', err)
-      setAlunosError('Erro ao gravar vínculos no Firestore: ' + ((err as Error).message || 'Tente novamente.'))
+      setAlunosError(failureMessage(err, 'salvar os participantes da oficina'))
     } finally {
       setSavingAlunos(false)
     }
@@ -376,14 +340,19 @@ export function Oficinas() {
 
   const handleConfirmDelete = async () => {
     if (!oficinaToDelete) return
+    // Os vínculos ativos são inativados junto; sem a lista atual, algum ficaria ativo.
+    if (vinculosSub.status !== 'ready') {
+      alert('Os vínculos da oficina não foram carregados. Use “Tentar novamente” no aviso da página antes de inativar.')
+      return
+    }
     setDeleting(true)
     try {
-      await deleteOficina(oficinaToDelete.id, userProfile?.uid || 'sistema')
+      await deleteOficina(oficinaToDelete.id, vinculos, userProfile?.uid || 'sistema')
       showFeedback(`Oficina ${oficinaToDelete.nome} inativada com sucesso.`)
       setOficinaToDelete(null)
     } catch (err) {
       console.error('Erro ao inativar oficina:', err)
-      alert('Erro ao inativar oficina: ' + ((err as Error).message || 'Erro desconhecido.'))
+      alert(failureMessage(err, 'inativar a oficina'))
     } finally {
       setDeleting(false)
     }
@@ -419,10 +388,24 @@ export function Oficinas() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="feedback-banner warning">
+      <LoadErrors
+        impact="Vínculos, contagens e participantes exibidos podem estar incompletos; salvar alterações fica bloqueado até carregarem."
+        sources={[
+          { what: 'as turmas', ...turmasSub },
+          { what: 'os vínculos turma-oficina', ...vinculosSub },
+          { what: 'os participantes das oficinas', ...alunoOficinasSub },
+          { what: 'os alunos', ...studentsSub },
+          { what: 'a equipe', ...usuariosSub },
+        ]}
+      />
+
+      {partialWarning && (
+        <div className="feedback-banner warning" role="alert">
           <AlertCircle size={18} />
-          <span>{loadError}</span>
+          <span>{partialWarning}</span>
+          <button className="text-button" onClick={() => setPartialWarning(null)} type="button">
+            Fechar
+          </button>
         </div>
       )}
 
@@ -439,7 +422,7 @@ export function Oficinas() {
             <Palette size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.total}</strong>
+            <strong>{formatLoadedCount(totals.total, oficinasSub.status)}</strong>
             <span>Oficinas cadastradas</span>
           </div>
         </article>
@@ -448,7 +431,7 @@ export function Oficinas() {
             <CheckCircle2 size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.ativas}</strong>
+            <strong>{formatLoadedCount(totals.ativas, oficinasSub.status)}</strong>
             <span>Oficinas ativas</span>
           </div>
         </article>
@@ -457,7 +440,7 @@ export function Oficinas() {
             <GraduationCap size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.vinculos}</strong>
+            <strong>{formatLoadedCount(totals.vinculos, combineStatus(oficinasSub.status, vinculosSub.status, turmasSub.status))}</strong>
             <span>Vínculos com turmas</span>
           </div>
         </article>
@@ -466,7 +449,7 @@ export function Oficinas() {
             <Users size={25} strokeWidth={2.2} />
           </span>
           <div>
-            <strong>{totals.alunos}</strong>
+            <strong>{formatLoadedCount(totals.alunos, combineStatus(oficinasSub.status, vinculosSub.status, turmasSub.status, alunoOficinasSub.status))}</strong>
             <span>Alunos participantes</span>
           </div>
         </article>
@@ -510,8 +493,10 @@ export function Oficinas() {
         </div>
       </div>
 
-      {loading ? (
+      {oficinasSub.status === 'loading' ? (
         <div className="form-card entity-empty">Carregando oficinas do banco de dados...</div>
+      ) : oficinasSub.status === 'error' ? (
+        <LoadError error={oficinasSub.error} onRetry={oficinasSub.retry} what="as oficinas" />
       ) : filtered.length === 0 ? (
         <div className="form-card entity-empty">
           <Palette size={32} />
@@ -563,10 +548,19 @@ export function Oficinas() {
 
                 <div className="oficina-vinculos">
                   {oficinaVinculos.length === 0 ? (
-                    <span className="entity-tag muted">Não vinculada a nenhuma turma</span>
+                    <span className="entity-tag muted">
+                      {combineStatus(vinculosSub.status, turmasSub.status) === 'ready'
+                        ? 'Não vinculada a nenhuma turma'
+                        : combineStatus(vinculosSub.status, turmasSub.status) === 'loading'
+                          ? 'Carregando turmas…'
+                          : 'Turmas indisponíveis'}
+                    </span>
                   ) : (
                     oficinaVinculos.map((v) => {
                       const qtdAlunos = (alunosAtivosPorVinculo[v.id] || []).length
+                      const responsaveisVinculo = v.idsUsuariosResponsaveis
+                        .map((uid) => getUsuarioNome(usuarios, uid))
+                        .join(', ')
                       return (
                         <div className="oficina-vinculo-row" key={v.id}>
                           <div>
@@ -574,25 +568,60 @@ export function Oficinas() {
                             <span>
                               <CalendarClock size={13} /> {formatHorarios(v.horarios)}
                             </span>
+                            <span className="vinculo-responsaveis">
+                              <UserRoundCheck size={13} /> {responsaveisVinculo || 'Sem responsável no vínculo'}
+                            </span>
                           </div>
-                          <button
-                            className="oficina-alunos-button"
-                            onClick={() => openAlunos(v)}
-                            title="Alunos participantes nesta turma"
-                            type="button"
-                          >
-                            <Users size={14} /> {qtdAlunos}
-                          </button>
+                          <div className="oficina-vinculo-actions">
+                            <button
+                              className="oficina-alunos-button"
+                              onClick={() => openAlunos(v)}
+                              title="Alunos participantes nesta turma"
+                              type="button"
+                            >
+                              <Users size={14} /> {qtdAlunos}
+                            </button>
+                            <button
+                              aria-label={`Editar vínculo com ${turmaNome(v.turmaId)}`}
+                              className="icon-button"
+                              onClick={() => setVinculoAlvo({ tipo: 'editar', vinculo: v })}
+                              title="Editar horários e responsáveis"
+                              type="button"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </div>
                         </div>
                       )
                     })
                   )}
+                  {(vinculosInativosPorOficina[oficina.id] || []).length > 0 && (
+                    <details className="vinculo-historico">
+                      <summary>
+                        {(vinculosInativosPorOficina[oficina.id] || []).length} vínculo(s) inativo(s) no histórico
+                      </summary>
+                      <ul>
+                        {(vinculosInativosPorOficina[oficina.id] || []).map((v) => (
+                          <li key={v.id}>
+                            {turmaNome(v.turmaId)} — {formatHorarios(v.horarios)}
+                            {v.inativadoEm ? ` (inativado em ${formatDataBR(v.inativadoEm)})` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
 
                 <div className="entity-actions">
-                  <span className="oficina-card-hint">
-                    {oficinaVinculos.length} {oficinaVinculos.length === 1 ? 'turma' : 'turmas'}
-                  </span>
+                  <button
+                    className="button secondary entity-main-action"
+                    disabled={!oficina.ativo}
+                    onClick={() => setVinculoAlvo({ tipo: 'novo-na-oficina', oficinaId: oficina.id })}
+                    title={oficina.ativo ? 'Vincular a uma turma' : 'Reative a oficina para vinculá-la a turmas'}
+                    type="button"
+                  >
+                    <Link2 size={16} /> Vincular turma
+                  </button>
                   <div className="students-table-actions">
                     <button
                       aria-label={'Editar ' + oficina.nome}
@@ -628,7 +657,7 @@ export function Oficinas() {
                 <Palette className="modal-icon" size={22} />
                 <div>
                   <h3>{editingOficina ? `Editar oficina: ${editingOficina.nome}` : 'Nova oficina'}</h3>
-                  <p>Dados da oficina, turmas vinculadas e horários semanais.</p>
+                  <p>Dados gerais da oficina e responsáveis padrão.</p>
                 </div>
               </div>
               <button
@@ -675,7 +704,7 @@ export function Oficinas() {
                 </label>
 
                 <div className="field field-wide">
-                  <span>Profissional(is) responsável(is) *</span>
+                  <span>Profissional(is) responsável(is) padrão *</span>
                   {usuarios.length === 0 ? (
                     <small>Nenhum profissional cadastrado em Equipe / Autores.</small>
                   ) : (
@@ -717,78 +746,11 @@ export function Oficinas() {
                   />
                 </label>
 
-                <div className="field field-wide">
-                  <span>Turmas vinculadas e horários</span>
-                  <small>
-                    Marque as turmas em que a oficina acontece e informe os dias e o horário
-                    semanal de cada uma.
-                  </small>
-                  {turmasDoFormulario.length === 0 ? (
-                    <p className="entity-modal-empty">
-                      Nenhuma turma ativa cadastrada. Cadastre turmas na tela <strong>Turmas</strong>.
-                    </p>
-                  ) : (
-                    <div className="oficina-turmas-list">
-                      {turmasDoFormulario.map((turma) => {
-                        const v = form.vinculos[turma.id] || emptyVinculo
-                        return (
-                          <div
-                            className={'oficina-turma-item' + (v.selected ? ' selected' : '')}
-                            key={turma.id}
-                          >
-                            <label className="toggle-check">
-                              <input
-                                checked={v.selected}
-                                onChange={(e) => updateVinculo(turma.id, { selected: e.target.checked })}
-                                type="checkbox"
-                              />
-                              <span>
-                                <strong>{turma.nome}</strong> · {PERIODO_LABELS[turma.periodo]}
-                              </span>
-                            </label>
-
-                            {v.selected && (
-                              <div className="oficina-horario-fields">
-                                <div className="oficina-dias">
-                                  {DIAS_SEMANA.map((dia) => (
-                                    <button
-                                      aria-pressed={v.dias.includes(dia.id)}
-                                      className={'dia-chip' + (v.dias.includes(dia.id) ? ' active' : '')}
-                                      key={dia.id}
-                                      onClick={() =>
-                                        updateVinculo(turma.id, { dias: toggleListValue(v.dias, dia.id) })
-                                      }
-                                      title={dia.label}
-                                      type="button"
-                                    >
-                                      {dia.curto}
-                                    </button>
-                                  ))}
-                                </div>
-                                <label className="field">
-                                  <span>Início</span>
-                                  <input
-                                    onChange={(e) => updateVinculo(turma.id, { horaInicio: e.target.value })}
-                                    type="time"
-                                    value={v.horaInicio}
-                                  />
-                                </label>
-                                <label className="field">
-                                  <span>Fim</span>
-                                  <input
-                                    onChange={(e) => updateVinculo(turma.id, { horaFim: e.target.value })}
-                                    type="time"
-                                    value={v.horaFim}
-                                  />
-                                </label>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
+                <p className="oficina-alunos-hint field-wide">
+                  Os responsáveis acima são o padrão da oficina. Turmas, horários semanais e responsáveis de cada
+                  turma são definidos no vínculo, pelo botão <strong>Vincular turma</strong> no card da oficina ou
+                  na tela <strong>Turmas</strong>.
+                </p>
 
                 <label className="toggle-check field-wide">
                   <input
@@ -811,6 +773,21 @@ export function Oficinas() {
             </form>
           </div>
         </div>
+      )}
+
+      {vinculoAlvo && (
+        <VinculoModal
+          alvo={vinculoAlvo}
+          dadosStatus={combineStatus(turmasSub.status, oficinasSub.status, vinculosSub.status, usuariosSub.status)}
+          oficinas={oficinas}
+          onClose={() => setVinculoAlvo(null)}
+          onSaved={showFeedback}
+          participantesAtivos={(id) => (alunosAtivosPorVinculo[id] || []).length}
+          turmas={turmas}
+          userId={userProfile?.uid || 'sistema'}
+          usuarios={usuarios}
+          vinculos={vinculos}
+        />
       )}
 
       {/* Modal Alunos participantes da oficina na turma */}
@@ -850,7 +827,18 @@ export function Oficinas() {
                 {!canAssignStudents && ' Somente Direção e Pedagogia podem alterar os vínculos.'}
               </small>
 
-              {alunosDaTurmaDoVinculo.length === 0 ? (
+              {combineStatus(studentsSub.status, alunoOficinasSub.status) === 'error' ? (
+                <LoadError
+                  error={studentsSub.error || alunoOficinasSub.error}
+                  onRetry={() => {
+                    if (studentsSub.status === 'error') studentsSub.retry()
+                    if (alunoOficinasSub.status === 'error') alunoOficinasSub.retry()
+                  }}
+                  what="os alunos e participantes"
+                />
+              ) : combineStatus(studentsSub.status, alunoOficinasSub.status) === 'loading' ? (
+                <p className="entity-modal-empty">Carregando alunos…</p>
+              ) : alunosDaTurmaDoVinculo.length === 0 ? (
                 <p className="entity-modal-empty">
                   Nenhum aluno ativo vinculado a esta turma. Vincule alunos à turma pelo cadastro do
                   aluno.
@@ -970,7 +958,7 @@ export function Oficinas() {
               <p className="confirm-modal-hint">
                 {vinculosDaOficinaExcluida.length > 0
                   ? `Ela está vinculada a ${vinculosDaOficinaExcluida.length} turma(s) e ` +
-                    `${alunosDaOficinaExcluida} aluno(s); esses vínculos serão desativados. `
+                    `${alunosDaOficinaExcluida} aluno(s); esses vínculos serão inativados e deixam de aparecer na chamada e nas atividades. `
                   : ''}
                 Registros de atividade já realizados são mantidos no histórico.
               </p>
