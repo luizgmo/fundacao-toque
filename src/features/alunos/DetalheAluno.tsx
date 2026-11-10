@@ -18,6 +18,8 @@ import { calculateAge, findStudent } from './students-data'
 import type { Student, ContactEntry, Guardian } from './students-data'
 import { getStudentById, getStudentGuardians } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
+import { listarRelatoriosDoAluno } from '../../services/relatoriosService'
+import type { RelatorioPedagogico } from '../../types/relatoriosPedagogicos'
 import './DetalheAluno.css'
 
 const tabs = [
@@ -46,6 +48,7 @@ export function DetalheAluno({
   const [student, setStudent] = useState<Student | null>(() => findStudent(studentId) || null)
   const [contactState, setContactState] = useState<{ studentId: string; items: ContactEntry[] }>({ studentId, items: [] })
   const [guardianState, setGuardianState] = useState<{ studentId: string; items: Guardian[]; loaded: boolean; error: boolean }>({ studentId, items: [], loaded: false, error: false })
+  const [reportState, setReportState] = useState<{ studentId: string; items: RelatorioPedagogico[]; loaded: boolean; error: boolean }>({ studentId, items: [], loaded: false, error: false })
 
   useEffect(() => {
     let isMounted = true
@@ -71,6 +74,18 @@ export function DetalheAluno({
     }
   }, [studentId])
 
+  useEffect(() => {
+    if (activeTab !== 'relatorios') return
+    let isMounted = true
+    listarRelatoriosDoAluno(studentId).then((items) => {
+      if (isMounted) setReportState({ studentId, items, loaded: true, error: false })
+    }).catch((error) => {
+      console.warn('Erro ao carregar relatórios pedagógicos:', error)
+      if (isMounted) setReportState({ studentId, items: [], loaded: true, error: true })
+    })
+    return () => { isMounted = false }
+  }, [studentId, activeTab])
+
   if (!student) {
     return (
       <div className="page-container">
@@ -88,6 +103,7 @@ export function DetalheAluno({
   const dbContacts = contactState.studentId === studentId ? contactState.items : []
   const guardians = guardianState.studentId === studentId ? guardianState.items : []
   const guardiansLoading = guardianState.studentId !== studentId || !guardianState.loaded
+  const pedagogicalReports = reportState.studentId === studentId ? reportState.items : []
   const allContacts = dbContacts.length ? dbContacts : student.contacts
 
   return (
@@ -255,20 +271,23 @@ export function DetalheAluno({
               </button>
             </div>
             <div className="timeline">
-              {student.reports.map((report) => (
-                <article key={report.date}>
+              {(!reportState.loaded || reportState.studentId !== studentId) && <p className="student-empty">Carregando relatórios...</p>}
+              {reportState.error && reportState.studentId === studentId && <p className="student-empty">Não foi possível carregar os relatórios. Tente novamente.</p>}
+              {pedagogicalReports.map((report) => (
+                <article key={report.id}>
                   <span className="timeline-dot">
                     <FileText size={15} />
                   </span>
                   <div>
                     <small>
-                      {report.date} — {report.title}
+                      {report.periodo_inicio} a {report.periodo_fim} — {report.tipo_relatorio} · {report.status}
                     </small>
-                    <p>{report.summary}</p>
+                    <p>{report.evolucao || report.avancos || report.dificuldades || 'Relatório sem resumo preenchido.'}</p>
+                    <small>Responsável: {report.usuario_responsavel_nome}</small>
                   </div>
                 </article>
               ))}
-              {student.reports.length === 0 && (
+              {reportState.loaded && !reportState.error && reportState.studentId === studentId && pedagogicalReports.length === 0 && (
                 <p className="student-empty">Nenhum relatório registrado ainda.</p>
               )}
             </div>
