@@ -67,9 +67,9 @@ A arquitetura é **serverless**, sem servidor próprio: toda a infraestrutura de
 │  └───────────────┘  │  documentos)       │  │
 │                     └────────────────────┘  │
 │  ┌───────────────┐  ┌────────────────────┐  │
-│  │ Storage       │  │ Security Rules     │  │
-│  │ (fotos/PDFs)  │  │ (controle de acesso│  │
-│  └───────────────┘  │  por perfil)       │  │
+│  │ anexos em     │  │ Security Rules     │  │
+│  │ partes no     │  │ (controle de acesso│  │
+│  │ Firestore     │  │  por perfil)       │  │
 │                     └────────────────────┘  │
 └─────────────────────────────────────────────┘
 ```
@@ -81,7 +81,7 @@ A arquitetura é **serverless**, sem servidor próprio: toda a infraestrutura de
 | Front-end | React 19 + TypeScript + Vite | Interface web responsiva (computador e tablet) |
 | Autenticação | Firebase Authentication | Login com e-mail/senha; perfis de acesso |
 | Banco de dados | Cloud Firestore (NoSQL, documentos) | Alunos, turmas, oficinas, frequência, evolução |
-| Arquivos | Firebase Storage | Fotos de atividades e fichas digitalizadas |
+| Arquivos | Cloud Firestore | Metadados e conteúdo em partes de até 600 KiB por documento |
 | Segurança | Firestore Security Rules | Permissões por perfil (negar por padrão) |
 | Ferramentas | Firebase CLI + Emulator Suite | Deploy, testes de regras e desenvolvimento local |
 | Seed de dados | Node.js (script próprio) | População do banco com dados fictícios (LGPD) |
@@ -109,7 +109,7 @@ A arquitetura é **serverless**, sem servidor próprio: toda a infraestrutura de
 - Regras de leitura/escrita distintas por coleção (ex.: apenas a Direção apaga registros e gerencia usuários);
 - Ficha médica: leitura restrita a Direção e Pedagogia; escrita apenas pela Direção;
 - Nenhum dado pessoal real é usado em desenvolvimento — apenas dados fictícios;
-- Arquivos (fotos, fichas digitalizadas) ficam no Firebase Storage; o banco guarda apenas metadados e caminhos.
+- Arquivos ficam no Firestore: metadados em `anexos/{id}` e conteúdo dividido na subcoleção `chunks`, respeitando o limite de 1 MiB por documento. Não há dependência de Firebase Storage.
 
 ---
 
@@ -136,10 +136,12 @@ matriculas/{matricula_id}
 aluno_oficinas/{vinculo_id}
 registros_atividade/{registro_id}
 └── anexos/{anexo_id}
+    └── chunks/{parte_id}          (conteúdo Base64 em partes <= 600 KiB)
 registros_evolucao/{registro_evolucao_id}
 modelos_formulario/{modelo_id}
 relatorios_pedagogicos/{relatorio_id}
 └── anexos/{anexo_id}
+    └── chunks/{parte_id}          (conteúdo Base64 em partes <= 600 KiB)
 sessoes_chamada/{sessao_id}           (com presenças embutidas)
 contatos_familia/{contato_id}
 relatorios_gerados/{relatorio_gerado_id}
@@ -168,7 +170,7 @@ data_nascimento: string        obrigatório (YYYY-MM-DD)
 status: string                 obrigatório (ativo | inativo)
 uso_imagem_autorizado: boolean obrigatório (LGPD)
 consentimento_imagem_em: Timestamp (opcional)
-caminho_foto: string           opcional (Firebase Storage)
+caminho_foto: string           opcional (referência do arquivo no Firestore)
 ```
 
 **alunos/{aluno_id}/ficha_medica/{ficha}** — subcoleção com regras restritivas
@@ -191,8 +193,8 @@ telefone_alternativo (opcional), email (opcional), principal: boolean
 
 ```
 tipo_documento: string        (ficha_medica | ficha_matricula | autorizacao_imagem | outro)
-caminho_storage: string       (arquivo real no Firebase Storage)
-nome_arquivo_original, tipo_conteudo, tamanho_bytes, enviado_por, enviado_em
+armazenamento: "firestore", status: enviando | disponivel, total_partes
+tamanho_bytes, nome_arquivo_original, tipo_conteudo, enviado_por, enviado_em
 ```
 
 **turmas/{turma_id}**

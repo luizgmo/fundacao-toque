@@ -221,7 +221,7 @@ export function Atividades() {
           tone: 'warning',
           message:
             `Atividade registrada, mas ${fotosComErro.length} foto(s) não foram enviadas: ` +
-            `${fotosComErro.join(', ')}. Verifique se o Firebase Storage está habilitado.`,
+            `${fotosComErro.join(', ')}. Verifique a conexão e as regras do Firestore.`,
         })
       } else {
         setFeedback({ tone: 'success', message: 'Atividade registrada com sucesso!' })

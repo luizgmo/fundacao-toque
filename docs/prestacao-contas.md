@@ -17,8 +17,9 @@ Matrículas com `data_inicio`/`data_fim` são avaliadas pela vigência do perío
 ## Geração e download
 
 O PDF é montado no navegador com `jspdf` + `jspdf-autotable` e baixado diretamente pelo navegador.
-Nenhum arquivo é enviado ao Storage nem gravado no Firestore; portanto, **não existe histórico de
-PDFs gerados**. O relatório deve ser baixado e arquivado pela própria Direção.
+O PDF gerado não é salvo; portanto, **não existe histórico de PDFs gerados**. O relatório deve ser
+baixado e arquivado pela própria Direção. As fotos das atividades são salvas no Firestore em partes,
+na subcoleção `anexos/{id}/chunks`, e reconstruídas na prévia, impressão e PDF.
 
 A opção **Imprimir** abre uma versão HTML em nova janela e também não salva arquivo no servidor.
 
@@ -44,33 +45,15 @@ duplicar registros.
 
 ## Implantação
 
-A prestação depende das permissões de leitura das coleções necessárias e de Storage para obter fotos. A necessidade final de índices deve ser confirmada contra as consultas integradas em homologação. O PDF é gerado localmente e baixado pelo navegador.
+A prestação depende das permissões de leitura do Firestore e dos índices das consultas em
+homologação. Os anexos ficam em documentos de até 600 KiB codificados em Base64, abaixo de
+`anexos/{id}/chunks/{parte}`; cada arquivo tem metadados em `anexos/{id}`. O limite da interface é
+5 MiB para fotos de atividade e 10 MiB para anexos pedagógicos. O Firestore limita cada documento a
+1 MiB, então o arquivo não deve ser gravado inteiro em um único documento. Essa estratégia usa
+leituras e gravações do Firestore para cada parte e não requer Storage, bucket nem CORS.
 
-As fotos de atividades continuam vindo do Storage, quando o bucket existir. Nesse caso:
-
-1. publique as regras do Storage:
-
-   ```bash
-   firebase deploy --only storage
-   ```
-
-2. configure o CORS do bucket para permitir que o PDF baixe as fotos diretamente:
-
-   ```bash
-   gcloud storage buckets update gs://SEU_BUCKET --cors-file=storage.cors.json
-   # alternativa:
-   gsutil cors set storage.cors.json gs://SEU_BUCKET
-
-   # conferência
-   gsutil cors get gs://SEU_BUCKET
-   ```
-
-   O CORS não é aplicado pelo `firebase deploy`. Antes de produção, troque `"origin": ["*"]`
-   no `storage.cors.json` pelo domínio da aplicação.
-
-   Sem Storage ou sem CORS, o PDF continua sendo gerado: as fotos que não puderem ser baixadas
-   aparecem como “Foto indisponível”, com aviso no relatório. A opção **Imprimir** exibe as fotos
-   normalmente quando as URLs estão acessíveis.
+Quando um anexo está incompleto ou inacessível pelas regras, a prévia informa a indisponibilidade e
+o PDF usa um espaço reservado. PDFs gerados continuam locais e não são persistidos.
 
 ## Testes
 

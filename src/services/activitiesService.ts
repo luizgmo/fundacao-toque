@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   increment,
   limit,
@@ -13,14 +14,47 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { db, storage } from '../lib/firebase'
+import { db } from '../lib/firebase'
 import type { Anexo, RegistroAtividade } from '../types/atividades'
 
 const REGISTROS_COLLECTION = 'registros_atividade'
 const ANEXOS_SUBCOLLECTION = 'anexos'
 
 export const MAX_FOTO_BYTES = 5 * 1024 * 1024
+const FIRESTORE_CHUNK_BYTES = 600 * 1024
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const blockSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += blockSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + blockSize))
+  }
+  return btoa(binary)
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes
+}
+
+export async function getAnexoFirestoreUrl(parentPath: string, attachmentId: string): Promise<string | null> {
+  const attachmentRef = doc(db, `${parentPath}/${ANEXOS_SUBCOLLECTION}/${attachmentId}`)
+  const metadataSnapshot = await getDoc(attachmentRef)
+  if (!metadataSnapshot.exists()) return null
+  const metadata = metadataSnapshot.data()
+  if (metadata.armazenamento !== 'firestore' || metadata.status !== 'disponivel') return null
+
+  const chunksSnapshot = await getDocs(query(collection(db, `${attachmentRef.path}/chunks`), orderBy('indice', 'asc')))
+  if (chunksSnapshot.size !== metadata.total_partes) throw new Error('O anexo está incompleto no Firestore.')
+  const chunks = chunksSnapshot.docs.map((chunk) => String(chunk.data().conteudo_base64 || ''))
+  const bytes = base64ToBytes(chunks.join(''))
+  const buffer = new ArrayBuffer(bytes.length)
+  new Uint8Array(buffer).set(bytes)
+  const blob = new Blob([buffer], { type: String(metadata.tipo_conteudo || 'application/octet-stream') })
+  return URL.createObjectURL(blob)
+}
 
 export function docToRegistro(id: string, data: DocumentData): RegistroAtividade {
   return {
@@ -70,7 +104,7 @@ export type RegistroAtividadeInput = {
   observacoesGerais: string
 }
 
-// Cria o registro diário e envia as fotos para o Storage (metadados em subcoleção anexos)
+// Cria o registro diário e grava as fotos em partes na subcoleção Firestore do anexo.
 export async function createRegistroAtividade(
   input: RegistroAtividadeInput,
   fotos: File[],
@@ -97,7 +131,7 @@ export async function createRegistroAtividade(
       await uploadAnexo(`${REGISTROS_COLLECTION}/${id}`, foto, userId)
       await updateDoc(doc(db, REGISTROS_COLLECTION, id), { total_anexos: increment(1) })
     } catch (err) {
-      console.warn('Erro ao enviar foto para o Storage:', err)
+      console.warn('Erro ao gravar foto no Firestore:', err)
       fotosComErro.push(foto.name)
     }
   }
@@ -105,18 +139,18 @@ export async function createRegistroAtividade(
   return { id, fotosComErro }
 }
 
-// Envia um arquivo ao Storage e grava seus metadados em {parentPath}/anexos.
-// Reutilizável para registros_atividade e relatorios_pedagogicos (modelagem.md).
+// Grava metadados e conteúdo em partes no Firestore, abaixo de {parentPath}/anexos.
+// Cada parte fica abaixo do limite de 1 MiB por documento do Firestore.
 export async function uploadAnexo(parentPath: string, file: File, userId: string): Promise<string> {
   const anexoRef = doc(collection(db, `${parentPath}/${ANEXOS_SUBCOLLECTION}`))
-  const safeName = file.name.replace(/[^\w.-]+/g, '_')
-  const caminhoStorage = `${parentPath}/${anexoRef.id}_${safeName}`
-
-  await uploadBytes(ref(storage, caminhoStorage), file, { contentType: file.type })
-
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const totalPartes = Math.ceil(bytes.length / FIRESTORE_CHUNK_BYTES)
   await setDoc(anexoRef, {
     tipo_anexo: file.type.startsWith('image/') ? 'imagem' : 'documento',
-    caminho_storage: caminhoStorage,
+    armazenamento: 'firestore',
+    status: 'enviando',
+    total_partes: totalPartes,
+    tamanho_bytes: file.size,
     nome_arquivo_original: file.name,
     tipo_conteudo: file.type,
     legenda: null,
@@ -124,10 +158,26 @@ export async function uploadAnexo(parentPath: string, file: File, userId: string
     enviado_em: serverTimestamp(),
   })
 
+  try {
+    await Promise.all(Array.from({ length: totalPartes }, async (_, indice) => {
+      const parte = bytes.subarray(indice * FIRESTORE_CHUNK_BYTES, (indice + 1) * FIRESTORE_CHUNK_BYTES)
+      await setDoc(doc(db, `${anexoRef.path}/chunks/${String(indice).padStart(6, '0')}`), {
+        indice,
+        conteudo_base64: bytesToBase64(parte),
+      })
+    }))
+    await updateDoc(anexoRef, { status: 'disponivel' })
+  } catch (error) {
+    const chunks = await getDocs(collection(db, `${anexoRef.path}/chunks`)).catch(() => null)
+    await Promise.all(chunks?.docs.map((chunk) => deleteDoc(chunk.ref)) || [])
+    await deleteDoc(anexoRef).catch(() => undefined)
+    throw error
+  }
+
   return anexoRef.id
 }
 
-// Lista anexos de um registro com a URL de download de cada arquivo
+// Lista anexos e reconstrói seus arquivos persistidos em partes no Firestore.
 export async function getAnexosComUrl(
   parentPath: string
 ): Promise<(Anexo & { url: string | null })[]> {
@@ -138,35 +188,31 @@ export async function getAnexosComUrl(
       const anexo: Anexo = {
         id: d.id,
         tipoAnexo: data.tipo_anexo === 'documento' ? 'documento' : 'imagem',
-        caminhoStorage: data.caminho_storage || '',
+        caminhoFirestore: data.armazenamento === 'firestore' ? `${parentPath}/${ANEXOS_SUBCOLLECTION}/${d.id}` : '',
         nomeArquivoOriginal: data.nome_arquivo_original || 'arquivo',
         tipoConteudo: data.tipo_conteudo || '',
         legenda: data.legenda || '',
       }
       let url: string | null = null
       try {
-        url = await getDownloadURL(ref(storage, anexo.caminhoStorage))
+        url = await getAnexoFirestoreUrl(parentPath, d.id)
       } catch (err) {
-        console.warn('Não foi possível obter URL do anexo:', err)
+        console.warn('Não foi possível reconstruir o anexo do Firestore:', err)
       }
       return { ...anexo, url }
     })
   )
 }
 
-// Excluir registro de atividade, seus anexos e arquivos no Storage
+// Excluir registro de atividade e o conteúdo dividido em partes no Firestore.
 export async function deleteRegistroAtividade(id: string): Promise<void> {
   const parentPath = `${REGISTROS_COLLECTION}/${id}`
   const anexos = await getDocs(collection(db, `${parentPath}/${ANEXOS_SUBCOLLECTION}`))
 
   await Promise.all(
     anexos.docs.map(async (a) => {
-      const caminho = a.data().caminho_storage
-      if (caminho) {
-        await deleteObject(ref(storage, caminho)).catch((err) =>
-          console.warn('Arquivo do anexo não removido do Storage:', err)
-        )
-      }
+      const chunks = await getDocs(collection(db, `${parentPath}/${ANEXOS_SUBCOLLECTION}/${a.id}/chunks`))
+      await Promise.all(chunks.docs.map((chunk) => deleteDoc(chunk.ref)))
       await deleteDoc(a.ref)
     })
   )

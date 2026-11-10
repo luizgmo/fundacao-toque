@@ -13,7 +13,6 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore'
-import { ref, uploadBytes } from 'firebase/storage'
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 
 const PROJECT_ID = 'fundacao-toque-rules-test'
@@ -23,7 +22,6 @@ beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: { rules: readFileSync('firestore.rules', 'utf8') },
-    storage: { rules: readFileSync('storage.rules', 'utf8') },
   })
 })
 
@@ -114,9 +112,25 @@ describe('Firestore security rules', () => {
   it('restringe relatório e exige pai existente para metadados de anexos', async () => {
     await assertSucceeds(setDoc(doc(firestore('pedagogia-1'), 'relatorios_pedagogicos/novo'), { status: 'rascunho', aluno_id: 'aluno-1' }))
     await assertFails(setDoc(doc(firestore('admin-1'), 'relatorios_pedagogicos/negado'), { status: 'rascunho' }))
-    await assertSucceeds(setDoc(doc(firestore('pedagogia-1'), 'relatorios_pedagogicos/rascunho-1/anexos/a1'), { enviado_por: 'pedagogia-1', caminho_storage: 'relatorios_pedagogicos/rascunho-1/a1.pdf' }))
-    await assertFails(setDoc(doc(firestore('pedagogia-1'), 'relatorios_pedagogicos/inexistente/anexos/a1'), { enviado_por: 'pedagogia-1' }))
-    await assertFails(setDoc(doc(firestore('admin-1'), 'relatorios_pedagogicos/rascunho-1/anexos/a2'), { enviado_por: 'admin-1' }))
+    const db = firestore('pedagogia-1')
+    const attachment = doc(db, 'relatorios_pedagogicos/rascunho-1/anexos/a1')
+    await assertSucceeds(setDoc(attachment, {
+      enviado_por: 'pedagogia-1', armazenamento: 'firestore', status: 'enviando',
+      total_partes: 1, tamanho_bytes: 10,
+    }))
+    await assertSucceeds(setDoc(doc(db, 'relatorios_pedagogicos/rascunho-1/anexos/a1/chunks/000000'), {
+      indice: 0, conteudo_base64: 'Y29udGV1ZG8=',
+    }))
+    await assertSucceeds(updateDoc(attachment, { status: 'disponivel' }))
+    await assertFails(setDoc(doc(db, 'relatorios_pedagogicos/inexistente/anexos/a1'), {
+      enviado_por: 'pedagogia-1', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
+    }))
+    await assertFails(setDoc(doc(firestore('admin-1'), 'relatorios_pedagogicos/rascunho-1/anexos/a2'), {
+      enviado_por: 'admin-1', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
+    }))
+    await assertFails(setDoc(doc(firestore('pedagogia-1'), 'relatorios_pedagogicos/concluido-1/anexos/a3'), {
+      enviado_por: 'pedagogia-1', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
+    }))
   })
 
   it('permite criar contatos sem permitir reescrita do snapshot histórico', async () => {
@@ -126,11 +140,4 @@ describe('Firestore security rules', () => {
     await assertSucceeds(getDoc(doc(db, 'contatos_familia/contato-1')))
   })
 
-  it('protege upload de relatório de usuários sem papel e limita tipo/conteúdo no Storage', async () => {
-    const file = new Blob(['conteúdo fictício'], { type: 'application/pdf' })
-    await assertFails(uploadBytes(ref(testEnv.unauthenticatedContext().storage(), 'relatorios_pedagogicos/rascunho-1/a.pdf'), file, { contentType: 'application/pdf' }))
-    await assertSucceeds(uploadBytes(ref(testEnv.authenticatedContext('pedagogia-1').storage(), 'relatorios_pedagogicos/rascunho-1/a.pdf'), file, { contentType: 'application/pdf' }))
-    const text = new Blob(['conteúdo'], { type: 'text/plain' })
-    await assertFails(uploadBytes(ref(testEnv.authenticatedContext('pedagogia-1').storage(), 'relatorios_pedagogicos/rascunho-1/a.txt'), text, { contentType: 'text/plain' }))
-  })
 })

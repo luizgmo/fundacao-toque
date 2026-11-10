@@ -106,6 +106,12 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "chunks",
+      "fieldPath": "conteudo_base64",
+      "indexes": []
+    }
+  ]
 }
 

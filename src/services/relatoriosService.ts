@@ -11,8 +11,8 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { deleteObject, getDownloadURL, ref } from 'firebase/storage'
-import { db, storage } from '../lib/firebase'
+import { db } from '../lib/firebase'
+import { getAnexoFirestoreUrl } from './activitiesService'
 import type {
   AnexoRelatorioPedagogico,
   RelatorioPedagogico,
@@ -104,10 +104,9 @@ export async function listarAnexosRelatorio(id: string): Promise<AnexoRelatorioP
   const snap = await getDocs(collection(db, COLLECTION, id, 'anexos'))
   return Promise.all(snap.docs.map(async (item) => {
     const data = item.data()
-    const path = String(data.caminho_storage || '')
     let url: string | null = null
-    if (path) {
-      try { url = await getDownloadURL(ref(storage, path)) } catch { url = null }
+    if (data.armazenamento === 'firestore') {
+      try { url = await getAnexoFirestoreUrl(`relatorios_pedagogicos/${id}`, item.id) } catch { url = null }
     }
     return {
       id: item.id,
@@ -115,15 +114,14 @@ export async function listarAnexosRelatorio(id: string): Promise<AnexoRelatorioP
       nome_arquivo_original: String(data.nome_arquivo_original || 'Arquivo'),
       tipo_conteudo: String(data.tipo_conteudo || ''),
       url,
-      caminho_storage: path,
+      caminho_firestore: data.armazenamento === 'firestore' ? `relatorios_pedagogicos/${id}/anexos/${item.id}` : '',
     }
   }))
 }
 
-export async function excluirAnexoRelatorio(reportId: string, attachmentId: string, storagePath: string): Promise<void> {
-  if (storagePath) await deleteObject(ref(storage, storagePath)).catch((error: { code?: string }) => {
-    if (error.code !== 'storage/object-not-found') throw error
-  })
+export async function excluirAnexoRelatorio(reportId: string, attachmentId: string): Promise<void> {
+  const chunks = await getDocs(collection(db, COLLECTION, reportId, 'anexos', attachmentId, 'chunks'))
+  await Promise.all(chunks.docs.map((chunk) => deleteDoc(chunk.ref)))
   await deleteDoc(doc(db, COLLECTION, reportId, 'anexos', attachmentId))
 }
 
@@ -131,6 +129,6 @@ export async function inativarRascunhoRelatorio(id: string): Promise<void> {
   const report = await obterRelatorio(id)
   if (!report || report.status !== 'rascunho') throw new Error('Somente rascunhos podem ser excluídos.')
   const attachments = await listarAnexosRelatorio(id)
-  for (const attachment of attachments) await excluirAnexoRelatorio(id, attachment.id, attachment.caminho_storage)
+  for (const attachment of attachments) await excluirAnexoRelatorio(id, attachment.id)
   await deleteDoc(doc(db, COLLECTION, id))
 }

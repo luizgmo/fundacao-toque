@@ -13,7 +13,7 @@
     "seed:cleanup": "node scripts/seed-firestore.mjs cleanup",
     "migrate:turmas": "node scripts/migrate-legacy-turmas.mjs",
     "test": "vitest run src",
-    "test:rules": "firebase emulators:exec --only firestore,storage --project fundacao-toque-rules-test \"vitest run tests/firestore/rules.test.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project fundacao-toque-rules-test \"vitest run tests/firestore/rules.test.ts\""
   },
   "dependencies": {
     "firebase": "^12.19.0",

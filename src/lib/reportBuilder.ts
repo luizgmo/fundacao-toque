@@ -552,7 +552,7 @@ export function buildPrestacaoContasReport(
           oficinas,
           nomeArquivo: anexo.nomeArquivo,
           legenda: anexo.legenda,
-          caminhoStorage: anexo.caminhoStorage,
+          caminhoFirestore: anexo.caminhoFirestore,
           url: anexo.url,
         }
       })
@@ -589,7 +589,7 @@ export function buildPrestacaoContasReport(
   }
   if (fotosSemUrl > 0 && secaoFotosAtiva(filtros)) {
     avisos.push(
-      `${fotosSemUrl} foto(s) sem arquivo acessível no Storage; o PDF mostrará um espaço reservado.`
+      `${fotosSemUrl} foto(s) sem conteúdo acessível no Firestore; o PDF mostrará um espaço reservado.`
     )
   }
   if (fotosOmitidasPorAutorizacao > 0 && secaoFotosAtiva(filtros)) {

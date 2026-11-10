@@ -1,7 +1,7 @@
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
-import { getDownloadURL, ref } from 'firebase/storage'
-import { db, storage } from '../lib/firebase'
+import { db } from '../lib/firebase'
+import { getAnexoFirestoreUrl } from './activitiesService'
 import {
   buildPrestacaoContasReport,
   secaoFotosAtiva,
@@ -232,12 +232,14 @@ export async function loadPrestacaoContasData(
             anexosSnapshot.docs.map(async (anexoDoc): Promise<RelatorioAnexoRaw> => {
               const data = anexoDoc.data()
               const tipoAnexo = data.tipo_anexo === 'documento' ? 'documento' : 'imagem'
-              const caminhoStorage = stringValue(data.caminho_storage)
+              const caminhoFirestore = data.armazenamento === 'firestore'
+                ? `${ATIVIDADES_COLLECTION}/${atividade.id}/anexos/${anexoDoc.id}`
+                : ''
               return {
                 id: anexoDoc.id,
                 atividadeId: atividade.id,
                 tipoAnexo,
-                caminhoStorage,
+                caminhoFirestore,
                 nomeArquivo: stringValue(data.nome_arquivo_original, 'foto'),
                 legenda: stringValue(data.legenda),
                 url: null,
@@ -270,15 +272,18 @@ export async function loadPrestacaoContasData(
     let relatorio = buildPrestacaoContasReport(buildInput)
 
     // Primeiro aplica matrícula histórica e política conservadora de autorização;
-    // somente fotos elegíveis geram URL de download do Storage.
+    // somente fotos elegíveis geram URLs dos arquivos persistidos no Firestore.
     if (deveCarregarUrls && relatorio.fotos.length > 0) {
       const elegiveis = new Set(relatorio.fotos.map((foto) => foto.id))
       const anexosComUrl = await mapWithConcurrency(anexos, QUERY_CONCURRENCY, async (anexo) => {
-        if (anexo.tipoAnexo !== 'imagem' || !elegiveis.has(anexo.id) || !anexo.caminhoStorage) return anexo
+        if (anexo.tipoAnexo !== 'imagem' || !elegiveis.has(anexo.id) || !anexo.caminhoFirestore) return anexo
         try {
-          return { ...anexo, url: await getDownloadURL(ref(storage, anexo.caminhoStorage)) }
+          return {
+            ...anexo,
+            url: await getAnexoFirestoreUrl(`${ATIVIDADES_COLLECTION}/${anexo.atividadeId}`, anexo.id),
+          }
         } catch (error) {
-          console.warn('Não foi possível obter URL de foto elegível:', anexo.id, error)
+          console.warn('Não foi possível reconstruir foto elegível do Firestore:', anexo.id, error)
           return anexo
         }
       })
@@ -287,7 +292,7 @@ export async function loadPrestacaoContasData(
 
     if (anexosComFalha > 0) {
       relatorio.avisos.push(
-        `${anexosComFalha} atividade(s) não puderam ter as fotos carregadas do Storage.`
+        `${anexosComFalha} atividade(s) não puderam ter os anexos carregados do Firestore.`
       )
     }
 

@@ -6,7 +6,7 @@ Os comandos abaixo devem ser executados depois de revisar os dados e selecionar 
 
 Na pasta `fundacao-toque-integracao`, confirme o projeto ativo com `npx firebase-tools projects:list` e autentique-se com a conta que tem permissão para publicar. Use o ID confirmado pela equipe no lugar de `ID_DO_PROJETO`.
 
-O projeto `fundacao-toque` foi limpo e repovoado com dados fictícios em 10/11/2026. O cleanup removeu 27 documentos das coleções atuais/legadas conhecidas e respectivas subcoleções do app; o seed gravou 36 documentos no schema atual, incluindo `usuarios_publicos`, referências de responsável principal e fichas médicas em subcoleção. A operação usou acesso Admin REST. Não foi criado nem alterado Storage.
+O projeto `fundacao-toque` foi limpo e repovoado com dados fictícios em 10/11/2026. O cleanup removeu 27 documentos das coleções atuais/legadas conhecidas e respectivas subcoleções do app; o seed gravou 36 documentos no schema atual, incluindo `usuarios_publicos`, referências de responsável principal e fichas médicas em subcoleção. A operação usou acesso Admin REST. O projeto não usa Firebase Storage: anexos são divididos em partes e gravados no Firestore.
 
 Se rodar novamente no futuro, o cleanup apaga **todos** os documentos nas coleções conhecidas listadas em `scripts/seed-firestore.mjs`; confirme o projeto antes de repetir.
 
@@ -41,8 +41,6 @@ Não apague os dados do aluno antes de confirmar que foram copiados para a ficha
 
 ## 4. Publicar regras e índices
 
-Se o projeto ainda não tiver um bucket do Firebase Storage, **não publique `storage.rules` e não espere que uploads funcionem**. Ative/crie o bucket no Console do Firebase primeiro; isso pode exigir habilitar faturamento no projeto. Até lá, anexos pedagógicos e fotos no Storage ficam indisponíveis. Firestore e relatórios sem anexos continuam funcionando.
-
 Com `firebase.json` apontando para os arquivos desta branch:
 
 ```bash
@@ -50,13 +48,7 @@ npx firebase-tools deploy --only firestore:rules --project ID_DO_PROJETO
 npx firebase-tools deploy --only firestore:indexes --project ID_DO_PROJETO
 ```
 
-Depois que o bucket existir, publique as regras de Storage separadamente:
-
-```bash
-npx firebase-tools deploy --only storage --project ID_DO_PROJETO
-```
-
-Confira no Console que as regras publicadas correspondem à branch `integration/tarefas-1-a-5`. O inventário atual não identificou necessidade de composto novo, mas o deploy publica o arquivo versionado completo; revise antes de remover qualquer índice que já exista no projeto.
+Confira no Console que as regras publicadas correspondem à branch `integration/tarefas-1-a-5`. O inventário atual não identificou necessidade de composto novo, mas o deploy publica o arquivo versionado completo; revise antes de remover qualquer índice que já exista no projeto. Anexos usam documentos Firestore em partes de até 600 KiB; não há publicação de regras, bucket ou configuração CORS de Storage.
 
 ## 5. Validar manualmente
 
@@ -67,4 +59,4 @@ Confira no Console que as regras publicadas correspondem à branch `integration/
 - Gere prestação com período/turma, frequência e fotos autorizadas; compare prévia, impressão e PDF.
 - Verifique no Console de índices que as consultas aceitas ficam operacionais.
 
-Os testes do Emulator estão em `npm run test:rules`; eles não substituem a validação no projeto real. Para configurar CORS de fotos do PDF, siga as instruções e limites em [prestacao-contas.md](prestacao-contas.md). CORS é configuração do bucket e não é aplicado pelo deploy acima.
+Os testes do Emulator estão em `npm run test:rules`; eles não substituem a validação no projeto real. Confira anexos em relatórios pedagógicos e atividades depois de sair e entrar novamente.

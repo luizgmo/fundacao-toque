@@ -11,7 +11,7 @@ export interface RegistroAtividade {
 export interface Anexo {
   id: string
   tipoAnexo: 'imagem' | 'documento'
-  caminhoStorage: string
+  caminhoFirestore: string
   nomeArquivoOriginal: string
   tipoConteudo: string
   legenda: string

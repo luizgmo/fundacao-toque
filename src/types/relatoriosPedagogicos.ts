@@ -33,5 +33,5 @@ export type AnexoRelatorioPedagogico = {
   nome_arquivo_original: string
   tipo_conteudo: string
   url: string | null
-  caminho_storage: string
+  caminho_firestore: string
 }

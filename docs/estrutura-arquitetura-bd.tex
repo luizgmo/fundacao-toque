@@ -87,7 +87,7 @@ A arquitetura é \textbf{serverless}, sem servidor próprio: toda a infraestrutu
   \node[box] (spa) {Navegador (equipe)\\ \small React + TypeScript (SPA)};
   \node[box, below=of spa, xshift=-3.2cm] (auth) {Authentication\\ \small login e perfis};
   \node[box, below=of spa] (fs) {Cloud Firestore\\ \small banco NoSQL};
-  \node[box, below=of spa, xshift=3.2cm] (st) {Storage\\ \small fotos e PDFs};
+  \node[box, below=of spa, xshift=3.2cm] (st) {Firestore\\ \small arquivos em partes};
   \node[box, below=1.1cm of fs, xshift=3.2cm] (rules) {Security Rules\\ \small acesso por perfil};
   \node[grupo, fit=(auth)(fs)(st)(rules), label={[anchor=north]north:FIREBASE}] (fb) {};
   \draw[-{Latex}, thick] (spa) -- node[right, font=\small]{HTTPS / SDK} (fb.north -| spa);
@@ -104,7 +104,7 @@ A arquitetura é \textbf{serverless}, sem servidor próprio: toda a infraestrutu
 Front-end & React 19 + TypeScript + Vite & Interface web responsiva (computador e tablet) \\
 Autenticação & Firebase Authentication & Login com e-mail/senha; perfis de acesso \\
 Banco de dados & Cloud Firestore (NoSQL) & Alunos, turmas, oficinas, frequência, evolução \\
-Arquivos & Firebase Storage & Fotos de atividades e fichas digitalizadas \\
+Arquivos & Cloud Firestore & Metadados e conteúdo em partes de até 600 KiB por documento \\
 Segurança & Firestore Security Rules & Permissões por perfil (negar por padrão) \\
 Ferramentas & Firebase CLI + Emulator Suite & Deploy, testes de regras e desenvolvimento local \\
 Seed de dados & Node.js (script próprio) & População do banco com dados fictícios (LGPD) \\
@@ -138,7 +138,7 @@ Seed de dados & Node.js (script próprio) & População do banco com dados fict�
   \item Regras de leitura/escrita distintas por coleção (ex.: apenas a Direção apaga registros e gerencia usuários);
   \item Ficha médica: leitura restrita a Direção e Pedagogia; escrita apenas pela Direção;
   \item Nenhum dado pessoal real é usado em desenvolvimento --- apenas dados fictícios;
-  \item Arquivos (fotos, fichas digitalizadas) ficam no Firebase Storage; o banco guarda apenas metadados e caminhos.
+  \item Arquivos ficam no Firestore: metadados em \texttt{anexos/\{id\}} e conteúdo dividido em \texttt{chunks}, respeitando o limite de 1 MiB por documento. Não há dependência de Firebase Storage.
 \end{itemize}
 
 \section{Banco de Dados (Cloud Firestore)}
@@ -196,7 +196,7 @@ data_nascimento: string        obrigatório (YYYY-MM-DD)
 status: string                 obrigatório (ativo | inativo)
 uso_imagem_autorizado: boolean obrigatório (LGPD)
 consentimento_imagem_em: Timestamp (opcional)
-caminho_foto: string           opcional (Firebase Storage)
+caminho_foto: string           opcional (referência do arquivo no Firestore)
 \end{verbatim}
 
 \subsubsection*{\texttt{alunos/\{aluno\_id\}/ficha\_medica/\{ficha\}} --- subcoleção com regras restritivas}
@@ -219,8 +219,8 @@ telefone_alternativo (opcional), email (opcional), principal: boolean
 
 \begin{verbatim}
 tipo_documento: string        (ficha_medica | ficha_matricula | autorizacao_imagem | outro)
-caminho_storage: string       (arquivo real no Firebase Storage)
-nome_arquivo_original, tipo_conteudo, tamanho_bytes, enviado_por, enviado_em
+armazenamento: "firestore", status: enviando | disponivel, total_partes
+tamanho_bytes, nome_arquivo_original, tipo_conteudo, enviado_por, enviado_em
 \end{verbatim}
 
 \subsubsection*{\texttt{turmas/\{turma\_id\}}}

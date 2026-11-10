@@ -106,7 +106,7 @@ function criarDados(
             oficinas: ['Musicalização'],
             nomeArquivo: 'roda.png',
             legenda: 'Roda de música',
-            caminhoStorage: 'registros_atividade/atividade-1/foto-1.png',
+            caminhoFirestore: 'registros_atividade/atividade-1/anexos/foto-1',
             url: PNG_1X1,
           },
         ],
@@ -122,7 +122,7 @@ function criarDados(
         oficinas: ['Musicalização'],
         nomeArquivo: 'roda.png',
         legenda: 'Roda de música',
-        caminhoStorage: 'registros_atividade/atividade-1/foto-1.png',
+        caminhoFirestore: 'registros_atividade/atividade-1/anexos/foto-1',
         url: PNG_1X1,
       },
     ],
@@ -136,7 +136,7 @@ function criarDados(
         },
       ],
     },
-    avisos: ['1 foto(s) sem arquivo acessível no Storage.'],
+    avisos: ['1 foto(s) sem conteúdo acessível no Firestore.'],
     ...overrides,
   }
 }

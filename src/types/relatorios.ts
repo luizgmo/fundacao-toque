@@ -53,7 +53,7 @@ export interface RelatorioFoto {
   oficinas: string[]
   nomeArquivo: string
   legenda: string
-  caminhoStorage: string
+  caminhoFirestore: string
   url: string | null
   /** Fotos são omitidas quando a autorização histórica do roster não é comprovável. */
   restricaoImagem?: string
@@ -164,7 +164,7 @@ export interface RelatorioAnexoRaw {
   id: string
   atividadeId: string
   tipoAnexo: 'imagem' | 'documento'
-  caminhoStorage: string
+  caminhoFirestore: string
   nomeArquivo: string
   legenda: string
   url: string | null
