@@ -30,20 +30,21 @@ export function LoginScreen() {
 
     try {
       await login(email.trim(), password)
-    } catch (err: any) {
-      console.error('Erro de login:', err)
+    } catch (err) {
+      const authError = err as { code?: string; message?: string }
+      console.error('Erro de login:', authError)
       if (
-        err.code === 'auth/invalid-credential' ||
-        err.code === 'auth/user-not-found' ||
-        err.code === 'auth/wrong-password'
+        authError.code === 'auth/invalid-credential' ||
+        authError.code === 'auth/user-not-found' ||
+        authError.code === 'auth/wrong-password'
       ) {
         setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.')
-      } else if (err.code === 'auth/too-many-requests') {
+      } else if (authError.code === 'auth/too-many-requests') {
         setErrorMsg('Muitas tentativas sem sucesso. Aguarde alguns instantes.')
-      } else if (err.code === 'auth/invalid-email') {
+      } else if (authError.code === 'auth/invalid-email') {
         setErrorMsg('O endereço de e-mail informado é inválido.')
       } else {
-        setErrorMsg('Não foi possível entrar no sistema. Detalhes: ' + (err.message || 'Erro desconhecido.'))
+        setErrorMsg('Não foi possível entrar no sistema. Detalhes: ' + (authError.message || 'Erro desconhecido.'))
       }
     } finally {
       setSubmitting(false)
@@ -143,7 +144,7 @@ export function LoginScreen() {
               }}
               type="button"
             >
-              <Sparkles size={16} style={{ color: '#059669' }} /> Entrar em Modo Demonstração (Direção)
+              <Sparkles size={16} style={{ color: '#059669' }} /> Entrar em Modo Demonstração (dados fictícios)
             </button>
           </div>
 
@@ -152,15 +153,18 @@ export function LoginScreen() {
             <span>
               {!isConfigured ? (
                 <>
-                  <strong>Ambiente Local:</strong> Nenhuma chave do Firebase (.env.local) foi detectada.
-                  Você pode usar o botão <strong>"Modo Demonstração"</strong> acima para testar todos os fluxos e telas imediatamente.
+                  <strong>Ambiente local:</strong> nenhuma chave do Firebase foi detectada. Use o
+                  botão <strong>Modo Demonstração</strong> para explorar as telas com dados
+                  fictícios.{' '}
                 </>
               ) : (
                 <>
                   Ainda não tem acesso? Solicite à <strong>Direção</strong> o cadastro da sua conta
-                  na página <strong>Equipe / Autores</strong>.
+                  na página <strong>Equipe / Autores</strong>.{' '}
                 </>
               )}
+              O modo demonstração <strong>não grava nada no Firebase</strong> e não substitui o
+              login real.
             </span>
           </div>
         </form>

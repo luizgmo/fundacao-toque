@@ -15,6 +15,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth as getSecondaryAuth } from 'firebase/auth'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db, isFirebaseConfigured } from '../../lib/firebase'
+import { clearDemoData, setDemoModeEnabled } from '../../lib/demoMode'
 import type { UserProfile, UserRole } from '../../types/auth'
 
 interface AuthContextType {
@@ -79,8 +80,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Sessão de convidado sempre implica modo demonstração explícito.
+    try {
+      if (localStorage.getItem('ft_guest_session')) setDemoModeEnabled(true)
+    } catch {
+      // ignore
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Usuário real: nunca misturar com dados fictícios de demonstração.
+        setDemoModeEnabled(false)
+        try {
+          localStorage.removeItem('ft_guest_session')
+        } catch {
+          // ignore
+        }
         setCurrentUser(user)
         try {
           const userDoc = await getDoc(doc(db, 'usuarios', user.uid))
@@ -144,8 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginAsGuest = (papel: UserRole = 'direcao') => {
     const mockUser = {
       uid: GUEST_UID,
-      email: `${papel}@fundacaotoque.org.br`,
-      displayName: papel === 'direcao' ? 'Direção (Modo Teste)' : papel === 'pedagogia' ? 'Pedagoga (Modo Teste)' : 'Administrativo (Modo Teste)',
+      email: `${papel}@modo-demonstracao.local`,
+      displayName: papel === 'direcao' ? 'Direção (Modo Demonstração)' : papel === 'pedagogia' ? 'Pedagoga (Modo Demonstração)' : 'Administrativo (Modo Demonstração)',
     } as unknown as User
 
     const mockProfile: UserProfile = {
@@ -161,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    setDemoModeEnabled(true)
 
     setCurrentUser(mockUser)
     setUserProfile(mockProfile)
@@ -172,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    setDemoModeEnabled(false)
+    clearDemoData()
     try {
       await signOut(auth)
     } catch {
@@ -253,6 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {

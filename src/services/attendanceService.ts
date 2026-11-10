@@ -10,10 +10,54 @@ import {
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { AttendanceSession, AttendanceStatus, ContactEntry } from '../features/alunos/students-data'
-import { initialAttendanceSessions } from '../features/alunos/students-data'
+import { demoAttendanceSessions } from '../features/alunos/students-data'
+import {
+  DEMO_CONTACTS_STORAGE_KEY,
+  DEMO_SESSIONS_STORAGE_KEY,
+  isDemoModeEnabled,
+} from '../lib/demoMode'
 
 const SESSOES_COLLECTION = 'sessoes_chamada'
 const CONTATOS_COLLECTION = 'contatos_familia'
+
+type DemoContact = ContactEntry & { studentId: string }
+
+// Armazenamento local usado apenas no modo demonstração.
+function readDemoSessions(): Record<string, AttendanceSession> {
+  try {
+    const raw = localStorage.getItem(DEMO_SESSIONS_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {
+    // ignore
+  }
+  return { ...demoAttendanceSessions }
+}
+
+function writeDemoSessions(sessions: Record<string, AttendanceSession>) {
+  try {
+    localStorage.setItem(DEMO_SESSIONS_STORAGE_KEY, JSON.stringify(sessions))
+  } catch {
+    // ignore
+  }
+}
+
+function readDemoContacts(): DemoContact[] {
+  try {
+    const raw = localStorage.getItem(DEMO_CONTACTS_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {
+    // ignore
+  }
+  return []
+}
+
+function writeDemoContacts(contacts: DemoContact[]) {
+  try {
+    localStorage.setItem(DEMO_CONTACTS_STORAGE_KEY, JSON.stringify(contacts))
+  } catch {
+    // ignore
+  }
+}
 
 export interface SaveSessionInput {
   id: string
@@ -27,7 +71,7 @@ export interface SaveSessionInput {
   records: Record<string, { status: AttendanceStatus; observation: string }>
 }
 
-// Salva sessão de chamada no Firestore
+// Salva sessão de chamada no Firestore (ou localmente no modo demonstração)
 export async function saveAttendanceToFirestore(session: SaveSessionInput): Promise<void> {
   const presencasMap: Record<string, AttendanceStatus> = {}
   const observacoesMap: Record<string, string> = {}
@@ -38,6 +82,22 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
       observacoesMap[studentId] = rec.observation
     }
   })
+
+  if (isDemoModeEnabled()) {
+    const sessions = readDemoSessions()
+    sessions[session.id] = {
+      id: session.id,
+      date: session.date,
+      turmaId: session.turmaId,
+      scope: session.scope,
+      oficinaName: session.oficinaName,
+      registeredBy: session.registeredBy,
+      registeredAt: new Date().toISOString(),
+      records: session.records,
+    }
+    writeDemoSessions(sessions)
+    return
+  }
 
   const docData = {
     data_chamada: session.date,
@@ -55,22 +115,17 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
   // Grava com o ID determinístico: YYYY-MM-DD_TurmaId_(TurmaOficinaId | geral)
   const sessionDocId = session.id.replace(/\//g, '-')
   await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
-
-  // Atualiza o cache em memória só depois de gravar no banco
-  initialAttendanceSessions[session.id] = {
-    id: session.id,
-    date: session.date,
-    turmaId: session.turmaId,
-    scope: session.scope,
-    oficinaName: session.oficinaName,
-    registeredBy: session.registeredBy,
-    registeredAt: new Date().toISOString(),
-    records: session.records,
-  }
 }
 
-// Carrega sessão do Firestore com fallback para memória
+// Carrega sessão do Firestore (ou do armazenamento local no modo demonstração).
+// Retorna null quando a sessão não existe ou o banco está inacessível — nunca
+// devolve uma chamada fictícia em nome do Firestore.
 export async function getAttendanceFromFirestore(sessionId: string): Promise<AttendanceSession | null> {
+  if (isDemoModeEnabled()) {
+    const sessions = readDemoSessions()
+    return sessions[sessionId] || sessions[sessionId.replace(/\//g, '-')] || null
+  }
+
   const cleanId = sessionId.replace(/\//g, '-')
   try {
     const snap = await getDoc(doc(db, SESSOES_COLLECTION, cleanId))
@@ -103,8 +158,7 @@ export async function getAttendanceFromFirestore(sessionId: string): Promise<Att
     console.warn('Erro ao carregar sessão do Firestore:', err)
   }
 
-  // Fallback para sessões padrão em memória
-  return initialAttendanceSessions[sessionId] || null
+  return null
 }
 
 export interface SaveOccurrenceInput {
@@ -118,10 +172,26 @@ export interface SaveOccurrenceInput {
   note: string
 }
 
-// Salva contato com a família / ocorrência no Firestore (com fallback local)
+// Salva contato com a família / ocorrência no Firestore (ou localmente no modo demonstração)
 export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Promise<string> {
   const contactId = `contato-${input.studentId}-${Date.now()}`
   const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
+
+  if (isDemoModeEnabled()) {
+    const contacts = readDemoContacts()
+    contacts.unshift({
+      studentId: input.studentId,
+      faltaDate: input.faltaDate,
+      contactDate: todayStr,
+      type: input.type,
+      responsible: input.responsible,
+      reason: input.reason,
+      status: input.status,
+      note: input.note,
+    })
+    writeDemoContacts(contacts)
+    return contactId
+  }
 
   const docData = {
     aluno_id: input.studentId,
@@ -137,19 +207,31 @@ export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Pro
     criado_em: serverTimestamp(),
   }
 
-  try {
-    await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
-  } catch (firestoreErr) {
-    console.warn('Ocorrência gravada localmente (Firestore indisponível ou permissão pendente):', firestoreErr)
-  }
+  await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
   return contactId
 }
 
-// Escuta ocorrências de um aluno em tempo real
+// Escuta ocorrências de um aluno em tempo real (ou localmente no modo demonstração)
 export function subscribeStudentOccurrences(
   studentId: string,
   onUpdate: (contacts: ContactEntry[]) => void
 ) {
+  if (isDemoModeEnabled()) {
+    const contacts = readDemoContacts()
+      .filter((c) => c.studentId === studentId)
+      .map((c) => ({
+        faltaDate: c.faltaDate,
+        contactDate: c.contactDate,
+        type: c.type,
+        responsible: c.responsible,
+        reason: c.reason,
+        status: c.status,
+        note: c.note,
+      }))
+    onUpdate(contacts)
+    return () => {}
+  }
+
   const q = query(
     collection(db, CONTATOS_COLLECTION),
     where('aluno_id', '==', studentId)

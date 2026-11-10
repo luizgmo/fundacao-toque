@@ -82,16 +82,17 @@ export function GerenciarUsuarios() {
         setSuccessMsg(null)
         setShowModal(false)
       }, 1500)
-    } catch (err: any) {
-      console.error('Erro ao cadastrar autor:', err)
-      if (err.code === 'permission-denied') {
+    } catch (err) {
+      const authError = err as { code?: string; message?: string }
+      console.error('Erro ao cadastrar autor:', authError)
+      if (authError.code === 'permission-denied') {
         setErrorMsg('Sem permissão para salvar o perfil no banco. Confirme que você está logado com uma conta de Direção.')
-      } else if (err.code === 'auth/email-already-in-use') {
+      } else if (authError.code === 'auth/email-already-in-use') {
         setErrorMsg('Este e-mail já está em uso por outro usuário.')
-      } else if (err.code === 'auth/weak-password') {
+      } else if (authError.code === 'auth/weak-password') {
         setErrorMsg('A senha informada é fraca. Escolha uma senha mais segura.')
       } else {
-        setErrorMsg('Não foi possível cadastrar o usuário: ' + (err.message || 'Erro desconhecido.'))
+        setErrorMsg('Não foi possível cadastrar o usuário: ' + (authError.message || 'Erro desconhecido.'))
       }
     } finally {
       setSubmitting(false)

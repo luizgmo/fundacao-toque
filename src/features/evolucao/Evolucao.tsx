@@ -7,8 +7,9 @@ import {
   X,
 } from 'lucide-react'
 import type { Student } from '../alunos/students-data'
-import { findStudent, students as defaultStudents } from '../alunos/students-data'
 import { subscribeToStudents } from '../../services/studentsService'
+import type { StudentsSource } from '../../services/studentsService'
+import { DataNotice } from '../../components/DataNotice'
 import './Evolucao.css'
 
 type Props = {
@@ -17,13 +18,20 @@ type Props = {
 }
 
 export function Evolucao({ onViewStudent, onNovoRelatorio }: Props) {
-  const [allStudents, setAllStudents] = useState<Student[]>(defaultStudents)
+  const [allStudents, setAllStudents] = useState<Student[]>([])
+  const [source, setSource] = useState<StudentsSource | 'loading'>('loading')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
 
   useEffect(() => {
-    const unsub = subscribeToStudents((data) => {
-      setAllStudents(data)
-    })
+    const unsub = subscribeToStudents(
+      (data) => {
+        setAllStudents(data)
+        setLoadError(null)
+      },
+      (err) => setLoadError(err.message),
+      (nextSource) => setSource(nextSource)
+    )
     return () => unsub()
   }, [])
 
@@ -42,6 +50,24 @@ export function Evolucao({ onViewStudent, onNovoRelatorio }: Props) {
             </button>
           </div>
         </div>
+
+        {source === 'demo' && (
+          <DataNotice kind="demo">
+            <strong>Modo demonstração:</strong> os alunos exibidos são fictícios e ficam apenas
+            neste navegador. Nada é gravado no Firebase.
+          </DataNotice>
+        )}
+
+        {source === 'loading' && (
+          <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
+        )}
+
+        {(source === 'error' || loadError) && (
+          <DataNotice kind="error">
+            <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
+            {loadError ? `Detalhes: ${loadError}` : 'Verifique a conexão e as permissões de acesso.'}
+          </DataNotice>
+        )}
 
         <div className="form-card">
           <div className="evolucao-students-list">
@@ -67,7 +93,13 @@ export function Evolucao({ onViewStudent, onNovoRelatorio }: Props) {
               </div>
             ))}
             {allStudents.length === 0 && (
-              <p className="student-empty">Nenhum aluno cadastrado.</p>
+              <p className="student-empty">
+                {source === 'loading'
+                  ? 'Carregando alunos do banco de dados…'
+                  : source === 'error'
+                    ? 'Não foi possível carregar os alunos. Veja o aviso acima.'
+                    : 'Nenhum aluno cadastrado no banco de dados.'}
+              </p>
             )}
           </div>
         </div>
@@ -75,7 +107,7 @@ export function Evolucao({ onViewStudent, onNovoRelatorio }: Props) {
     )
   }
 
-  const student = findStudent(selectedStudentId)
+  const student = allStudents.find((item) => item.id === selectedStudentId)
   if (!student) {
     return (
       <div className="page-container evolucao-page">

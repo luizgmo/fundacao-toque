@@ -15,8 +15,10 @@ import {
 import { calculateAge } from './students-data'
 import type { Student } from './students-data'
 import { subscribeToStudents, inactivateStudent } from '../../services/studentsService'
+import type { StudentsSource } from '../../services/studentsService'
 import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
 import type { Turma } from '../../types/turmas'
+import { DataNotice } from '../../components/DataNotice'
 import './ListarAlunos.css'
 
 const TODAS_TURMAS = 'todas'
@@ -32,6 +34,8 @@ export function ListarAlunos({
   onEditStudent: (student: Student) => void
 }) {
   const [studentsList, setStudentsList] = useState<Student[]>([])
+  const [source, setSource] = useState<StudentsSource | 'loading'>('loading')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [turma, setTurma] = useState(TODAS_TURMAS)
   const [turmas, setTurmas] = useState<Turma[]>([])
@@ -46,9 +50,14 @@ export function ListarAlunos({
   useEffect(() => subscribeToTurmas(setTurmas), [])
 
   useEffect(() => {
-    const unsubscribe = subscribeToStudents((data) => {
-      setStudentsList(data)
-    })
+    const unsubscribe = subscribeToStudents(
+      (data) => {
+        setStudentsList(data)
+        setLoadError(null)
+      },
+      (err) => setLoadError(err.message),
+      (nextSource) => setSource(nextSource)
+    )
     return () => unsubscribe()
   }, [])
 
@@ -80,9 +89,9 @@ export function ListarAlunos({
       setActionFeedback(`Aluno ${studentToDelete.name} inativado com sucesso.`)
       setStudentToDelete(null)
       setTimeout(() => setActionFeedback(null), 3500)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao inativar aluno:', err)
-      alert('Erro ao inativar aluno: ' + (err.message || 'Erro desconhecido.'))
+      alert('Erro ao inativar aluno: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
     } finally {
       setDeleting(false)
     }
@@ -102,6 +111,24 @@ export function ListarAlunos({
           </button>
         </div>
       </div>
+
+      {source === 'demo' && (
+        <DataNotice kind="demo">
+          <strong>Modo demonstração:</strong> os alunos exibidos são fictícios e ficam apenas
+          neste navegador. Nada é gravado no Firebase.
+        </DataNotice>
+      )}
+
+      {source === 'loading' && (
+        <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
+      )}
+
+      {(source === 'error' || loadError) && (
+        <DataNotice kind="error">
+          <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
+          {loadError ? `Detalhes: ${loadError}` : 'Verifique a conexão e as permissões de acesso.'}
+        </DataNotice>
+      )}
 
       {actionFeedback && (
         <div
@@ -270,7 +297,13 @@ export function ListarAlunos({
               {filtered.length === 0 && (
                 <tr>
                   <td className="students-table-empty" colSpan={7}>
-                    Nenhum aluno encontrado para os filtros selecionados.
+                    {source === 'loading'
+                      ? 'Carregando alunos do banco de dados…'
+                      : source === 'error'
+                        ? 'Não foi possível carregar os alunos. Veja o aviso acima.'
+                        : studentsList.length === 0
+                          ? 'Nenhum aluno cadastrado no banco de dados.'
+                          : 'Nenhum aluno encontrado para os filtros selecionados.'}
                   </td>
                 </tr>
               )}

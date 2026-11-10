@@ -20,8 +20,9 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { AttendanceStatus, ContactEntry, Student } from '../alunos/students-data'
-import { addContactToStudent, saveAttendanceSession, students as defaultStudents } from '../alunos/students-data'
+import { addContactToStudent, saveAttendanceSession } from '../alunos/students-data'
 import { subscribeToStudents } from '../../services/studentsService'
+import type { StudentsSource } from '../../services/studentsService'
 import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
 import { subscribeToOficinas, subscribeToTurmaOficinas } from '../../services/oficinasService'
 import type { Turma } from '../../types/turmas'
@@ -31,6 +32,8 @@ import {
   saveAttendanceToFirestore,
   saveOccurrenceToFirestore,
 } from '../../services/attendanceService'
+import { isDemoModeEnabled } from '../../lib/demoMode'
+import { DataNotice } from '../../components/DataNotice'
 import { maskPhone } from '../../lib/masks'
 import { useAuth } from '../auth/AuthContext'
 import './Frequencia.css'
@@ -41,13 +44,20 @@ type Props = {
 
 export function Frequencia({ onViewStudentProfile }: Props) {
   const { userProfile } = useAuth()
-  const [allStudents, setAllStudents] = useState<Student[]>(defaultStudents)
+  const [allStudents, setAllStudents] = useState<Student[]>([])
+  const [studentsSource, setStudentsSource] = useState<StudentsSource | 'loading'>('loading')
+  const [studentsError, setStudentsError] = useState<string | null>(null)
 
   // Inscrição na lista de alunos do Firestore em tempo real
   useEffect(() => {
-    const unsub = subscribeToStudents((data) => {
-      setAllStudents(data)
-    })
+    const unsub = subscribeToStudents(
+      (data) => {
+        setAllStudents(data)
+        setStudentsError(null)
+      },
+      (err) => setStudentsError(err.message),
+      (source) => setStudentsSource(source)
+    )
     return () => unsub()
   }, [])
 
@@ -133,7 +143,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
   const [contactType, setContactType] = useState<string>('WhatsApp')
   const [contactResponsible, setContactResponsible] = useState<string>(
-    userProfile?.nome_completo || 'Ana Carolina Silva'
+    userProfile?.nome_completo || ''
   )
   const [contactReason, setContactReason] = useState<string>(
     'Faltas consecutivas recorrentes (Alerta institucional)'
@@ -256,7 +266,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       }
     })
 
-    const professional = userProfile?.nome_completo || 'Ana Carolina Silva'
+    const professional = userProfile?.nome_completo || 'Equipe'
     const turmaOficinaId = chamadaPorOficina ? oficinaAtual?.id : undefined
     const oficinaName = chamadaPorOficina ? oficinaAtual?.nome : undefined
 
@@ -272,22 +282,24 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         records: recordsMap,
       })
 
-      saveAttendanceSession({
-        id: sessionId,
-        date: dateStr,
-        turmaId,
-        scope,
-        oficinaName,
-        registeredBy: professional,
-        registeredAt: new Date().toISOString(),
-        records: recordsMap,
-      })
+      if (isDemoModeEnabled()) {
+        saveAttendanceSession({
+          id: sessionId,
+          date: dateStr,
+          turmaId,
+          scope,
+          oficinaName,
+          registeredBy: professional,
+          registeredAt: new Date().toISOString(),
+          records: recordsMap,
+        })
+      }
 
       setSaveSuccessMessage('Chamada salva no Firestore com sucesso! O histórico foi atualizado.')
       setTimeout(() => setSaveSuccessMessage(null), 4000)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao salvar chamada no Firestore:', err)
-      alert('Erro ao salvar chamada: ' + (err.message || 'Erro desconhecido.'))
+      alert('Erro ao salvar chamada: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
     } finally {
       setSavingChamada(false)
     }
@@ -302,7 +314,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setSelectedStudentForContact(student)
     setContactFaltaDate(defaultFaltaDate || dateStr)
     setContactType('WhatsApp')
-    setContactResponsible(userProfile?.nome_completo || 'Ana Carolina Silva')
+    setContactResponsible(userProfile?.nome_completo || '')
     setContactReason(
       defaultReason ||
         (student.faltasConsecutivas >= absenceThreshold
@@ -344,16 +356,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         note: contactNote,
       }
 
-      addContactToStudent(selectedStudentForContact.id, newContact)
+      if (isDemoModeEnabled()) {
+        addContactToStudent(selectedStudentForContact.id, newContact)
+      }
       setFamilyContactSuccess('Ocorrência e contato salvos com sucesso no Firestore!')
 
       setTimeout(() => {
         setFamilyContactSuccess(null)
         setSelectedStudentForContact(null)
       }, 1800)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao salvar ocorrência no Firestore:', err)
-      alert('Erro ao salvar ocorrência: ' + (err.message || 'Erro desconhecido.'))
+      alert('Erro ao salvar ocorrência: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
     } finally {
       setSavingContact(false)
     }
@@ -361,6 +375,30 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
   return (
     <div className="frequencia-page page-container">
+      {studentsSource === 'demo' && (
+        <DataNotice kind="demo">
+          <strong>Modo demonstração:</strong> alunos, chamadas e ocorrências são fictícios e ficam
+          apenas neste navegador. Nada é gravado no Firebase.
+        </DataNotice>
+      )}
+
+      {studentsSource === 'loading' && (
+        <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
+      )}
+
+      {(studentsSource === 'error' || studentsError) && (
+        <DataNotice kind="error">
+          <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
+          {studentsError ? `Detalhes: ${studentsError}` : 'Verifique a conexão e as permissões de acesso.'}
+        </DataNotice>
+      )}
+
+      {studentsSource === 'empty' && (
+        <DataNotice kind="empty">
+          Nenhum aluno cadastrado no banco de dados. Cadastre alunos para registrar a chamada.
+        </DataNotice>
+      )}
+
       {/* Top Banner / Introduction */}
       <header className="frequencia-header">
         <div>

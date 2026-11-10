@@ -17,7 +17,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react'
-import { calculateAge, findStudent } from './students-data'
+import { calculateAge } from './students-data'
 import type { Student, ContactEntry, DocumentEntry } from './students-data'
 import { getStudentById, getDocumentosComUrl } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
@@ -46,7 +46,8 @@ export function DetalheAluno({
   onEdit?: (student: Student) => void
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('visao')
-  const [student, setStudent] = useState<Student | null>(() => findStudent(studentId) || null)
+  const [student, setStudent] = useState<Student | null>(null)
+  const [loadedStudentId, setLoadedStudentId] = useState<string | null>(null)
   const [dbContacts, setDbContacts] = useState<ContactEntry[]>([])
   const [documentos, setDocumentos] = useState<(DocumentEntry & { url: string | null })[]>([])
   const [documentosError, setDocumentosError] = useState<string | null>(null)
@@ -55,8 +56,9 @@ export function DetalheAluno({
   useEffect(() => {
     let isMounted = true
     getStudentById(studentId).then((st) => {
-      if (isMounted && st) {
+      if (isMounted) {
         setStudent(st)
+        setLoadedStudentId(studentId)
       }
     })
 
@@ -84,9 +86,9 @@ export function DetalheAluno({
         if (isMounted && !cancel) {
           setDocumentos(docs)
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isMounted && !cancel) {
-          setDocumentosError(err.message || 'Falha ao carregar documentos')
+          setDocumentosError(err instanceof Error ? err.message : 'Falha ao carregar documentos')
           setDocumentos([])
         }
       } finally {
@@ -104,11 +106,23 @@ export function DetalheAluno({
     }
   }, [studentId])
 
+  const loadingStudent = loadedStudentId !== studentId
+
+  if (loadingStudent) {
+    return (
+      <div className="page-container">
+        <div className="form-card">
+          <p>Carregando dados do aluno no banco de dados…</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!student) {
     return (
       <div className="page-container">
         <div className="form-card">
-          <p>Aluno não encontrado.</p>
+          <p>Aluno não encontrado no banco de dados.</p>
           <button className="button secondary" onClick={onBack} type="button">
             <ChevronLeft size={18} /> Voltar para Alunos
           </button>
@@ -297,14 +311,14 @@ export function DetalheAluno({
 
             <div className="student-documents-grid">
               {(documentos.length > 0 ? documentos : student.documentos).map((doc) => {
-                const nome = 'nomeArquivoOriginal' in doc ? doc.nomeArquivoOriginal : doc.name
-                const tipo = 'tipo' in doc ? doc.tipo : (doc.kind === 'lgpd' ? 'autorizacao_imagem' : 'ficha_medica')
-                const dataUrl = 'dataUrl' in doc ? doc.dataUrl : ''
-                const enviadoEm = 'enviadoEm' in doc ? doc.enviadoEm : (doc.attachedAt || '')
+                const nome = doc.nomeArquivoOriginal
+                const tipo = doc.tipo
+                const dataUrl = doc.dataUrl
+                const enviadoEm = doc.enviadoEm
                 const ehImagem = dataUrl.startsWith('data:image/')
                 const ehPdf = dataUrl.startsWith('data:application/pdf') || tipo === 'ficha_medica'
                 return (
-                  <div className="student-document-card" key={doc.id || doc.name}>
+                  <div className="student-document-card" key={doc.id}>
                     {tipo === 'autorizacao_imagem' ? <ShieldCheck size={28} /> : <FileText size={28} />}
                     <p title={nome}>{nome}</p>
                     {ehImagem && dataUrl ? (

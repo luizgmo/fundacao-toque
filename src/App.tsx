@@ -46,6 +46,7 @@ import { TrocarSenha } from './features/auth/TrocarSenha'
 import { Evolucao } from './features/evolucao/Evolucao'
 import { useAuth } from './features/auth/AuthContext'
 import { subscribeToStudents } from './services/studentsService'
+import type { StudentsSource } from './services/studentsService'
 import {
   getRelatoriosDoAluno,
   saveRelatorio,
@@ -64,7 +65,7 @@ import type { AlunoFaltaRecorrente, TimelineItem } from './services/dashboardSer
 import type { UserProfile, UserRole } from './types/auth'
 import { ROLE_LABELS } from './types/auth'
 import type { Student } from './features/alunos/students-data'
-import { findStudent } from './features/alunos/students-data'
+import { DataNotice } from './components/DataNotice'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
@@ -234,12 +235,10 @@ function Sidebar({
 
 function Topbar({
   screen,
-  studentName,
   userProfile,
   onOpenMenu,
 }: {
   screen: Screen
-  studentName?: string
   userProfile?: UserProfile | null
   onOpenMenu: () => void
 }) {
@@ -248,7 +247,7 @@ function Topbar({
     reports: 'Relatórios',
     register: 'Cadastrar aluno',
     students: 'Alunos',
-    'student-detail': studentName ?? 'Perfil do aluno',
+    'student-detail': 'Perfil do aluno',
     frequencia: 'Frequência e Registro de Chamada',
     usuarios: 'Equipe e Autores do Sistema',
     turmas: 'Turmas',
@@ -267,7 +266,7 @@ function Topbar({
         .toUpperCase()
     : 'AS'
 
-  const displayName = userProfile?.nome_completo || 'Ana Carolina Silva'
+  const displayName = userProfile?.nome_completo || 'Equipe'
   const displayRole = userProfile ? ROLE_LABELS[userProfile.papel] : 'Pedagoga'
 
   return (
@@ -591,19 +590,15 @@ type ReportValues = {
 }
 
 const initialReport: ReportValues = {
-  student: 'mariana-oliveira',
+  student: '',
   reportType: 'Semestral',
-  periodStart: '2026-01-01',
-  periodEnd: '2026-06-30',
+  periodStart: '',
+  periodEnd: '',
   professional: '',
-  evolution:
-    'Mariana demonstrou evolução gradual na participação das atividades coletivas e maior segurança para realizar tarefas com orientação.',
-  advances:
-    'Maior interação com os colegas, melhor organização da rotina e participação frequente nas oficinas de musicalização.',
-  difficulties:
-    'Ainda necessita de apoio para mudanças inesperadas de atividade e para manter a concentração por períodos prolongados.',
-  referrals:
-    'Manter estímulos visuais na rotina e ampliar, de forma progressiva, as atividades realizadas em pequenos grupos.',
+  evolution: '',
+  advances: '',
+  difficulties: '',
+  referrals: '',
   finalNotes: '',
 }
 
@@ -622,6 +617,8 @@ function PedagogicalReport({ initialStudentId }: { initialStudentId?: string | n
   const [attachmentName, setAttachmentName] = useState('')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [students, setStudents] = useState<Student[]>([])
+  const [studentsSource, setStudentsSource] = useState<StudentsSource | 'loading'>('loading')
+  const [studentsError, setStudentsError] = useState<string | null>(null)
   const [history, setHistory] = useState<RelatorioPedagogico[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -634,19 +631,24 @@ function PedagogicalReport({ initialStudentId }: { initialStudentId?: string | n
 
   // Alunos reais do Firestore para o select (antes eram 3 fixos)
   useEffect(() => {
-    const unsub = subscribeToStudents((list) => {
-      setStudents(list)
-      setValues((current) => {
-        if (list.length === 0) return current
-        const preferredId =
-          initialStudentId && list.some((s) => s.id === initialStudentId)
-            ? initialStudentId
-            : null
-        const targetId = preferredId || (list.some((s) => s.id === current.student) ? current.student : list[0].id)
-        if (targetId === current.student) return current
-        return { ...current, student: targetId }
-      })
-    })
+    const unsub = subscribeToStudents(
+      (list) => {
+        setStudents(list)
+        setStudentsError(null)
+        setValues((current) => {
+          if (list.length === 0) return current
+          const preferredId =
+            initialStudentId && list.some((s) => s.id === initialStudentId)
+              ? initialStudentId
+              : null
+          const targetId = preferredId || (list.some((s) => s.id === current.student) ? current.student : list[0].id)
+          if (targetId === current.student) return current
+          return { ...current, student: targetId }
+        })
+      },
+      (err) => setStudentsError(err.message),
+      (source) => setStudentsSource(source)
+    )
     return () => unsub()
   }, [initialStudentId])
 
@@ -841,6 +843,30 @@ function PedagogicalReport({ initialStudentId }: { initialStudentId?: string | n
         </p>
       )}
 
+      {studentsSource === 'demo' && (
+        <DataNotice kind="demo">
+          <strong>Modo demonstração:</strong> os alunos e relatórios são fictícios e ficam apenas
+          neste navegador. Nada é gravado no Firebase.
+        </DataNotice>
+      )}
+
+      {studentsSource === 'loading' && (
+        <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
+      )}
+
+      {(studentsSource === 'error' || studentsError) && (
+        <DataNotice kind="error">
+          <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
+          {studentsError ? `Detalhes: ${studentsError}` : 'Verifique a conexão e as permissões de acesso.'}
+        </DataNotice>
+      )}
+
+      {studentsSource === 'empty' && (
+        <DataNotice kind="empty">
+          Nenhum aluno cadastrado no banco de dados. Cadastre um aluno antes de criar relatórios.
+        </DataNotice>
+      )}
+
       <div className="report-layout">
         <form className="report-form" id="pedagogical-report-form" onSubmit={finishReport}>
           <section className="form-card student-summary-card">
@@ -860,7 +886,15 @@ function PedagogicalReport({ initialStudentId }: { initialStudentId?: string | n
                   required
                   value={values.student}
                 >
-                  {students.length === 0 && <option value="">Carregando alunos do banco…</option>}
+                  {students.length === 0 && (
+                    <option value="">
+                      {studentsSource === 'loading'
+                        ? 'Carregando alunos do banco…'
+                        : studentsSource === 'error'
+                          ? 'Falha ao carregar alunos'
+                          : 'Nenhum aluno cadastrado'}
+                    </option>
+                  )}
                   {students.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -1200,10 +1234,18 @@ function App() {
         userRole={userProfile?.papel}
       />
       <div className="app-main">
+        {isGuest && (
+          <div style={{ padding: '0.75rem 1.5rem 0' }}>
+            <DataNotice kind="demo">
+              <strong>Modo demonstração ativo.</strong> Todos os dados exibidos são fictícios e
+              ficam apenas neste navegador. Operações que exigem autenticação real estão
+              desabilitadas.
+            </DataNotice>
+          </div>
+        )}
         <Topbar
           onOpenMenu={() => setSidebarOpen(true)}
           screen={screen}
-          studentName={selectedStudentId ? findStudent(selectedStudentId)?.name : undefined}
           userProfile={userProfile}
         />
         <main>

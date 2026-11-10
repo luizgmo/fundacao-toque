@@ -171,9 +171,9 @@ const WORKSHOP_GARDEN = 'seed-oficina-horta'
 const CW_MUSIC_A = 'seed-cw-music-manha'
 const CW_GARDEN_A = 'seed-cw-horta-manha'
 const CW_DANCE_B = 'seed-cw-dance-tarde'
-const STUDENT_1 = 'seed-student-ana'
-const STUDENT_2 = 'seed-student-bruno'
-const STUDENT_3 = 'seed-student-carla'
+const STUDENT_1 = 'seed-student-1'
+const STUDENT_2 = 'seed-student-2'
+const STUDENT_3 = 'seed-student-3'
 const GUARDIAN_1 = 'seed-guardian-1'
 const GUARDIAN_2 = 'seed-guardian-2'
 const SESSION_1 = 'seed-session-manha-1'
@@ -185,27 +185,27 @@ function now() {
 }
 // ==== PARTE 2: usuários, alunos, saúde ====
 const usuarios = {
-  [DIRECTION_UID]: { nome_completo: 'Maria Silva (Direção)', email: 'direcao@exemplo.com', papel: 'direcao', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
-  [PEDAGOGUE_UID]: { nome_completo: 'Joana Souza (Pedagoga)', email: 'pedagoga@exemplo.com', papel: 'pedagogia', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
-  [ADMIN_UID]: { nome_completo: 'Carlos Lima (Administrativo)', email: 'admin@exemplo.com', papel: 'administrativo', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
-  [USER_1]: { nome_completo: 'Rita Ferreira (Pedagoga)', email: 'pedagoga2@exemplo.com', papel: 'pedagogia', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
+  [DIRECTION_UID]: { nome_completo: 'Usuário Direção (seed)', email: 'direcao@exemplo.test', papel: 'direcao', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
+  [PEDAGOGUE_UID]: { nome_completo: 'Usuário Pedagogia (seed)', email: 'pedagogia@exemplo.test', papel: 'pedagogia', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
+  [ADMIN_UID]: { nome_completo: 'Usuário Administrativo (seed)', email: 'administrativo@exemplo.test', papel: 'administrativo', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
+  [USER_1]: { nome_completo: 'Usuário Pedagogia 2 (seed)', email: 'pedagogia2@exemplo.test', papel: 'pedagogia', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
 }
 
 const alunos = {
   [STUDENT_1]: {
-    nome_completo: 'Ana Souza Pereira', nome_busca: 'ana souza pereira',
+    nome_completo: 'Aluno Exemplo 01', nome_busca: 'aluno exemplo 01',
     data_nascimento: '2015-03-12', status: 'ativo', uso_imagem_autorizado: true,
     consentimento_imagem_em: now(), caminho_foto: null,
     criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [STUDENT_2]: {
-    nome_completo: 'Bruno Alves Santos', nome_busca: 'bruno alves santos',
+    nome_completo: 'Aluno Exemplo 02', nome_busca: 'aluno exemplo 02',
     data_nascimento: '2013-07-25', status: 'ativo', uso_imagem_autorizado: false,
     consentimento_imagem_em: null, caminho_foto: null,
     criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [STUDENT_3]: {
-    nome_completo: 'Carla Oliveira Costa', nome_busca: 'carla oliveira costa',
+    nome_completo: 'Aluno Exemplo 03', nome_busca: 'aluno exemplo 03',
     data_nascimento: '2016-11-02', status: 'ativo', uso_imagem_autorizado: true,
     consentimento_imagem_em: now(), caminho_foto: null,
     criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
@@ -233,13 +233,13 @@ const fichasMedicasPaths = {
 // ==== PARTE 3: responsáveis, turmas, oficinas e vínculos ====
 const responsaveis = {
   [GUARDIAN_1]: {
-    nome_completo: 'Fernanda Souza Pereira', parentesco: 'mae',
-    telefone: '+5516999990001', telefone_alternativo: null, email: 'fernanda@exemplo.com',
+    nome_completo: 'Responsável Exemplo 01', parentesco: 'responsavel',
+    telefone: '+5500000000001', telefone_alternativo: null, email: 'responsavel01@exemplo.test',
     principal: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [GUARDIAN_2]: {
-    nome_completo: 'Marcos Alves', parentesco: 'pai',
-    telefone: '+5516999990002', telefone_alternativo: null, email: null,
+    nome_completo: 'Responsável Exemplo 02', parentesco: 'responsavel',
+    telefone: '+5500000000002', telefone_alternativo: null, email: null,
     principal: true, criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
 }
