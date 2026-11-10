@@ -204,6 +204,10 @@ aluno_id: string                        obrigatório
 turma_id: string                          obrigatório
 data_inicio: string                        obrigatório
   formato: YYYY-MM-DD
+data_inicio_estimativa: boolean             opcional
+origem_data_inicio: string                  opcional
+  valores sugeridos: informado | menor_data_atividade_turma |
+                     data_execucao_migracao | legado_desconhecido
 data_fim: string                          opcional
   formato: YYYY-MM-DD
 status: string                            obrigatório
@@ -438,7 +442,15 @@ atualizado_em: Timestamp                     obrigatório
 | `sessoes_chamada` | `turma_oficina_id`, `data_chamada DESC` |
 | `modelos_formulario` | `tipo_modelo`, `versao DESC` |
 
-Índices de subcoleções herdam as consultas do pai e em geral não precisam de índices compostos extras nesta escala.
+Índices não são herdados de um documento pai. Uma consulta a uma subcoleção específica e uma consulta `collectionGroup` têm escopos distintos; a necessidade de índice depende dos filtros, ordenações e escopo da consulta, não do tamanho atual dos dados. Conferir as queries reais contra `firestore.indexes.json` e validar em homologação antes de concluir que um índice é dispensável.
+
+O deploy dos índices declarados é feito separadamente das regras:
+
+```bash
+npx firebase-tools deploy --only firestore:indexes --project ID_HOMOLOGACAO
+```
+
+Substituir `ID_HOMOLOGACAO` somente após identificar o projeto Firebase aprovado. O comando não foi executado nesta auditoria; acompanhar no Console até os índices necessários ficarem prontos.
 
 ## Critérios de aceite
 
