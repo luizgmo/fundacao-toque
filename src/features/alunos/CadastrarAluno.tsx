@@ -447,9 +447,12 @@ export function CadastrarAluno({
 
       setSubmitted(true)
       if (onSaveSuccess) onSaveSuccess(alunoId)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao salvar aluno:', err)
-      setSaveError('Erro ao gravar dados no Firestore: ' + (err.message || 'Tente novamente.'))
+      setSaveError(
+        'Erro ao gravar dados no Firestore: ' +
+          (err instanceof Error ? err.message : 'Tente novamente.')
+      )
     } finally {
       setSaving(false)
     }
@@ -493,8 +496,8 @@ export function CadastrarAluno({
           delete next[envio.tipo]
           return next
         })
-      } catch (err: any) {
-        const msg = err.message || 'Falha ao enviar arquivo'
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Falha ao enviar arquivo'
         // O uploadDocumento já salvou localmente mesmo quando o Firebase falha,
         // então consideramos sucesso (pode ser apenas local).
         setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
@@ -620,7 +623,7 @@ export function CadastrarAluno({
                 <Camera size={20} />
               </span>
               <label className="button secondary photo-upload-button">
-                <input accept="image/*" onChange={pickFile(setPhotoName)} type="file" />
+                <input accept="image/*" onChange={(event) => setPhotoName(event.target.files?.[0]?.name || '')} type="file" />
                 <Camera size={16} /> {photoName || 'Anexar foto (opcional)'}
               </label>
             </div>
@@ -879,7 +882,6 @@ export function CadastrarAluno({
                 />
               )}
               <UploadDocumentoStatus
-                tipo="outro"
                 status={uploadStatus['outro']}
                 progress={uploadProgress['outro'] ?? 0}
                 error={uploadError['outro']}

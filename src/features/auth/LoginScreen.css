@@ -160,15 +160,21 @@
   box-shadow: 0 0 0 3px rgba(31, 111, 181, 0.14);
 }
 
-.toggle-password-btn:hover {
-  color: var(--blue-700);
-}
+.toggle-password-btn {
+  position: absolute;
+  right: 0.85rem;
+  display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #8d99ae;
+  cursor: pointer;
 }
 
 .toggle-password-btn:hover {
-  color: #2d6a4f;
+  color: var(--blue-700);
 }
 
 .login-submit-button {
