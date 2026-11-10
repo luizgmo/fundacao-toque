@@ -341,22 +341,28 @@ Definidos em `firestore.indexes.json` e aplicados automaticamente no deploy:
 
 ## 3.6. Controle de acesso (Security Rules)
 
-Arquivo `firestore.rules` — **nega tudo por padrão** e concede acesso por perfil:
+Arquivo `firestore.rules` — nega tudo por padrão. **A matriz abaixo é a proposta técnica em implementação e ainda requer validação formal da Fundação; não deve ser tratada como matriz aprovada nem prova das regras publicadas no Firebase.** Usuário deve ter perfil existente, papel reconhecido e `ativo == true` para acessar dados operacionais. O perfil próprio pode ser consultado para autenticação; a listagem/gestão de perfis é reservada à Direção.
 
 | Recurso | Leitura | Escrita |
 |---|---|---|
-| usuarios | autenticados | Direção |
-| alunos | autenticados | Direção/Administrativo (criar/excluir); autenticados (atualizar) |
+| usuarios | próprio perfil mínimo; Direção lista/consulta equipe | Direção; usuário não altera seu papel/ativo; exclusão negada |
+| usuarios_publicos | diretório mínimo (nome, papel e ativo) para papéis ativos | Direção provisiona/sincroniza; exclusão negada |
+| alunos | papéis ativos | Direção/Administrativo criam e excluem; três papéis atualizam |
 | ficha_medica | Direção + Pedagogia | Direção |
-| responsaveis / documentos | autenticados | Direção/Administrativo |
-| turmas, oficinas, turma_oficinas, matriculas | autenticados | Direção, Pedagogia ou Administrativo |
-| aluno_oficinas | autenticados | Direção/Pedagogia |
-| registros_atividade, evolução, anexos | autenticados | autenticados (criar/atualizar); exclusão só Direção |
-| modelos_formulario | autenticados | Direção/Pedagogia |
-| relatorios_pedagogicos | autenticados | Direção/Pedagogia |
-| sessoes_chamada (frequência) | autenticados | Direção, Pedagogia ou Administrativo |
-| contatos_familia | autenticados | Direção, Pedagogia ou Administrativo |
-| relatorios_gerados, configuracoes_sistema | autenticados | Direção |
+| responsáveis / documentos | papéis ativos | Direção/Administrativo |
+| turmas, oficinas, turma_oficinas, matriculas | papéis ativos | Direção, Pedagogia ou Administrativo |
+| aluno_oficinas | papéis ativos | Direção/Pedagogia |
+| registros_atividade e anexos | papéis ativos | papéis ativos criam/atualizam atividade; exclusão e alterações de anexo reservadas à Direção |
+| evolução | papéis ativos | Direção/Pedagogia; exclusão Direção |
+| modelos_formulario | papéis ativos | Direção/Pedagogia |
+| relatorios_pedagogicos e anexos | Direção/Pedagogia | Direção/Pedagogia; exclusão do relatório reservada à Direção |
+| sessoes_chamada (frequência) | papéis ativos | Direção, Pedagogia ou Administrativo |
+| contatos_familia | papéis ativos | três papéis criam; atualização negada para preservar histórico; exclusão Direção |
+| relatorios_gerados, configuracoes_sistema | Direção | Direção |
+
+Essa matriz descreve a configuração local em implementação, e não cobre ainda escopo por turma, autorização de campos individuais ou segregação de dados médicos duplicados no documento `alunos`. O Firestore não mascara campos individuais de um documento autorizado para leitura. Remover dados sensíveis duplicados requer migração e validação próprias. O provisionamento da primeira conta de Direção deve ocorrer por canal confiável, fora da tela pública. Usuários já existentes precisam de um backfill confiável para `usuarios_publicos` antes de seus nomes aparecerem nos seletores; a tela atual de provisionamento grava essa projeção para novas contas.
+
+Em 10/11/2026, o usuário aprovou que Direção e Pedagogia consultem CID, deficiência e ficha médica. Isso valida a leitura restrita da subcoleção `ficha_medica`; dados médicos duplicados no documento de `alunos` permanecem acessíveis a todos os papéis ativos até a migração e a remoção das cópias.
 
 ## 3.7. População e teste do banco (seed)
 
