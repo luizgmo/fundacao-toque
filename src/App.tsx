@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { ChangeEvent, FormEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ClipboardCheck,
   Clock3,
-  Download,
   FileBarChart,
   FileText,
   GraduationCap,
@@ -22,12 +21,9 @@ import {
   Menu,
   MessageCircle,
   Palette,
-  Paperclip,
-  Save,
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  Upload,
   UserRound,
   Users,
   X,
@@ -41,6 +37,7 @@ import { Turmas } from './features/turmas/Turmas'
 import { Oficinas } from './features/oficinas/Oficinas'
 import { Atividades } from './features/atividades/Atividades'
 import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
+import { PedagogicalReport } from './features/relatorios/PedagogicalReport'
 import { LoginScreen } from './features/auth/LoginScreen'
 import { useAuth } from './features/auth/AuthContext'
 import type { UserProfile, UserRole } from './types/auth'
@@ -478,351 +475,6 @@ function Dashboard({
   )
 }
 
-type ReportValues = {
-  student: string
-  reportType: string
-  periodStart: string
-  periodEnd: string
-  professional: string
-  evolution: string
-  advances: string
-  difficulties: string
-  referrals: string
-  finalNotes: string
-}
-
-const initialReport: ReportValues = {
-  student: 'mariana-oliveira',
-  reportType: 'Semestral',
-  periodStart: '2026-01-01',
-  periodEnd: '2026-06-30',
-  professional: 'Ana Carolina Silva',
-  evolution:
-    'Mariana demonstrou evolução gradual na participação das atividades coletivas e maior segurança para realizar tarefas com orientação.',
-  advances:
-    'Maior interação com os colegas, melhor organização da rotina e participação frequente nas oficinas de musicalização.',
-  difficulties:
-    'Ainda necessita de apoio para mudanças inesperadas de atividade e para manter a concentração por períodos prolongados.',
-  referrals:
-    'Manter estímulos visuais na rotina e ampliar, de forma progressiva, as atividades realizadas em pequenos grupos.',
-  finalNotes: '',
-}
-
-function PedagogicalReport() {
-  const [values, setValues] = useState<ReportValues>(initialReport)
-  const [areas, setAreas] = useState({
-    cognitive: 'Em evolução',
-    motor: 'Adequado',
-    social: 'Em evolução',
-    communication: 'Em evolução',
-    autonomy: 'Necessita apoio',
-  })
-  const [status, setStatus] = useState<'Rascunho' | 'Concluído'>('Rascunho')
-  const [savedMessage, setSavedMessage] = useState('Salvo automaticamente às 14:18')
-  const [attachmentName, setAttachmentName] = useState('')
-
-  const updateValue = (field: keyof ReportValues, value: string) => {
-    setValues((current) => ({ ...current, [field]: value }))
-    setStatus('Rascunho')
-  }
-
-  const saveDraft = () => {
-    setStatus('Rascunho')
-    setSavedMessage(
-      'Rascunho salvo às ' +
-        new Intl.DateTimeFormat('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }).format(new Date()),
-    )
-  }
-
-  const finishReport = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setStatus('Concluído')
-    setSavedMessage('Relatório finalizado e pronto para consulta')
-  }
-
-  const selectAttachment = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0]
-    setAttachmentName(selectedFile?.name ?? '')
-  }
-
-  return (
-    <div className="report-page page-container">
-      <div className="report-page-heading">
-        <div>
-          <span className="eyebrow">Acompanhamento pedagógico</span>
-          <h2>Novo relatório pedagógico</h2>
-          <p>Registre a evolução do aluno durante o período avaliado.</p>
-        </div>
-        <div className="report-heading-actions">
-          <span className={'report-status ' + (status === 'Concluído' ? 'completed' : '')}>
-            {status}
-          </span>
-          <button className="button secondary" onClick={saveDraft} type="button">
-            <Save size={18} />
-            Salvar rascunho
-          </button>
-          <button className="button primary" form="pedagogical-report-form" type="submit">
-            <CheckCircle2 size={18} />
-            Finalizar relatório
-          </button>
-        </div>
-      </div>
-
-      <div className="report-layout">
-        <form className="report-form" id="pedagogical-report-form" onSubmit={finishReport}>
-          <section className="form-card student-summary-card">
-            <div className="form-card-heading">
-              <span className="form-heading-icon"><UserRound size={21} /></span>
-              <div>
-                <h3>Identificação do relatório</h3>
-                <p>Selecione o aluno e informe o período avaliado.</p>
-              </div>
-            </div>
-
-            <div className="form-grid">
-              <label className="field field-wide">
-                <span>Aluno</span>
-                <select
-                  onChange={(event) => updateValue('student', event.target.value)}
-                  required
-                  value={values.student}
-                >
-                  <option value="mariana-oliveira">Mariana Oliveira</option>
-                  <option value="lucas-almeida">Lucas Almeida</option>
-                  <option value="pedro-henrique">Pedro Henrique</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Tipo de relatório</span>
-                <select
-                  onChange={(event) => updateValue('reportType', event.target.value)}
-                  value={values.reportType}
-                >
-                  <option>Diário</option>
-                  <option>Semestral</option>
-                  <option>Anual</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Início do período</span>
-                <input
-                  onChange={(event) => updateValue('periodStart', event.target.value)}
-                  required
-                  type="date"
-                  value={values.periodStart}
-                />
-              </label>
-              <label className="field">
-                <span>Fim do período</span>
-                <input
-                  onChange={(event) => updateValue('periodEnd', event.target.value)}
-                  required
-                  type="date"
-                  value={values.periodEnd}
-                />
-              </label>
-              <label className="field field-wide">
-                <span>Profissional responsável</span>
-                <input
-                  onChange={(event) => updateValue('professional', event.target.value)}
-                  required
-                  value={values.professional}
-                />
-              </label>
-            </div>
-
-            <div className="selected-student">
-              <span className="student-avatar">MO</span>
-              <div>
-                <strong>Mariana Oliveira</strong>
-                <span>12 anos · Turma B · Período da manhã</span>
-              </div>
-              <span className="status-pill success">Cadastro ativo</span>
-            </div>
-          </section>
-
-          <section className="form-card">
-            <div className="form-card-heading">
-              <span className="form-heading-icon"><TrendingUp size={21} /></span>
-              <div>
-                <h3>Evolução pedagógica</h3>
-                <p>Descreva os principais aspectos observados no período.</p>
-              </div>
-            </div>
-
-            <label className="field">
-              <span>Evolução observada</span>
-              <textarea
-                onChange={(event) => updateValue('evolution', event.target.value)}
-                required
-                rows={5}
-                value={values.evolution}
-              />
-              <small>Informe mudanças percebidas no desenvolvimento e na participação do aluno.</small>
-            </label>
-
-            <div className="two-column-fields">
-              <label className="field">
-                <span>Avanços identificados</span>
-                <textarea
-                  onChange={(event) => updateValue('advances', event.target.value)}
-                  required
-                  rows={5}
-                  value={values.advances}
-                />
-              </label>
-              <label className="field">
-                <span>Dificuldades observadas</span>
-                <textarea
-                  onChange={(event) => updateValue('difficulties', event.target.value)}
-                  required
-                  rows={5}
-                  value={values.difficulties}
-                />
-              </label>
-            </div>
-          </section>
-
-          <section className="form-card">
-            <div className="form-card-heading">
-              <span className="form-heading-icon"><BarChart3 size={21} /></span>
-              <div>
-                <h3>Avaliação por área</h3>
-                <p>Classifique o desenvolvimento nas áreas acompanhadas pela equipe.</p>
-              </div>
-            </div>
-            <div className="area-evaluation-grid">
-              {[
-                ['cognitive', 'Desenvolvimento cognitivo'],
-                ['motor', 'Desenvolvimento motor'],
-                ['social', 'Interação social'],
-                ['communication', 'Comunicação'],
-                ['autonomy', 'Autonomia'],
-              ].map(([key, label]) => (
-                <label className="area-field" key={key}>
-                  <span>{label}</span>
-                  <select
-                    onChange={(event) => {
-                      setAreas((current) => ({ ...current, [key]: event.target.value }))
-                      setStatus('Rascunho')
-                    }}
-                    value={areas[key as keyof typeof areas]}
-                  >
-                    <option>Adequado</option>
-                    <option>Em evolução</option>
-                    <option>Necessita apoio</option>
-                    <option>Não avaliado</option>
-                  </select>
-                </label>
-              ))}
-            </div>
-          </section>
-
-          <section className="form-card">
-            <div className="form-card-heading">
-              <span className="form-heading-icon"><BookOpenCheck size={21} /></span>
-              <div>
-                <h3>Encaminhamentos e observações</h3>
-                <p>Indique recomendações para a continuidade do acompanhamento.</p>
-              </div>
-            </div>
-            <label className="field">
-              <span>Encaminhamentos</span>
-              <textarea
-                onChange={(event) => updateValue('referrals', event.target.value)}
-                required
-                rows={4}
-                value={values.referrals}
-              />
-            </label>
-            <label className="field">
-              <span>Observações finais <em>(opcional)</em></span>
-              <textarea
-                onChange={(event) => updateValue('finalNotes', event.target.value)}
-                placeholder="Adicione informações complementares relevantes para a equipe."
-                rows={4}
-                value={values.finalNotes}
-              />
-            </label>
-          </section>
-
-          <section className="form-card">
-            <div className="form-card-heading">
-              <span className="form-heading-icon"><Paperclip size={21} /></span>
-              <div>
-                <h3>Anexos</h3>
-                <p>Inclua fotos ou documentos relacionados ao período avaliado.</p>
-              </div>
-            </div>
-            <label className="upload-area">
-              <input accept=".pdf,image/*" onChange={selectAttachment} type="file" />
-              <span className="upload-icon"><Upload size={23} /></span>
-              <strong>{attachmentName || 'Selecione um arquivo para anexar'}</strong>
-              <span>PDF, JPG ou PNG · máximo de 10 MB</span>
-            </label>
-          </section>
-
-          <div className="mobile-form-actions">
-            <button className="button secondary" onClick={saveDraft} type="button">
-              <Save size={18} /> Salvar rascunho
-            </button>
-            <button className="button primary" type="submit">
-              <CheckCircle2 size={18} /> Finalizar relatório
-            </button>
-          </div>
-        </form>
-
-        <aside className="report-aside">
-          <SectionCard title="Resumo">
-            <dl className="report-summary">
-              <div><dt>Aluno</dt><dd>Mariana Oliveira</dd></div>
-              <div><dt>Turma</dt><dd>Turma B</dd></div>
-              <div><dt>Período</dt><dd>1º semestre de 2026</dd></div>
-              <div><dt>Responsável</dt><dd>Ana Carolina Silva</dd></div>
-            </dl>
-            <div className="save-feedback">
-              <CheckCircle2 size={16} />
-              <span>{savedMessage}</span>
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Relatórios anteriores">
-            <div className="report-history">
-              <article>
-                <span className="history-icon"><FileText size={19} /></span>
-                <div>
-                  <strong>Relatório anual</strong>
-                  <span>Janeiro a dezembro de 2025</span>
-                  <small>Concluído em 18/12/2025</small>
-                </div>
-                <button aria-label="Baixar relatório anual" type="button"><Download size={17} /></button>
-              </article>
-              <article>
-                <span className="history-icon"><FileText size={19} /></span>
-                <div>
-                  <strong>Relatório semestral</strong>
-                  <span>Janeiro a junho de 2025</span>
-                  <small>Concluído em 02/07/2025</small>
-                </div>
-                <button aria-label="Baixar relatório semestral" type="button"><Download size={17} /></button>
-              </article>
-            </div>
-            <button className="text-button" type="button">Ver histórico completo</button>
-          </SectionCard>
-
-          <div className="privacy-note">
-            <AlertTriangle size={19} />
-            <p>Este relatório contém dados pessoais. Compartilhe somente com profissionais autorizados.</p>
-          </div>
-        </aside>
-      </div>
-    </div>
-  )
-}
-
 function App() {
   const { currentUser, userProfile, loading, logout } = useAuth()
 
@@ -951,14 +603,14 @@ function App() {
             <DetalheAluno
               onBack={() => navigate('students')}
               onEdit={handleEditStudent}
-              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico' })}
+              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico', aluno: selectedStudentId })}
               studentId={selectedStudentId}
             />
           )}
           {screen === 'reports' && (
             <RelatoriosScreen
               isDirection={userProfile?.papel === 'direcao'}
-              pedagogicalContent={<PedagogicalReport />}
+              pedagogicalContent={<PedagogicalReport initialStudentId={selectedStudentId || new URLSearchParams(window.location.search).get('aluno') || ''} />}
             />
           )}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
