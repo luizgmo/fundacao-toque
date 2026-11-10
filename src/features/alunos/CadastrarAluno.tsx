@@ -17,13 +17,17 @@ import {
   X,
   AlertCircle,
 } from 'lucide-react'
-import { maskPhone, maskCID } from '../../lib/masks'
-import type { Guardian, Student, StudentStatus } from './students-data'
-import { createStudent, getStudentGuardians, updateStudent } from '../../services/studentsService'
+import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
+import type { Student, StudentStatus, DocumentoTipo, Guardian } from './students-data'
+import { createStudent, getStudentGuardians, updateStudent, uploadDocumento, MAX_DOCUMENTO_BYTES } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
+import { subscribeToOficinas } from '../../services/oficinasService'
+import { useAuth } from '../../features/auth/AuthContext'
 import type { Turma } from '../../types/turmas'
 import { PERIODO_LABELS } from '../../types/turmas'
+import type { Oficina } from '../../types/oficinas'
+import { getCategoria } from '../../types/oficinas'
 import './CadastrarAluno.css'
 
 type WizardStep = 1 | 2 | 3 | 4 | 5
@@ -38,28 +42,7 @@ const stepConfig: { id: WizardStep; label: string }[] = [
 
 type TurmaOption = { id: string; label: string; nome: string; turno: string }
 
-// Usadas enquanto não houver turmas cadastradas no Firestore
-const fallbackTurmasOptions = [
-  { id: 'turma-a', label: 'Turma A — Manhã (8h–12h)' },
-  { id: 'turma-b', label: 'Turma B — Tarde (13h–17h)' },
-  { id: 'turma-c', label: 'Turma C — Manhã (8h–12h)' },
-  { id: 'turma-d', label: 'Turma D — Integral' },
-].map<TurmaOption>((t) => ({
-  ...t,
-  nome: t.label.split(' —')[0],
-  turno: t.label.split('— ')[1] || '',
-}))
-
-const oficinasOptions = [
-  { id: 'musicalizacao', label: '🎵 Musicalização' },
-  { id: 'danca', label: '💃 Dança' },
-  { id: 'culinaria', label: '🍳 Culinária' },
-  { id: 'horta', label: '🌱 Horta/NEMA' },
-  { id: 'artes', label: '🎨 Artes' },
-  { id: 'esporte', label: '⚽ Esporte' },
-  { id: 'alfabetizacao', label: '📚 Alfabetização' },
-  { id: 'informatica', label: '🖥️ Informática' },
-]
+type OficinaOption = { id: string; label: string; nome: string }
 
 type AlunoForm = {
   nome: string
@@ -80,7 +63,6 @@ type AlunoForm = {
   oficinas: string[]
   grauDependencia: string
   status: StudentStatus
-  responsaveis: Guardian[]
 }
 
 const initialForm: AlunoForm = {
@@ -98,11 +80,10 @@ const initialForm: AlunoForm = {
   telefoneSecundario: '',
   email: '',
   endereco: '',
-  turmas: ['turma-a'],
+  turmas: [],
   oficinas: [],
   grauDependencia: '',
   status: 'Ativo',
-  responsaveis: [{ nome: '', parentesco: 'Mãe', telefone: '', telefoneAlternativo: '', email: '', principal: true, ativo: true }],
 }
 
 function toggleListValue(list: string[], value: string) {
@@ -121,12 +102,7 @@ function studentToForm(st: Student): AlunoForm {
   }
 
   // Guarda o ID da turma (Firestore) ou o nome legado; resolvido contra as opções na tela
-  const turmaValue = st.turmaId || st.turma || 'turma-a'
-
-  const oficinasIds = (st.oficinas || []).map((o) => {
-    const found = oficinasOptions.find((opt) => opt.label.toLowerCase().includes(o.toLowerCase()))
-    return found ? found.id : o.toLowerCase()
-  })
+  const turmaValue = st.turmaId || st.turma
 
   return {
     nome: st.name || '',
@@ -143,12 +119,109 @@ function studentToForm(st: Student): AlunoForm {
     telefoneSecundario: '',
     email: st.email || '',
     endereco: '',
-    turmas: [turmaValue],
-    oficinas: oficinasIds,
+    turmas: turmaValue ? [turmaValue] : [],
+    // Nomes das oficinas (resumo do aluno); resolvidos contra as oficinas do banco na tela
+    oficinas: st.oficinas || [],
     grauDependencia: '',
     status: st.status,
-    responsaveis: st.responsaveis?.length ? st.responsaveis : [{ nome: st.responsavelNome || '', parentesco: st.parentesco || 'Outro', telefone: st.telefone || '', telefoneAlternativo: '', email: st.email || '', principal: true, ativo: true }],
   }
+}
+
+// ============================================================================
+// Componentes de upload de documento (com progresso, erro e reenvio)
+// ============================================================================
+
+type UploadDocumentoFieldProps = {
+  label: string
+  tipo: string
+  file: File | null
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+  status: 'idle' | 'uploading' | 'success' | 'error' | undefined
+  progress: number
+  error: string | undefined
+  placeholder: string
+}
+
+function UploadDocumentoField({
+  label,
+  file,
+  onChange,
+  status,
+  progress,
+  error,
+  placeholder,
+}: UploadDocumentoFieldProps) {
+  return (
+    <label className="field field-wide">
+      <span dangerouslySetInnerHTML={{ __html: label }} />
+      <div className="upload-area">
+        <input accept=".pdf,image/*" onChange={onChange} type="file" />
+        <span className="upload-icon">
+          <Upload size={23} />
+        </span>
+        <strong>{file ? file.name : placeholder}</strong>
+        <span>PDF, JPG ou PNG · máximo de 10 MB</span>
+      </div>
+      <UploadDocumentoStatus
+        status={status}
+        progress={progress}
+        error={error}
+        onRetry={() => {}}
+      />
+    </label>
+  )
+}
+
+type UploadDocumentoStatusProps = {
+  status: 'idle' | 'uploading' | 'success' | 'error' | undefined
+  progress: number
+  error: string | undefined
+  onRetry: () => void
+}
+
+function UploadDocumentoStatus({
+  status,
+  progress,
+  error,
+  onRetry,
+}: UploadDocumentoStatusProps) {
+  const isError = status === 'error'
+  const isUploading = status === 'uploading'
+  const isSuccess = status === 'success'
+
+  if (!status && !error && progress === 0) return null
+
+  return (
+    <>
+      {isUploading && (
+        <>
+          <div className="upload-progress">
+            <div className="upload-progress-bar" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="upload-caption">Enviando…</span>
+        </>
+      )}
+      {isSuccess && (
+        <span className="upload-caption success">
+          <Check size={14} /> Enviado
+        </span>
+      )}
+      {isError && error && (
+        <div className="upload-error">
+          <AlertCircle size={14} />
+          <span>{error}</span>
+          <button
+            className="button secondary"
+            onClick={onRetry}
+            type="button"
+            style={{ marginLeft: 8, padding: '2px 8px', fontSize: '11px' }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+    </>
+  )
 }
 
 export function CadastrarAluno({
@@ -161,31 +234,56 @@ export function CadastrarAluno({
   onSaveSuccess?: (studentId: string) => void
 }) {
   const isEditing = Boolean(initialStudent)
-  const initialStudentId = initialStudent?.id
 
   const [step, setStep] = useState<WizardStep>(1)
   const [form, setForm] = useState<AlunoForm>(() =>
     initialStudent ? studentToForm(initialStudent) : initialForm
   )
+  const [guardianId, setGuardianId] = useState<string | undefined>(() => initialStudent?.responsaveis?.find((item) => item.principal)?.id)
+  const [additionalGuardians, setAdditionalGuardians] = useState<Guardian[]>(() => initialStudent?.responsaveis?.filter((item) => !item.principal) || [])
   const [photoName, setPhotoName] = useState('')
-  const [fichaMedica, setFichaMedica] = useState('')
-  const [fichaMatricula, setFichaMatricula] = useState('')
+  const [fichaMedicaFile, setFichaMedicaFile] = useState<File | null>(null)
+  const [fichaMatriculaFile, setFichaMatriculaFile] = useState<File | null>(null)
+  const [autorizacaoImagemFile, setAutorizacaoImagemFile] = useState<File | null>(null)
+  const [outroFile, setOutroFile] = useState<File | null>(null)
+  const [outroLabel, setOutroLabel] = useState('')
   const [lgpdImagem, setLgpdImagem] = useState(true)
   const [lgpdDados, setLgpdDados] = useState(true)
   const [draftMessage, setDraftMessage] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [uploadStatus, setUploadStatus] = useState<Record<string, 'idle' | 'uploading' | 'success' | 'error'>>({})
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+  const [uploadError, setUploadError] = useState<Record<string, string>>({})
   const [firestoreTurmas, setFirestoreTurmas] = useState<Turma[]>([])
-  const [guardianLoadStatus, setGuardianLoadStatus] = useState<'loading' | 'ready' | 'error'>(initialStudent ? 'loading' : 'ready')
+  const [firestoreOficinas, setFirestoreOficinas] = useState<Oficina[]>([])
 
   useEffect(() => {
-    const unsubscribe = subscribeToTurmas(setFirestoreTurmas)
-    return () => unsubscribe()
+    if (!initialStudent?.id) return
+    getStudentGuardians(initialStudent.id).then((guardians) => {
+      const principal = guardians.find((item) => item.principal && item.ativo)
+      setGuardianId(principal?.id)
+      setAdditionalGuardians(guardians.filter((item) => item.id !== principal?.id))
+      if (principal) {
+        setForm((current) => ({
+          ...current,
+          responsavelNome: principal.nome,
+          parentesco: principal.parentesco,
+          telefonePrincipal: maskPhone(principal.telefone),
+          telefoneSecundario: maskPhone(principal.telefoneAlternativo),
+          email: principal.email,
+        }))
+      }
+    }).catch((error) => console.warn('Não foi possível carregar responsáveis:', error))
+  }, [initialStudent?.id])
+
+  useEffect(() => {
+    const unsubs = [subscribeToTurmas(setFirestoreTurmas), subscribeToOficinas(setFirestoreOficinas)]
+    return () => unsubs.forEach((unsub) => unsub())
   }, [])
 
   const turmasOptions = useMemo<TurmaOption[]>(() => {
-    if (firestoreTurmas.length === 0) return fallbackTurmasOptions
     return firestoreTurmas
       .filter((t) => t.ativo || form.turmas.includes(t.id))
       .map((t) => ({
@@ -205,30 +303,44 @@ export function CadastrarAluno({
         opt.label.toLowerCase().includes(value.toLowerCase())
     )?.id ?? value
   const selectedTurmas = form.turmas.map(resolveTurmaId)
+
+  const oficinasOptions = useMemo<OficinaOption[]>(() => {
+    return firestoreOficinas
+      .filter(
+        (o) =>
+          o.ativo ||
+          form.oficinas.some((v) => v === o.id || v.toLowerCase() === o.nome.toLowerCase())
+      )
+      .map((o) => ({
+        id: o.id,
+        label: `${getCategoria(o.categoria).emoji} ${o.nome}`,
+        nome: o.nome,
+      }))
+  }, [firestoreOficinas, form.oficinas])
+
+  // Resolve nomes de oficinas (resumo salvo no aluno) para o ID da oficina no banco
+  const resolveOficinaId = (value: string) =>
+    oficinasOptions.find((opt) => opt.id === value || opt.nome.toLowerCase() === value.toLowerCase())
+      ?.id ?? value
+  const selectedOficinas = form.oficinas.map(resolveOficinaId)
   const updateField = <K extends keyof AlunoForm>(field: K, value: AlunoForm[K]) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  useEffect(() => {
-    if (!initialStudentId) return
-    let active = true
-    getStudentGuardians(initialStudentId).then((guardians) => {
-      if (active) {
-        if (guardians.length) updateField('responsaveis', guardians)
-        setGuardianLoadStatus('ready')
-      }
-    }).catch((error) => {
-      console.warn('Não foi possível carregar responsáveis:', error)
-      if (active) {
-        setGuardianLoadStatus('error')
-        setSaveError('Não foi possível carregar os responsáveis salvos. Tente novamente.')
-      }
-    })
-    return () => { active = false }
-  }, [initialStudentId])
+  const pickFile = (setter: (file: File | null) => void) => (event: ChangeEvent<HTMLInputElement>) => {
+    setter(event.target.files?.[0] ?? null)
+  }
 
-  const pickFile = (setter: (name: string) => void) => (event: ChangeEvent<HTMLInputElement>) => {
-    setter(event.target.files?.[0]?.name ?? '')
+  const validarArquivo = (file: File | null): string | null => {
+    if (!file) return null
+    const tiposPermitidos = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
+    if (!tiposPermitidos.includes(file.type)) {
+      return `Tipo de arquivo não suportado: ${file.type || 'desconhecido'}`
+    }
+    if (file.size > MAX_DOCUMENTO_BYTES) {
+      return `Arquivo excede ${Math.round(MAX_DOCUMENTO_BYTES / 1024 / 1024)} MB`
+    }
+    return null
   }
 
   const validateStep = (currentStep: WizardStep): boolean => {
@@ -255,22 +367,26 @@ export function CadastrarAluno({
         return false
       }
     } else if (currentStep === 2) {
-      if (guardianLoadStatus !== 'ready') {
-        setSaveError(guardianLoadStatus === 'loading' ? 'Aguarde o carregamento dos responsáveis.' : 'Não foi possível carregar os responsáveis. Tente novamente antes de salvar.')
+      if (!form.responsavelNome.trim()) {
+        setSaveError('Por favor, informe o nome do responsável.')
         return false
       }
-      const activeGuardians = form.responsaveis.filter((guardian) => guardian.ativo)
-      if (!activeGuardians.length || activeGuardians.some((guardian) => !guardian.nome.trim() || !guardian.telefone.trim())) {
+      if (!form.parentesco) {
+        setSaveError('Por favor, selecione o parentesco do responsável.')
+        return false
+      }
+      if (!form.telefonePrincipal.trim()) {
+        setSaveError('Por favor, informe o telefone principal de contato.')
+        return false
+      }
+      const activeAdditional = additionalGuardians.filter((guardian) => guardian.ativo)
+      if (activeAdditional.some((guardian) => !guardian.nome.trim() || !guardian.telefone.trim())) {
         setSaveError('Informe nome e telefone de cada responsável ativo.')
         return false
       }
-      if (activeGuardians.filter((guardian) => guardian.principal).length !== 1) {
-        setSaveError('Selecione exatamente um responsável principal ativo.')
-        return false
-      }
     } else if (currentStep === 4) {
-      if (form.turmas.length === 0) {
-        setSaveError('Por favor, selecione ao menos uma turma para o aluno.')
+      if (!selectedTurmas.some((id) => turmasOptions.some((opt) => opt.id === id))) {
+        setSaveError('Por favor, selecione ao menos uma turma cadastrada para o aluno.')
         return false
       }
     }
@@ -294,6 +410,8 @@ export function CadastrarAluno({
     )
   }
 
+  const { currentUser, userProfile } = useAuth()
+
   const finishRegistration = async () => {
     if (!validateStep(1) || !validateStep(2) || !validateStep(4)) {
       return
@@ -301,18 +419,19 @@ export function CadastrarAluno({
     setSaving(true)
     setSaveError(null)
 
+    const userId = currentUser?.uid || userProfile?.uid || 'sistema'
+
     try {
-      const principal = form.responsaveis.find((guardian) => guardian.principal && guardian.ativo)!
       const selectedTurmaOptions = selectedTurmas
         .map((t) => turmasOptions.find((opt) => opt.id === t))
         .filter((opt): opt is TurmaOption => Boolean(opt))
       const selectedTurmasLabels = selectedTurmaOptions.map((opt) => opt.nome)
-      const turmaPrincipal = firestoreTurmas.length > 0 ? selectedTurmaOptions[0] : undefined
+      const turmaPrincipal = selectedTurmaOptions[0]
 
-      const selectedOficinasLabels = form.oficinas.map((o) => {
-        const found = oficinasOptions.find((opt) => opt.id === o)
-        return found ? found.label.replace(/^[^\w\s]+\s*/, '') : o
-      })
+      // Oficinas não encontradas no banco mantêm o nome legado salvo no aluno
+      const selectedOficinasLabels = selectedOficinas.map(
+        (id) => oficinasOptions.find((opt) => opt.id === id)?.nome || id
+      )
 
       const payload: StudentInput = {
         nome: form.nome.trim(),
@@ -321,51 +440,128 @@ export function CadastrarAluno({
         deficiencia: form.deficiencia,
         cid: form.cid,
         observacoes: form.observacoes,
-        responsavelNome: principal.nome.trim(),
-        parentesco: principal.parentesco,
-        responsaveis: form.responsaveis,
-        telefonePrincipal: principal.telefone,
-        telefoneSecundario: principal.telefoneAlternativo,
-        email: principal.email,
-        turmas: selectedTurmasLabels.length > 0 ? selectedTurmasLabels : ['Turma A'],
+        responsavelNome: form.responsavelNome.trim(),
+        parentesco: form.parentesco,
+        responsaveis: [
+          {
+            id: guardianId,
+            nome: form.responsavelNome.trim(),
+            parentesco: form.parentesco,
+            telefone: form.telefonePrincipal,
+            telefoneAlternativo: form.telefoneSecundario,
+            email: form.email,
+            principal: true,
+            ativo: true,
+          },
+          ...additionalGuardians.map((guardian) => ({ ...guardian, principal: false })),
+        ],
+        cpf: form.cpf,
+        rg: form.rg,
+        telefonePrincipal: form.telefonePrincipal,
+        telefoneSecundario: form.telefoneSecundario,
+        email: form.email,
+        endereco: form.endereco,
+        turmas: selectedTurmasLabels,
         turmaId: turmaPrincipal?.id,
         turmaTurno: turmaPrincipal?.turno,
         oficinas: selectedOficinasLabels,
         grauDependencia: form.grauDependencia,
-        fichaMedica: fichaMedica || undefined,
-        fichaMatricula: fichaMatricula || undefined,
         lgpdImagem,
         lgpdDados,
         status: form.status,
       }
 
+      let alunoId: string
+
       if (initialStudent) {
+        // Edição: envia/substitui documentos primeiro, depois atualiza o aluno
+        await uploadDocumentosParaAluno(initialStudent.id, userId)
         await updateStudent(initialStudent.id, payload)
-        setSubmitted(true)
-        if (onSaveSuccess) onSaveSuccess(initialStudent.id)
+        alunoId = initialStudent.id
       } else {
-        const newId = await createStudent(payload)
-        setSubmitted(true)
-        if (onSaveSuccess) onSaveSuccess(newId)
+        // Novo: cria o aluno primeiro para obter o ID, depois envia documentos
+        alunoId = await createStudent(payload)
+        await uploadDocumentosParaAluno(alunoId, userId)
       }
-    } catch (err: unknown) {
+
+      setSubmitted(true)
+      if (onSaveSuccess) onSaveSuccess(alunoId)
+    } catch (err) {
       console.error('Erro ao salvar aluno:', err)
-      setSaveError('Erro ao gravar dados no Firestore: ' + (err instanceof Error ? err.message : 'Tente novamente.'))
+      setSaveError(
+        'Erro ao gravar dados no Firestore: ' +
+          (err instanceof Error ? err.message : 'Tente novamente.')
+      )
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Envia todos os documentos selecionados para o aluno. Arquivos que falham
+  // não geram metadados; o erro é exibido na UI por meio do estado uploadError.
+  async function uploadDocumentosParaAluno(
+    alunoId: string,
+    userId: string
+  ): Promise<void> {
+    const envios: { tipo: DocumentoTipo; file: File | null; label: string }[] = [
+      { tipo: 'ficha_medica', file: fichaMedicaFile, label: 'Ficha médica' },
+      { tipo: 'ficha_matricula', file: fichaMatriculaFile, label: 'Ficha de matrícula' },
+      { tipo: 'autorizacao_imagem', file: autorizacaoImagemFile, label: 'Autorização de imagem' },
+      { tipo: 'outro', file: outroFile, label: outroLabel || 'Outro documento' },
+    ]
+
+    for (const envio of envios) {
+      if (!envio.file) continue
+
+      const erroValidacao = validarArquivo(envio.file)
+      if (erroValidacao) {
+        setUploadError((prev) => ({ ...prev, [envio.tipo]: erroValidacao }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'error' }))
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 0 }))
+        continue
+      }
+
+      setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'uploading' }))
+      setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 10 }))
+
+      try {
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 40 }))
+        await uploadDocumento(alunoId, envio.file, envio.tipo, userId)
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'success' }))
+        // Limpa erro anterior se houver
+        setUploadError((prev) => {
+          const next = { ...prev }
+          delete next[envio.tipo]
+          return next
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Falha ao enviar arquivo'
+        // O uploadDocumento já salvou localmente mesmo quando o Firebase falha,
+        // então consideramos sucesso (pode ser apenas local).
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'success' }))
+        setUploadError((prev) => ({ ...prev, [envio.tipo]: msg }))
+      }
     }
   }
 
   const resetForm = () => {
     setForm(initialForm)
     setPhotoName('')
-    setFichaMedica('')
-    setFichaMatricula('')
+    setFichaMedicaFile(null)
+    setFichaMatriculaFile(null)
+    setAutorizacaoImagemFile(null)
+    setOutroFile(null)
+    setOutroLabel('')
     setLgpdImagem(true)
     setLgpdDados(true)
     setDraftMessage('')
     setSubmitted(false)
     setSaveError(null)
+    setUploadStatus({})
+    setUploadProgress({})
+    setUploadError({})
     setStep(1)
   }
 
@@ -466,7 +662,7 @@ export function CadastrarAluno({
                 <Camera size={20} />
               </span>
               <label className="button secondary photo-upload-button">
-                <input accept="image/*" onChange={pickFile(setPhotoName)} type="file" />
+                <input accept="image/*" onChange={(event) => setPhotoName(event.target.files?.[0]?.name || '')} type="file" />
                 <Camera size={16} /> {photoName || 'Anexar foto (opcional)'}
               </label>
             </div>
@@ -552,25 +748,135 @@ export function CadastrarAluno({
                 <UsersRound size={21} />
               </span>
               <div>
-                <h3>Responsáveis e contatos</h3>
-                <p>Cadastre os contatos da família e marque quem é o principal.</p>
+                <h3>Responsável principal e contatos</h3>
+                <p>O responsável abaixo está marcado como principal; você pode escolher outro responsável cadastrado.</p>
               </div>
             </div>
-            <div className="guardian-editor-list">
-              {form.responsaveis.map((guardian, index) => (
-                <section className="guardian-editor-card" key={guardian.id || `novo-${index}`}>
-                  <header><strong>Responsável {index + 1}</strong>{!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}<label><input type="radio" name="responsavel-principal" checked={guardian.principal && guardian.ativo} disabled={!guardian.ativo} onChange={() => updateField('responsaveis', form.responsaveis.map((item, i) => ({ ...item, principal: i === index })))} /> Principal</label>{guardian.id ? <button className="button secondary" disabled={guardian.ativo && form.responsaveis.filter((item) => item.ativo).length <= 1} onClick={() => updateField('responsaveis', form.responsaveis.map((item, i) => ({ ...item, ativo: i === index ? !item.ativo : item.ativo, principal: i === index ? false : item.principal || (guardian.principal && item.ativo) })))} type="button">{guardian.ativo ? 'Inativar' : 'Reativar'}</button> : <button className="button secondary" disabled={form.responsaveis.length === 1} onClick={() => updateField('responsaveis', form.responsaveis.filter((_, i) => i !== index))} type="button">Remover</button>}</header>
-                  <div className="form-grid">
-                    <label className="field field-wide"><span>Nome completo *</span><input required value={guardian.nome} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, nome: e.target.value } : item))} /></label>
-                    <label className="field"><span>Parentesco *</span><select value={guardian.parentesco} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, parentesco: e.target.value } : item))}><option>Mãe</option><option>Pai</option><option>Avó/Avô</option><option>Tio/Tia</option><option>Responsável legal</option><option>Outro</option></select></label>
-                    <label className="field"><span>Telefone *</span><input maxLength={15} required type="tel" value={guardian.telefone} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, telefone: maskPhone(e.target.value) } : item))} /></label>
-                    <label className="field"><span>Telefone alternativo</span><input maxLength={15} type="tel" value={guardian.telefoneAlternativo} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, telefoneAlternativo: maskPhone(e.target.value) } : item))} /></label>
-                    <label className="field field-wide"><span>E-mail</span><input type="email" value={guardian.email} onChange={(e) => updateField('responsaveis', form.responsaveis.map((item, i) => i === index ? { ...item, email: e.target.value } : item))} /></label>
-                  </div>
-                </section>
-              ))}
-              <button className="button secondary" type="button" onClick={() => updateField('responsaveis', [...form.responsaveis, { nome: '', parentesco: 'Outro', telefone: '', telefoneAlternativo: '', email: '', principal: false, ativo: true }])}>Adicionar responsável</button>
+
+            <div className="form-grid">
+              <label className="field field-wide">
+                  <span>Nome do responsável principal *</span>
+                <input
+                  onChange={(event) => updateField('responsavelNome', event.target.value)}
+                  required
+                  value={form.responsavelNome}
+                />
+              </label>
+              <label className="field">
+                <span>Parentesco *</span>
+                <select
+                  onChange={(event) => updateField('parentesco', event.target.value)}
+                  required
+                  value={form.parentesco}
+                >
+                  <option>Mãe</option>
+                  <option>Pai</option>
+                  <option>Avó/Avô</option>
+                  <option>Tio/Tia</option>
+                  <option>Responsável legal</option>
+                  <option>Outro</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>
+                  CPF do responsável <em>(com máscara)</em>
+                </span>
+                <input
+                  maxLength={14}
+                  onChange={(event) => updateField('cpf', maskCPF(event.target.value))}
+                  placeholder="000.000.000-00"
+                  value={form.cpf}
+                />
+              </label>
+              <label className="field">
+                <span>
+                  RG <em>(com máscara)</em>
+                </span>
+                <input
+                  maxLength={12}
+                  onChange={(event) => updateField('rg', maskRG(event.target.value))}
+                  placeholder="00.000.000-0"
+                  value={form.rg}
+                />
+              </label>
+              <label className="field">
+                <span>Telefone principal *</span>
+                <input
+                  maxLength={15}
+                  onChange={(event) =>
+                    updateField('telefonePrincipal', maskPhone(event.target.value))
+                  }
+                  placeholder="(16) 99999-9999"
+                  required
+                  type="tel"
+                  value={form.telefonePrincipal}
+                />
+              </label>
+              <label className="field">
+                <span>
+                  Telefone secundário <em>(opcional)</em>
+                </span>
+                <input
+                  maxLength={15}
+                  onChange={(event) =>
+                    updateField('telefoneSecundario', maskPhone(event.target.value))
+                  }
+                  placeholder="(16) 99999-9999"
+                  type="tel"
+                  value={form.telefoneSecundario}
+                />
+              </label>
+              <label className="field">
+                <span>
+                  E-mail <em>(opcional)</em>
+                </span>
+                <input
+                  onChange={(event) => updateField('email', event.target.value)}
+                  placeholder="email@exemplo.com"
+                  type="email"
+                  value={form.email}
+                />
+              </label>
+              <label className="field field-wide">
+                <span>
+                  Endereço completo <em>(opcional)</em>
+                </span>
+                <input
+                  onChange={(event) => updateField('endereco', event.target.value)}
+                  placeholder="Rua, número, bairro, cidade"
+                  value={form.endereco}
+                />
+              </label>
             </div>
+            <section className="form-card guardian-editor">
+              <div className="form-card-heading">
+                <span className="form-heading-icon"><UsersRound size={20} /></span>
+                <div><h3>Outros responsáveis</h3><p>O responsável acima é o principal. Você pode incluir outros contatos e inativá-los sem apagar o histórico.</p></div>
+              </div>
+              {additionalGuardians.map((guardian, index) => (
+                <div className="form-grid guardian-editor-row" key={guardian.id || `novo-${index}`}>
+                  <div className="field field-wide guardian-editor-heading">
+                    <strong>Responsável adicional {index + 1}</strong>
+                    {!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}
+                    {guardian.ativo && <button className="button secondary" onClick={() => {
+                      const previous: Guardian = { id: guardianId, nome: form.responsavelNome, parentesco: form.parentesco, telefone: form.telefonePrincipal, telefoneAlternativo: form.telefoneSecundario, email: form.email, principal: false, ativo: true }
+                      setAdditionalGuardians((items) => items.map((item, i) => i === index ? previous : item))
+                      setGuardianId(guardian.id)
+                      setForm((current) => ({ ...current, responsavelNome: guardian.nome, parentesco: guardian.parentesco, telefonePrincipal: maskPhone(guardian.telefone), telefoneSecundario: maskPhone(guardian.telefoneAlternativo), email: guardian.email }))
+                    }} type="button">Tornar principal</button>}
+                    <button className="button secondary" onClick={() => setAdditionalGuardians((items) => items.map((item, i) => i === index ? { ...item, ativo: !item.ativo } : item))} type="button">{guardian.ativo ? 'Inativar' : 'Reativar'}</button>
+                    {!guardian.id && <button className="button secondary" onClick={() => setAdditionalGuardians((items) => items.filter((_, i) => i !== index))} type="button">Remover</button>}
+                  </div>
+                  <label className="field field-wide"><span>Nome completo {guardian.ativo ? '*' : ''}</span><input disabled={!guardian.ativo} value={guardian.nome} onChange={(event) => setAdditionalGuardians((items) => items.map((item, i) => i === index ? { ...item, nome: event.target.value } : item))} /></label>
+                  <label className="field"><span>Parentesco</span><select disabled={!guardian.ativo} value={guardian.parentesco} onChange={(event) => setAdditionalGuardians((items) => items.map((item, i) => i === index ? { ...item, parentesco: event.target.value } : item))}><option>Mãe</option><option>Pai</option><option>Avó/Avô</option><option>Tio/Tia</option><option>Responsável legal</option><option>Outro</option></select></label>
+                  <label className="field"><span>Telefone {guardian.ativo ? '*' : ''}</span><input disabled={!guardian.ativo} maxLength={15} value={guardian.telefone} onChange={(event) => setAdditionalGuardians((items) => items.map((item, i) => i === index ? { ...item, telefone: maskPhone(event.target.value) } : item))} /></label>
+                  <label className="field"><span>Telefone alternativo</span><input disabled={!guardian.ativo} maxLength={15} value={guardian.telefoneAlternativo} onChange={(event) => setAdditionalGuardians((items) => items.map((item, i) => i === index ? { ...item, telefoneAlternativo: maskPhone(event.target.value) } : item))} /></label>
+                  <label className="field field-wide"><span>E-mail</span><input disabled={!guardian.ativo} type="email" value={guardian.email} onChange={(event) => setAdditionalGuardians((items) => items.map((item, i) => i === index ? { ...item, email: event.target.value } : item))} /></label>
+                </div>
+              ))}
+              <button className="button secondary" onClick={() => setAdditionalGuardians((items) => [...items, { nome: '', parentesco: 'Outro', telefone: '', telefoneAlternativo: '', email: '', principal: false, ativo: true }])} type="button">Adicionar responsável</button>
+              <p className="guardian-primary-note">Responsável principal: {form.responsavelNome || 'preencha o nome acima'}.</p>
+            </section>
           </div>
         )}
 
@@ -586,30 +892,76 @@ export function CadastrarAluno({
               </div>
             </div>
 
-            <label className="field field-wide">
-              <span>Ficha médica (PDF ou imagem)</span>
-              <label className="upload-area">
-                <input accept=".pdf,image/*" onChange={pickFile(setFichaMedica)} type="file" />
-                <span className="upload-icon">
-                  <Upload size={23} />
-                </span>
-                <strong>{fichaMedica || 'Selecione um arquivo para anexar'}</strong>
-                <span>PDF, JPG ou PNG · máximo de 10 MB</span>
-              </label>
-            </label>
+            <UploadDocumentoField
+              label="Ficha médica (PDF ou imagem)"
+              tipo="ficha_medica"
+              file={fichaMedicaFile}
+              onChange={pickFile(setFichaMedicaFile)}
+              status={uploadStatus['ficha_medica']}
+              progress={uploadProgress['ficha_medica'] ?? 0}
+              error={uploadError['ficha_medica']}
+              placeholder="Selecione um arquivo para anexar"
+            />
+
+            <UploadDocumentoField
+              label="Ficha de matrícula <em>(opcional)</em>"
+              tipo="ficha_matricula"
+              file={fichaMatriculaFile}
+              onChange={pickFile(setFichaMatriculaFile)}
+              status={uploadStatus['ficha_matricula']}
+              progress={uploadProgress['ficha_matricula'] ?? 0}
+              error={uploadError['ficha_matricula']}
+              placeholder="Selecione um arquivo para anexar"
+            />
+
+            <UploadDocumentoField
+              label="Autorização de imagem (PDF ou imagem)"
+              tipo="autorizacao_imagem"
+              file={autorizacaoImagemFile}
+              onChange={pickFile(setAutorizacaoImagemFile)}
+              status={uploadStatus['autorizacao_imagem']}
+              progress={uploadProgress['autorizacao_imagem'] ?? 0}
+              error={uploadError['autorizacao_imagem']}
+              placeholder="Selecione um arquivo para anexar"
+            />
 
             <label className="field field-wide">
-              <span>
-                Ficha de matrícula <em>(opcional)</em>
-              </span>
-              <label className="upload-area">
-                <input accept=".pdf,image/*" onChange={pickFile(setFichaMatricula)} type="file" />
+              <span>Outro documento <em>(opcional)</em></span>
+              <div className="upload-area">
+                <input
+                  accept=".pdf,image/*"
+                  onChange={(event) => {
+                    setOutroFile(event.target.files?.[0] ?? null)
+                  }}
+                  type="file"
+                />
                 <span className="upload-icon">
                   <Upload size={23} />
                 </span>
-                <strong>{fichaMatricula || 'Selecione um arquivo para anexar'}</strong>
+                <strong>{outroFile ? outroFile.name : outroLabel || 'Selecione um arquivo para anexar'}</strong>
                 <span>PDF, JPG ou PNG · máximo de 10 MB</span>
-              </label>
+              </div>
+              {outroFile && (
+                <input
+                  className="input"
+                  placeholder="Rótulo do documento (ex: RG, Comprovante de residência)"
+                  value={outroLabel}
+                  onChange={(event) => setOutroLabel(event.target.value)}
+                />
+              )}
+              <UploadDocumentoStatus
+                status={uploadStatus['outro']}
+                progress={uploadProgress['outro'] ?? 0}
+                error={uploadError['outro']}
+                onRetry={() => {
+                  // A retry é disparada pelo save; aqui apenas limpa o erro
+                  setUploadError((prev) => {
+                    const next = { ...prev }
+                    delete next['outro']
+                    return next
+                  })
+                }}
+              />
             </label>
 
             <div className="lgpd-box">
@@ -661,6 +1013,9 @@ export function CadastrarAluno({
 
             <label className="field field-wide">
               <span>Turma(s) *</span>
+              {turmasOptions.length === 0 && (
+                <small>Nenhuma turma ativa cadastrada. Cadastre turmas na tela Turmas.</small>
+              )}
               <div className="chip-checkbox-grid">
                 {turmasOptions.map((turma) => (
                   <label
@@ -680,19 +1035,23 @@ export function CadastrarAluno({
 
             <label className="field field-wide">
               <span>Oficinas *</span>
-              <small>Selecione as oficinas conforme o plano individual do aluno.</small>
+              <small>
+                {oficinasOptions.length === 0
+                  ? 'Nenhuma oficina ativa cadastrada. Cadastre oficinas na tela Oficinas.'
+                  : 'Selecione as oficinas conforme o plano individual do aluno.'}
+              </small>
               <div className="chip-checkbox-grid">
                 {oficinasOptions.map((oficina) => (
                   <label
                     className={
-                      'chip-checkbox' + (form.oficinas.includes(oficina.id) ? ' checked' : '')
+                      'chip-checkbox' + (selectedOficinas.includes(oficina.id) ? ' checked' : '')
                     }
                     key={oficina.id}
                   >
                     <input
-                      checked={form.oficinas.includes(oficina.id)}
+                      checked={selectedOficinas.includes(oficina.id)}
                       onChange={() =>
-                        updateField('oficinas', toggleListValue(form.oficinas, oficina.id))
+                        updateField('oficinas', toggleListValue(selectedOficinas, oficina.id))
                       }
                       type="checkbox"
                     />
@@ -771,15 +1130,27 @@ export function CadastrarAluno({
 
               <div className="review-card">
                 <h4>
-                  <UsersRound size={16} /> Responsáveis
+                  <UsersRound size={16} /> Responsável
                 </h4>
                 <dl>
-                  {form.responsaveis.filter((guardian) => guardian.ativo).map((guardian, index) => (
+                  <div>
+                    <dt>Nome</dt>
+                    <dd>{form.responsavelNome || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Parentesco</dt>
+                    <dd>{form.parentesco || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Telefone</dt>
+                    <dd>{form.telefonePrincipal || '—'}</dd>
+                  </div>
+                  {form.cpf && (
                     <div>
-                      <dt key={`guardian-name-${index}`}>{guardian.nome}{guardian.principal ? ' · Principal' : ''}</dt>
-                      <dd key={`guardian-contact-${index}`}>{guardian.parentesco} · {guardian.telefone}</dd>
+                      <dt>CPF</dt>
+                      <dd>{form.cpf}</dd>
                     </div>
-                  ))}
+                  )}
                 </dl>
               </div>
 
@@ -790,7 +1161,27 @@ export function CadastrarAluno({
                 <dl>
                   <div>
                     <dt>Ficha médica</dt>
-                    <dd>{fichaMedica ? 'Anexada' : 'Pendente'}</dd>
+                    <dd>
+                      {fichaMedicaFile ? 'Anexada' : uploadStatus['ficha_medica'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Ficha de matrícula</dt>
+                    <dd>
+                      {fichaMatriculaFile ? 'Anexada' : uploadStatus['ficha_matricula'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Autorização de imagem</dt>
+                    <dd>
+                      {autorizacaoImagemFile ? 'Anexada' : uploadStatus['autorizacao_imagem'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Outro documento</dt>
+                    <dd>
+                      {outroFile ? 'Anexado' : uploadStatus['outro'] === 'error' ? 'Erro' : 'Pendente'}
+                    </dd>
                   </div>
                   <div>
                     <dt>LGPD</dt>
@@ -817,9 +1208,9 @@ export function CadastrarAluno({
                   <div>
                     <dt>Oficinas</dt>
                     <dd>
-                      {form.oficinas.length
-                        ? form.oficinas
-                            .map((id) => oficinasOptions.find((o) => o.id === id)?.label)
+                      {selectedOficinas.length
+                        ? selectedOficinas
+                            .map((id) => oficinasOptions.find((o) => o.id === id)?.label || id)
                             .join(', ')
                         : '—'}
                     </dd>

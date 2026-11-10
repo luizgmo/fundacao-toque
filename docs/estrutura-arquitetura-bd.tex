@@ -104,7 +104,7 @@ A arquitetura é \textbf{serverless}, sem servidor próprio: toda a infraestrutu
 Front-end & React 19 + TypeScript + Vite & Interface web responsiva (computador e tablet) \\
 Autenticação & Firebase Authentication & Login com e-mail/senha; perfis de acesso \\
 Banco de dados & Cloud Firestore (NoSQL) & Alunos, turmas, oficinas, frequência, evolução \\
-Arquivos & Cloud Firestore & Metadados e conteúdo em partes de até 600 KiB por documento \\
+Arquivos & Cloud Firestore & Anexos em partes de até 600 KiB; documentos de alunos até 500 KiB \\
 Segurança & Firestore Security Rules & Permissões por perfil (negar por padrão) \\
 Ferramentas & Firebase CLI + Emulator Suite & Deploy, testes de regras e desenvolvimento local \\
 Seed de dados & Node.js (script próprio) & População do banco com dados fictícios (LGPD) \\
@@ -138,7 +138,7 @@ Seed de dados & Node.js (script próprio) & População do banco com dados fict�
   \item Regras de leitura/escrita distintas por coleção (ex.: apenas a Direção apaga registros e gerencia usuários);
   \item Ficha médica: leitura restrita a Direção e Pedagogia; escrita apenas pela Direção;
   \item Nenhum dado pessoal real é usado em desenvolvimento --- apenas dados fictícios;
-  \item Arquivos ficam no Firestore: metadados em \texttt{anexos/\{id\}} e conteúdo dividido em \texttt{chunks}, respeitando o limite de 1 MiB por documento. Não há dependência de Firebase Storage.
+  \item Fotos e anexos de atividade/relatório ficam no Firestore: metadados em \texttt{anexos/\{id\}} e conteúdo dividido em \texttt{chunks}, respeitando o limite de 1 MiB por documento. Documentos do cadastro de alunos são Data URLs em documentos limitados a 500 KiB. Não há dependência de Firebase Storage.
 \end{itemize}
 
 \section{Banco de Dados (Cloud Firestore)}
@@ -183,6 +183,7 @@ nome_completo: string          obrigatório
 email: string                  obrigatório
 papel: string                  obrigatório (direcao | pedagogia | administrativo)
 ativo: boolean                 obrigatório
+trocar_senha: boolean          opcional (true = senha provisória criada pela Direção)
 ultimo_login_em: Timestamp     opcional
 criado_em / atualizado_em: Timestamp
 \end{verbatim}

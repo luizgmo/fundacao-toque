@@ -48,7 +48,7 @@ npx firebase-tools deploy --only firestore:rules --project ID_DO_PROJETO
 npx firebase-tools deploy --only firestore:indexes --project ID_DO_PROJETO
 ```
 
-Confira no Console que as regras publicadas correspondem à branch `integration/tarefas-1-a-5`. O inventário atual não identificou necessidade de composto novo, mas o deploy publica o arquivo versionado completo; revise antes de remover qualquer índice que já exista no projeto. Anexos usam documentos Firestore em partes de até 600 KiB; não há publicação de regras, bucket ou configuração CORS de Storage.
+Confira no Console que as regras publicadas correspondem ao commit da branch `main`. O inventário atual não identificou necessidade de composto novo, mas o deploy publica o arquivo versionado completo; revise antes de remover qualquer índice que já exista no projeto. Fotos e anexos pedagógicos usam documentos Firestore em partes de até 600 KiB; documentos do cadastro de alunos são armazenados como Data URL em documentos limitados a 500 KiB. Não há publicação de regras, bucket ou configuração CORS de Storage.
 
 ## 5. Validar manualmente
 

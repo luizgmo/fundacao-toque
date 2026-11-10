@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -7,7 +7,6 @@ import {
   BarChart3,
   Bell,
   BookOpenCheck,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
@@ -17,6 +16,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   ListChecks,
+  KeyRound,
   LogOut,
   Menu,
   MessageCircle,
@@ -39,11 +39,20 @@ import { Atividades } from './features/atividades/Atividades'
 import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
 import { PedagogicalReport } from './features/relatorios/PedagogicalReport'
 import { LoginScreen } from './features/auth/LoginScreen'
+import { TrocarSenha } from './features/auth/TrocarSenha'
+import { Evolucao } from './features/evolucao/Evolucao'
 import { useAuth } from './features/auth/AuthContext'
+import {
+  getAlunosFaltasRecorrentes,
+  getDashboardMetrics,
+  getTarefasDeHoje,
+  getUltimasAtualizacoes,
+} from './services/dashboardService'
+import type { AlunoFaltaRecorrente, TimelineItem } from './services/dashboardService'
 import type { UserProfile, UserRole } from './types/auth'
 import { ROLE_LABELS } from './types/auth'
 import type { Student } from './features/alunos/students-data'
-import { findStudent } from './features/alunos/students-data'
+import { DataNotice } from './components/DataNotice'
 import logoUrl from './assets/logo.png'
 import './App.css'
 
@@ -58,6 +67,7 @@ type Screen =
   | 'turmas'
   | 'oficinas'
   | 'atividades'
+  | 'evolucao'
 
 const validScreens: Screen[] = [
   'reports',
@@ -69,6 +79,7 @@ const validScreens: Screen[] = [
   'turmas',
   'oficinas',
   'atividades',
+  'evolucao',
 ]
 
 type NavItem = {
@@ -87,7 +98,7 @@ const mainNavigation: NavItem[] = [
 ]
 
 const pedagogicalNavigation: NavItem[] = [
-  { label: 'Evolução', icon: BarChart3 },
+  { label: 'Evolução', icon: BarChart3, screen: 'evolucao' },
   { label: 'Relatórios', icon: FileText, screen: 'reports' },
 ]
 
@@ -116,6 +127,7 @@ function Sidebar({
   onClose,
   onNavigate,
   onLogout,
+  onChangePassword,
 }: {
   currentScreen: Screen
   isOpen: boolean
@@ -123,6 +135,7 @@ function Sidebar({
   onClose: () => void
   onNavigate: (screen: Screen) => void
   onLogout: () => void
+  onChangePassword?: () => void
 }) {
   const renderItem = (item: NavItem) => {
     const Icon = item.icon
@@ -176,6 +189,20 @@ function Sidebar({
           )}
         </nav>
 
+        {onChangePassword && (
+          <button
+            className="nav-item"
+            onClick={() => {
+              onChangePassword()
+              onClose()
+            }}
+            type="button"
+          >
+            <KeyRound size={19} strokeWidth={2} />
+            <span>Alterar senha</span>
+          </button>
+        )}
+
         <button className="logout-button" onClick={onLogout} title="Sair da conta" type="button">
           <LogOut size={19} />
           <span>Sair</span>
@@ -195,12 +222,10 @@ function Sidebar({
 
 function Topbar({
   screen,
-  studentName,
   userProfile,
   onOpenMenu,
 }: {
   screen: Screen
-  studentName?: string
   userProfile?: UserProfile | null
   onOpenMenu: () => void
 }) {
@@ -209,12 +234,13 @@ function Topbar({
     reports: 'Relatórios',
     register: 'Cadastrar aluno',
     students: 'Alunos',
-    'student-detail': studentName ?? 'Perfil do aluno',
+    'student-detail': 'Perfil do aluno',
     frequencia: 'Frequência e Registro de Chamada',
     usuarios: 'Equipe e Autores do Sistema',
     turmas: 'Turmas',
     oficinas: 'Oficinas e Atividades',
     atividades: 'Registro de Atividades',
+    evolucao: 'Evolução',
   }
 
   const initials = userProfile
@@ -227,7 +253,7 @@ function Topbar({
         .toUpperCase()
     : 'AS'
 
-  const displayName = userProfile?.nome_completo || 'Ana Carolina Silva'
+  const displayName = userProfile?.nome_completo || 'Equipe'
   const displayRole = userProfile ? ROLE_LABELS[userProfile.papel] : 'Pedagoga'
 
   return (
@@ -323,20 +349,66 @@ function Dashboard({
     return text.charAt(0).toUpperCase() + text.slice(1)
   }, [])
 
+  const [metrics, setMetrics] = useState({ alunosAtivos: 0, turmasAtivas: 0, oficinasAtivas: 0, frequenciaMedia: null as number | null })
+  const [loadingMetrics, setLoadingMetrics] = useState(true)
+  const [faltas, setFaltas] = useState<AlunoFaltaRecorrente[]>([])
+  const [timeline, setTimeline] = useState<TimelineItem[]>([])
+  const [tarefas, setTarefas] = useState<{ titulo: string; prazo: string; feito: boolean }[]>([])
+  const [dashboardError, setDashboardError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      setLoadingMetrics(true)
+      setDashboardError('')
+      try {
+        const [m, f, t, tasks] = await Promise.all([
+          getDashboardMetrics(),
+          getAlunosFaltasRecorrentes(5),
+          getUltimasAtualizacoes(6),
+          getTarefasDeHoje(),
+        ])
+        if (!mounted) return
+        setMetrics({
+          alunosAtivos: m.alunosAtivos,
+          turmasAtivas: m.turmasAtivas,
+          oficinasAtivas: m.oficinasAtivas,
+          frequenciaMedia: m.frequenciaMedia,
+        })
+        setFaltas(f)
+        setTimeline(t)
+        setTarefas(tasks)
+      } catch (err) {
+        console.warn('Erro ao carregar dashboard do Firestore:', err)
+        if (mounted) setDashboardError('Não foi possível carregar os dados do banco. Verifique a conexão/permissões.')
+      } finally {
+        if (mounted) setLoadingMetrics(false)
+      }
+    }
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const pendentes = tarefas.filter((t) => !t.feito).length
+
   const shortcuts = [
-    { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen },
-    { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen },
+    { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen, tone: 'green' },
+    { label: 'Registrar frequência', description: 'Chamada do dia', icon: ClipboardCheck, action: 'frequencia' as Screen, tone: 'blue' },
     {
       label: 'Registrar atividade',
       description: 'Atividades por turma',
       icon: BookOpenCheck,
       action: 'atividades' as Screen,
+      tone: 'orange',
     },
     {
       label: 'Gerar relatório',
       description: 'Acompanhamento pedagógico',
       icon: FileBarChart,
       action: 'reports' as Screen,
+      tone: 'red',
     },
   ]
 
@@ -350,11 +422,22 @@ function Dashboard({
         <Sparkles aria-hidden="true" size={60} strokeWidth={1.5} />
       </section>
 
+      {dashboardError && (
+        <p style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '0.6rem 0.9rem' }}>
+          {dashboardError}
+        </p>
+      )}
+
       <section aria-label="Resumo do sistema" className="metrics-grid">
-        <MetricCard icon={Users} label="Alunos ativos" tone="green" value="47" />
-        <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value="5" />
-        <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value="12" />
-        <MetricCard icon={TrendingUp} label="Frequência média (mês)" tone="mint" value="87%" />
+        <MetricCard icon={Users} label="Alunos ativos" tone="green" value={loadingMetrics ? '…' : String(metrics.alunosAtivos)} />
+        <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value={loadingMetrics ? '…' : String(metrics.turmasAtivas)} />
+        <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value={loadingMetrics ? '…' : String(metrics.oficinasAtivas)} />
+        <MetricCard
+          icon={TrendingUp}
+          label="Frequência média (mês)"
+          tone="yellow"
+          value={loadingMetrics ? '…' : metrics.frequenciaMedia === null ? '—' : `${metrics.frequenciaMedia}%`}
+        />
       </section>
 
       <div className="dashboard-primary-grid">
@@ -364,7 +447,7 @@ function Dashboard({
               const Icon = shortcut.icon
               return (
                 <button
-                  className="shortcut-button"
+                  className={`shortcut-button tone-${shortcut.tone}`}
                   key={shortcut.label}
                   onClick={() => {
                     if (!shortcut.action) return
@@ -386,35 +469,34 @@ function Dashboard({
         </SectionCard>
 
         <SectionCard
-          action={<span className="status-pill warning">3 pendentes</span>}
+          action={<span className="status-pill warning">{pendentes} pendentes</span>}
           className="tasks-card"
           title="Tarefas de hoje"
         >
           <div className="task-list">
-            <article className="task-item">
-              <ClipboardCheck className="task-icon amber" size={21} />
-              <div>
-                <strong>Frequência — Turma A</strong>
-                <span><Clock3 size={13} /> Prazo: 12h00</span>
-              </div>
-              <span className="status-pill danger">Pendente</span>
-            </article>
-            <article className="task-item">
-              <ListChecks className="task-icon orange" size={21} />
-              <div>
-                <strong>Atividades — Turma B</strong>
-                <span><Clock3 size={13} /> Prazo: 17h00</span>
-              </div>
-              <span className="status-pill danger">Pendente</span>
-            </article>
-            <article className="task-item">
-              <FileText className="task-icon green-text" size={21} />
-              <div>
-                <strong>Relatório semanal</strong>
-                <span><CalendarDays size={13} /> Prazo: sexta</span>
-              </div>
-              <span className="status-pill warning">Em breve</span>
-            </article>
+            {tarefas.length === 0 && (
+              <article className="task-item">
+                <Clock3 className="task-icon amber" size={21} />
+                <div>
+                  <strong>{loadingMetrics ? 'Carregando tarefas…' : 'Nenhuma tarefa encontrada'}</strong>
+                  <span>Verifique os registros de hoje</span>
+                </div>
+              </article>
+            )}
+            {tarefas.map((tarefa, i) => (
+              <article className="task-item" key={tarefa.titulo}>
+                {i === 0 && <ClipboardCheck className="task-icon amber" size={21} />}
+                {i === 1 && <ListChecks className="task-icon orange" size={21} />}
+                {i > 1 && <FileText className="task-icon green-text" size={21} />}
+                <div>
+                  <strong>{tarefa.titulo}</strong>
+                  <span><Clock3 size={13} /> {tarefa.prazo}</span>
+                </div>
+                <span className={'status-pill ' + (tarefa.feito ? 'success' : 'danger')}>
+                  {tarefa.feito ? 'Feito' : 'Pendente'}
+                </span>
+              </article>
+            ))}
           </div>
         </SectionCard>
       </div>
@@ -427,47 +509,53 @@ function Dashboard({
           <div className="absence-alert">
             <AlertTriangle size={21} />
             <div>
-              <strong>3 alunos precisam de contato com a família</strong>
+              <strong>
+                {faltas.length === 0
+                  ? 'Nenhum aluno com 3+ faltas consecutivas'
+                  : `${faltas.length} aluno${faltas.length === 1 ? '' : 's'} precisa${faltas.length === 1 ? '' : 'm'} de contato com a família`}
+              </strong>
               <span>Verifique os registros de contato e as ausências recentes.</span>
             </div>
           </div>
           <div className="student-alert-list">
-            {['Lucas Almeida', 'Mariana Oliveira', 'Pedro Henrique'].map((student, index) => (
-              <div className="student-alert-row" key={student}>
-                <span className="mini-avatar">{student.charAt(0)}</span>
+            {faltas.map((aluno) => (
+              <div className="student-alert-row" key={aluno.alunoId}>
+                <span className="mini-avatar">{aluno.alunoNome.charAt(0)}</span>
                 <div>
-                  <strong>{student}</strong>
-                  <span>Turma {String.fromCharCode(65 + index)} · {3 + index} faltas consecutivas</span>
+                  <strong>{aluno.alunoNome}</strong>
+                  <span>{aluno.turmaNome} · {aluno.faltasConsecutivas} faltas consecutivas</span>
                 </div>
                 <button onClick={() => onNavigate('frequencia')} type="button">Ver chamadas</button>
               </div>
             ))}
+            {faltas.length === 0 && !loadingMetrics && (
+              <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Sem alertas no momento. Bom trabalho!</p>
+            )}
           </div>
         </SectionCard>
 
         <SectionCard title="Últimas atualizações">
           <div className="timeline">
-            <article>
-              <span className="timeline-dot"><CheckCircle2 size={15} /></span>
-              <div>
-                <small>Hoje, 09:42</small>
-                <p><strong>Roberto Mendes</strong> registrou frequência da <strong>Turma A</strong>.</p>
-              </div>
-            </article>
-            <article>
-              <span className="timeline-dot"><Activity size={15} /></span>
-              <div>
-                <small>Hoje, 08:15</small>
-                <p><strong>Ana Carolina</strong> anexou fotos à atividade <strong>Musicalização</strong>.</p>
-              </div>
-            </article>
-            <article>
-              <span className="timeline-dot"><FileText size={15} /></span>
-              <div>
-                <small>Ontem, 16:28</small>
-                <p>Relatório semestral de <strong>Mariana Oliveira</strong> foi atualizado.</p>
-              </div>
-            </article>
+            {timeline.length === 0 && (
+              <article>
+                <span className="timeline-dot"><Activity size={15} /></span>
+                <div>
+                  <small>{loadingMetrics ? 'Carregando…' : 'Sem movimentações'}</small>
+                  <p>{loadingMetrics ? 'Buscando dados do banco…' : 'Nenhuma atividade, chamada ou relatório recente.'}</p>
+                </div>
+              </article>
+            )}
+            {timeline.map((item, index) => (
+              <article key={item.id}>
+                <span className="timeline-dot">
+                  {index % 3 === 0 ? <CheckCircle2 size={15} /> : index % 3 === 1 ? <Activity size={15} /> : <FileText size={15} />}
+                </span>
+                <div>
+                  <small>{item.horario}</small>
+                  <p><strong>{item.autor}</strong> {item.texto}</p>
+                </div>
+              </article>
+            ))}
           </div>
         </SectionCard>
       </div>
@@ -476,7 +564,7 @@ function Dashboard({
 }
 
 function App() {
-  const { currentUser, userProfile, loading, logout } = useAuth()
+  const { currentUser, userProfile, loading, logout, isGuest } = useAuth()
 
   const [screen, setScreen] = useState<Screen>(() => {
     const param = new URLSearchParams(window.location.search).get('screen')
@@ -485,8 +573,12 @@ function App() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('aluno'),
   )
+  const [reportStudentId, setReportStudentId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('alunoRelatorio'),
+  )
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   if (loading) {
     return (
@@ -513,6 +605,10 @@ function App() {
     return <LoginScreen />
   }
 
+  if (userProfile?.trocar_senha) {
+    return <TrocarSenha />
+  }
+
   const navigate = (nextScreen: Screen, params: Record<string, string> = {}) => {
     const url = new URL(window.location.href)
     if (nextScreen === 'home') {
@@ -525,12 +621,17 @@ function App() {
     }
     if (nextScreen !== 'reports') {
       url.searchParams.delete('aba')
+      url.searchParams.delete('alunoRelatorio')
+      setReportStudentId(null)
     }
     Object.entries(params).forEach(([key, value]) => {
       if (value) url.searchParams.set(key, value)
       else url.searchParams.delete(key)
     })
     window.history.replaceState({}, '', url)
+    if (Object.prototype.hasOwnProperty.call(params, 'alunoRelatorio')) {
+      setReportStudentId(params.alunoRelatorio || null)
+    }
     setScreen(nextScreen)
   }
 
@@ -539,8 +640,10 @@ function App() {
     url.searchParams.set('screen', 'student-detail')
     url.searchParams.set('aluno', id)
     url.searchParams.delete('aba')
+    url.searchParams.delete('alunoRelatorio')
     window.history.replaceState({}, '', url)
     setSelectedStudentId(id)
+    setReportStudentId(null)
     setScreen('student-detail')
   }
 
@@ -560,15 +663,24 @@ function App() {
         currentScreen={screen}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onChangePassword={isGuest ? undefined : () => setChangingPassword(true)}
         onLogout={logout}
         onNavigate={navigate}
         userRole={userProfile?.papel}
       />
       <div className="app-main">
+        {isGuest && (
+          <div style={{ padding: '0.75rem 1.5rem 0' }}>
+            <DataNotice kind="demo">
+              <strong>Modo demonstração ativo.</strong> Todos os dados exibidos são fictícios e
+              ficam apenas neste navegador. Operações que exigem autenticação real estão
+              desabilitadas.
+            </DataNotice>
+          </div>
+        )}
         <Topbar
           onOpenMenu={() => setSidebarOpen(true)}
           screen={screen}
-          studentName={selectedStudentId ? findStudent(selectedStudentId)?.name : undefined}
           userProfile={userProfile}
         />
         <main>
@@ -603,14 +715,22 @@ function App() {
             <DetalheAluno
               onBack={() => navigate('students')}
               onEdit={handleEditStudent}
-              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico', aluno: selectedStudentId })}
+              onNovoRelatorio={() => navigate('reports', { aba: 'pedagogico', alunoRelatorio: selectedStudentId || '' })}
               studentId={selectedStudentId}
             />
           )}
           {screen === 'reports' && (
             <RelatoriosScreen
               isDirection={userProfile?.papel === 'direcao'}
-              pedagogicalContent={<PedagogicalReport initialStudentId={selectedStudentId || new URLSearchParams(window.location.search).get('aluno') || ''} />}
+              pedagogicalContent={<PedagogicalReport initialStudentId={reportStudentId || ''} />}
+            />
+          )}
+          {screen === 'evolucao' && (
+            <Evolucao
+              onViewStudent={viewStudent}
+              onNovoRelatorio={(studentId) =>
+                navigate('reports', { aba: 'pedagogico', alunoRelatorio: studentId || '' })
+              }
             />
           )}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
@@ -635,6 +755,7 @@ function App() {
             ))}
         </main>
       </div>
+      {changingPassword && <TrocarSenha onClose={() => setChangingPassword(false)} />}
       <button aria-label="Contato pelo WhatsApp" className="whatsapp-button" type="button">
         <MessageCircle size={26} />
       </button>

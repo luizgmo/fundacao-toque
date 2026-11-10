@@ -2,6 +2,8 @@
 
 Auditoria pelo subagente da tarefa 3, consolidada em 10/11/2026. Este plano não declara homologação nem aprovação institucional. Coordenação: [execução paralela](planos-execucao-paralela.md).
 
+**Atualização da implementação:** o projeto não usa Firebase Storage nem CORS de bucket. Fotos e anexos são persistidos no Firestore em partes; referências a URLs/Storage abaixo descrevem a auditoria inicial e foram substituídas.
+
 ## Diagnóstico
 
 **Parcialmente entregue, com base extensa a preservar.** A descrição do card está desatualizada quanto às opções desabilitadas: frequência e fotos já estão disponíveis. O trabalho restante concentra-se em histórico de matrículas, política de imagens, semântica dos indicadores e rastreabilidade. Não reconstruir o módulo.

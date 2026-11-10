@@ -21,6 +21,8 @@ export function subscribeToUsuarios(
           email: '',
           papel: (data.papel as UserRole) || 'administrativo',
           ativo: data.ativo !== false,
+          trocar_senha: data.trocar_senha === true,
+          criado_em: data.criado_em?.toDate?.()?.toLocaleDateString('pt-BR') || null,
         })
       })
       list.sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR'))

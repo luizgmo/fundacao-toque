@@ -2,6 +2,8 @@
 
 Auditoria local em 10/11/2026. Este documento organiza a implementação futura; nesta etapa foram produzidos planos, sem alteração do código funcional, das regras ou dos índices e sem deploy. Os documentos descrevem evidências locais, não comprovam o estado publicado no Firebase.
 
+**Atualização da execução:** as cinco tarefas foram integradas nesta branch. Anexos/fotos usam apenas Firestore (metadados e chunks); instruções anteriores que mencionam Storage foram supersedidas.
+
 ## Planos por subagente
 
 1. [Múltiplos responsáveis e histórico de contatos](plano-task-1-responsaveis.md).

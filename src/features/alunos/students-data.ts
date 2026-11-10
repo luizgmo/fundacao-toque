@@ -38,10 +38,22 @@ export type Guardian = {
   ativo: boolean
 }
 
+export type DocumentoTipo = 'ficha_medica' | 'ficha_matricula' | 'autorizacao_imagem' | 'outro'
+
 export type DocumentEntry = {
-  name: string
-  attachedAt: string
-  kind: 'pdf' | 'lgpd'
+  id: string
+  tipo: DocumentoTipo
+  // dataUrl armazena o arquivo em base64 (DataURL) dentro do Firestore, evitando custo do Storage
+  dataUrl: string
+  nomeArquivoOriginal: string
+  tipoConteudo: string
+  tamanhoBytes: number
+  enviadoPor: string
+  enviadoEm: string
+  // Campos legados (dados existentes antes desta refatoração)
+  name?: string
+  attachedAt?: string
+  kind?: 'pdf' | 'lgpd'
 }
 
 export type Student = {
@@ -84,213 +96,111 @@ export function calculateAge(birthDate: string): number {
   return age
 }
 
-export const students: Student[] = [
+// ---------------------------------------------------------------------------
+// Dados fictícios usados SOMENTE no modo demonstração (login de convidado).
+// Não são fallback de leitura: o fluxo real nunca exibe esta lista.
+// Nomes, contatos e documentos são genéricos e não pertencem a pessoas reais.
+// ---------------------------------------------------------------------------
+export const demoStudents: Student[] = [
   {
-    id: 'lucas-oliveira-santos',
-    name: 'Lucas Oliveira Santos',
-    birthDate: '15/03/2008',
-    sexo: 'Masculino',
-    turma: 'Turma A',
+    id: 'demo-aluno-1',
+    name: 'Aluno Exemplo 01',
+    birthDate: '01/01/2010',
+    sexo: 'Não informado',
+    turma: 'Turma Exemplo A',
     turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Intelectual',
-    cid: 'F71',
+    deficiencia: 'Exemplo',
+    cid: 'Exemplo',
     status: 'Ativo',
-    observacoes: 'Aluno participativo, gosta de atividades musicais.',
-    responsavelNome: 'Maria Oliveira Santos',
-    parentesco: 'Mãe',
-    telefone: '(16) 99999-9999',
-    email: 'maria.oliveira@email.com',
-    oficinas: ['Musicalização', 'Horta/NEMA'],
-    documentos: [
-      { name: 'ficha_medica.pdf', attachedAt: '15/02/2026', kind: 'pdf' },
-      { name: 'matricula.pdf', attachedAt: '15/02/2026', kind: 'pdf' },
-      { name: 'LGPD', attachedAt: '15/02/2026', kind: 'lgpd' },
-    ],
-    faltasConsecutivas: 5,
-    frequenciaMedia: 82,
+    observacoes: 'Registro fictício criado apenas para demonstração.',
+    responsavelNome: 'Responsável Exemplo 01',
+    parentesco: 'Responsável',
+    telefone: '(00) 00000-0000',
+    email: 'exemplo01@exemplo.test',
+    oficinas: ['Oficina Exemplo A', 'Oficina Exemplo B'],
+    documentos: [],
+    faltasConsecutivas: 1,
+    frequenciaMedia: 80,
     reports: [
-      { date: '28/08/2026', title: '1º semestre 2026', summary: 'Evolução gradual na participação das atividades coletivas.' },
-      { date: '18/12/2025', title: 'Relatório anual 2025', summary: 'Bom progresso na comunicação e maior autonomia nas oficinas.' },
+      { date: '01/06/2026', title: 'Relatório de exemplo', summary: 'Conteúdo fictício de demonstração.' },
     ],
     evolution: [
-      { date: '02/09/2026', area: 'Social', note: 'Maior interação com os colegas durante a musicalização.' },
-      { date: '10/07/2026', area: 'Cognitiva', note: 'Melhor organização da rotina diária.' },
+      { date: '01/06/2026', area: 'Exemplo', note: 'Observação fictícia de demonstração.' },
     ],
-    contacts: [
-      { faltaDate: '28/08/2026', contactDate: '29/08/2026', type: 'Ligação telefônica', responsible: 'Roberto Mendes', note: 'Mãe informou consulta médica.' },
-    ],
-    activities: ['Musicalização — 02/09/2026', 'Horta/NEMA — 30/08/2026', 'Musicalização — 26/08/2026'],
-  },
-  {
-    id: 'beatriz-santos-lima',
-    name: 'Beatriz Santos Lima',
-    birthDate: '22/07/2010',
-    sexo: 'Feminino',
-    turma: 'Turma B',
-    turmaTurno: 'Tarde (13h–17h)',
-    deficiencia: 'Múltipla',
-    cid: 'G80',
-    status: 'Ativo',
-    observacoes: 'Necessita apoio para deslocamento entre salas.',
-    responsavelNome: 'João Lima',
-    parentesco: 'Pai',
-    telefone: '(16) 98888-1234',
-    email: 'joao.lima@email.com',
-    oficinas: ['Dança', 'Artes'],
-    documentos: [
-      { name: 'ficha_medica.pdf', attachedAt: '03/03/2026', kind: 'pdf' },
-      { name: 'LGPD', attachedAt: '03/03/2026', kind: 'lgpd' },
-    ],
-    faltasConsecutivas: 0,
-    frequenciaMedia: 94,
-    reports: [{ date: '10/07/2026', title: '1º semestre 2026', summary: 'Boa adaptação às oficinas de dança e artes.' }],
-    evolution: [{ date: '15/06/2026', area: 'Motora', note: 'Maior firmeza nos deslocamentos com apoio.' }],
     contacts: [],
-    activities: ['Dança — 01/09/2026', 'Artes — 28/08/2026'],
+    activities: ['Oficina Exemplo A — 01/06/2026'],
   },
   {
-    id: 'pedro-henrique-souza',
-    name: 'Pedro Henrique Souza',
-    birthDate: '10/11/2005',
-    sexo: 'Masculino',
-    turma: 'Turma C',
-    turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Intelectual',
-    cid: 'F72',
+    id: 'demo-aluno-2',
+    name: 'Aluno Exemplo 02',
+    birthDate: '02/02/2011',
+    sexo: 'Não informado',
+    turma: 'Turma Exemplo B',
+    turmaTurno: 'Tarde (13h–17h)',
+    deficiencia: 'Exemplo',
+    cid: 'Exemplo',
     status: 'Ativo',
-    observacoes: 'Gosta de atividades esportivas e de culinária.',
-    responsavelNome: 'Carla Souza',
-    parentesco: 'Mãe',
-    telefone: '(16) 97777-4321',
-    email: 'carla.souza@email.com',
-    oficinas: ['Esporte', 'Culinária'],
-    documentos: [{ name: 'ficha_medica.pdf', attachedAt: '20/01/2026', kind: 'pdf' }],
+    observacoes: 'Registro fictício criado apenas para demonstração.',
+    responsavelNome: 'Responsável Exemplo 02',
+    parentesco: 'Responsável',
+    telefone: '(00) 00000-0000',
+    email: 'exemplo02@exemplo.test',
+    oficinas: ['Oficina Exemplo B'],
+    documentos: [],
     faltasConsecutivas: 0,
     frequenciaMedia: 90,
-    reports: [{ date: '05/07/2026', title: '1º semestre 2026', summary: 'Bom desempenho nas atividades em grupo.' }],
-    evolution: [{ date: '20/06/2026', area: 'Social', note: 'Maior liderança nas atividades esportivas.' }],
+    reports: [],
+    evolution: [],
     contacts: [],
-    activities: ['Esporte — 03/09/2026', 'Culinária — 27/08/2026'],
+    activities: ['Oficina Exemplo B — 02/06/2026'],
   },
   {
-    id: 'fernanda-lima-costa',
-    name: 'Fernanda Lima Costa',
-    birthDate: '05/02/2012',
-    sexo: 'Feminino',
-    turma: 'Turma A',
+    id: 'demo-aluno-3',
+    name: 'Aluno Exemplo 03',
+    birthDate: '03/03/2012',
+    sexo: 'Não informado',
+    turma: 'Turma Exemplo A',
     turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Intelectual',
-    cid: 'F70',
+    deficiencia: 'Exemplo',
+    cid: 'Exemplo',
     status: 'Ativo',
-    observacoes: 'Aluna dedicada, gosta de leitura e alfabetização.',
-    responsavelNome: 'Marcos Costa',
-    parentesco: 'Pai',
-    telefone: '(16) 96666-5566',
-    email: 'marcos.costa@email.com',
-    oficinas: ['Alfabetização', 'Artes'],
-    documentos: [{ name: 'ficha_medica.pdf', attachedAt: '12/02/2026', kind: 'pdf' }],
-    faltasConsecutivas: 0,
-    frequenciaMedia: 96,
-    reports: [{ date: '02/07/2026', title: '1º semestre 2026', summary: 'Progresso consistente na alfabetização.' }],
-    evolution: [{ date: '18/06/2026', area: 'Comunicação', note: 'Maior vocabulário e iniciativa para falar em grupo.' }],
+    observacoes: 'Registro fictício criado apenas para demonstração.',
+    responsavelNome: 'Responsável Exemplo 03',
+    parentesco: 'Responsável',
+    telefone: '(00) 00000-0000',
+    email: 'exemplo03@exemplo.test',
+    oficinas: ['Oficina Exemplo C'],
+    documentos: [],
+    faltasConsecutivas: 4,
+    frequenciaMedia: 70,
+    reports: [],
+    evolution: [],
     contacts: [],
-    activities: ['Alfabetização — 04/09/2026', 'Artes — 29/08/2026'],
+    activities: [],
   },
   {
-    id: 'gabriel-ferreira',
-    name: 'Gabriel Ferreira',
-    birthDate: '30/08/2009',
-    sexo: 'Masculino',
-    turma: 'Turma B',
+    id: 'demo-aluno-4',
+    name: 'Aluno Exemplo 04',
+    birthDate: '04/04/2013',
+    sexo: 'Não informado',
+    turma: 'Turma Exemplo C',
     turmaTurno: 'Tarde (13h–17h)',
-    deficiencia: 'Autismo (TEA)',
-    cid: 'F84',
-    status: 'Ativo',
-    observacoes: 'Prefere rotinas previsíveis, boa adaptação à informática.',
-    responsavelNome: 'Sandra Ferreira',
-    parentesco: 'Mãe',
-    telefone: '(16) 95555-7788',
-    email: 'sandra.ferreira@email.com',
-    oficinas: ['Informática', 'Musicalização'],
-    documentos: [{ name: 'ficha_medica.pdf', attachedAt: '08/02/2026', kind: 'pdf' }],
-    faltasConsecutivas: 1,
-    frequenciaMedia: 88,
-    reports: [{ date: '30/06/2026', title: '1º semestre 2026', summary: 'Boa adaptação às mudanças de rotina com apoio visual.' }],
-    evolution: [{ date: '22/06/2026', area: 'Autonomia', note: 'Maior independência para seguir a rotina da oficina.' }],
-    contacts: [{ faltaDate: '20/08/2026', contactDate: '21/08/2026', type: 'WhatsApp', responsible: 'Roberto Mendes', note: 'Família confirmou retorno.' }],
-    activities: ['Informática — 03/09/2026', 'Musicalização — 27/08/2026'],
-  },
-  {
-    id: 'julia-mendes-rocha',
-    name: 'Júlia Mendes Rocha',
-    birthDate: '18/01/2014',
-    sexo: 'Feminino',
-    turma: 'Turma A',
-    turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Síndrome de Down',
-    cid: 'Q90',
-    status: 'Ativo',
-    observacoes: 'Muito sociável, adora dança e culinária.',
-    responsavelNome: 'Paulo Rocha',
-    parentesco: 'Pai',
-    telefone: '(16) 94444-3322',
-    email: 'paulo.rocha@email.com',
-    oficinas: ['Dança', 'Culinária'],
-    documentos: [{ name: 'ficha_medica.pdf', attachedAt: '25/01/2026', kind: 'pdf' }],
-    faltasConsecutivas: 0,
-    frequenciaMedia: 97,
-    reports: [{ date: '28/06/2026', title: '1º semestre 2026', summary: 'Excelente participação e sociabilização.' }],
-    evolution: [{ date: '10/06/2026', area: 'Social', note: 'Iniciativa para incluir colegas nas brincadeiras.' }],
-    contacts: [],
-    activities: ['Dança — 02/09/2026', 'Culinária — 26/08/2026'],
-  },
-  {
-    id: 'rafael-cardoso',
-    name: 'Rafael Cardoso',
-    birthDate: '25/06/2007',
-    sexo: 'Masculino',
-    turma: 'Turma C',
-    turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Intelectual',
-    cid: 'F71',
+    deficiencia: 'Exemplo',
+    cid: 'Exemplo',
     status: 'Inativo',
-    observacoes: 'Em processo de adaptação após mudança de turno.',
-    responsavelNome: 'Lucia Cardoso',
-    parentesco: 'Mãe',
-    telefone: '(16) 93333-2211',
-    email: 'lucia.cardoso@email.com',
-    oficinas: ['Esporte'],
-    documentos: [{ name: 'ficha_medica.pdf', attachedAt: '02/02/2026', kind: 'pdf' }],
-    faltasConsecutivas: 3,
-    frequenciaMedia: 71,
-    reports: [{ date: '15/06/2026', title: '1º semestre 2026', summary: 'Necessita de apoio adicional na adaptação à nova turma.' }],
-    evolution: [{ date: '05/06/2026', area: 'Autonomia', note: 'Ainda depende de apoio para mudanças de rotina.' }],
-    contacts: [{ faltaDate: '01/09/2026', contactDate: '02/09/2026', type: 'Ligação telefônica', responsible: 'Roberto Mendes', note: 'Aguardando retorno da família.' }],
-    activities: ['Esporte — 28/08/2026'],
-  },
-  {
-    id: 'ana-clara-vieira',
-    name: 'Ana Clara Vieira',
-    birthDate: '09/04/2011',
-    sexo: 'Feminino',
-    turma: 'Turma B',
-    turmaTurno: 'Tarde (13h–17h)',
-    deficiencia: 'Paralisia Cerebral',
-    cid: 'G80',
-    status: 'Ativo',
-    observacoes: 'Utiliza cadeira de rodas, participa bem das oficinas adaptadas.',
-    responsavelNome: 'Roberto Vieira',
-    parentesco: 'Pai',
-    telefone: '(16) 92222-1100',
-    email: 'roberto.vieira@email.com',
-    oficinas: ['Artes', 'Musicalização'],
-    documentos: [{ name: 'ficha_medica.pdf', attachedAt: '19/01/2026', kind: 'pdf' }],
+    observacoes: 'Registro fictício criado apenas para demonstração.',
+    responsavelNome: 'Responsável Exemplo 04',
+    parentesco: 'Responsável',
+    telefone: '(00) 00000-0000',
+    email: 'exemplo04@exemplo.test',
+    oficinas: [],
+    documentos: [],
     faltasConsecutivas: 0,
-    frequenciaMedia: 93,
-    reports: [{ date: '20/06/2026', title: '1º semestre 2026', summary: 'Boa evolução na coordenação motora fina nas artes.' }],
-    evolution: [{ date: '01/06/2026', area: 'Motora', note: 'Maior precisão em atividades manuais.' }],
+    frequenciaMedia: 100,
+    reports: [],
+    evolution: [],
     contacts: [],
-    activities: ['Artes — 04/09/2026', 'Musicalização — 28/08/2026'],
+    activities: [],
   },
 ]
 
@@ -316,37 +226,32 @@ export type AttendanceSession = {
   records: Record<string, { status: AttendanceStatus; observation: string }>
 }
 
-export function findStudent(id: string): Student | undefined {
-  return students.find((student) => student.id === id)
-}
-
-// Memory store for dynamic interactions during session
-export const initialAttendanceSessions: Record<string, AttendanceSession> = {
-  '2026-09-15_Turma A_geral': {
-    id: '2026-09-15_Turma A_geral',
-    date: '2026-09-15',
-    turmaId: 'Turma A',
+// Sessões fictícias do modo demonstração (nunca usadas como fallback real).
+export const demoAttendanceSessions: Record<string, AttendanceSession> = {
+  '2026-06-01_demo-turma-a_geral': {
+    id: '2026-06-01_demo-turma-a_geral',
+    date: '2026-06-01',
+    turmaId: 'demo-turma-a',
     scope: 'turma',
-    registeredBy: 'Ana Carolina Silva',
-    registeredAt: '2026-09-15T09:30:00Z',
+    registeredBy: 'Demonstração',
+    registeredAt: '2026-06-01T09:30:00Z',
     records: {
-      'lucas-oliveira-santos': { status: 'ausente', observation: 'Sem aviso prévio' },
-      'fernanda-lima-costa': { status: 'presente', observation: '' },
-      'julia-mendes-rocha': { status: 'presente', observation: '' },
+      'demo-aluno-1': { status: 'ausente', observation: 'Registro fictício.' },
+      'demo-aluno-3': { status: 'presente', observation: '' },
     },
   },
 }
 
-export function getAttendanceSession(id: string): AttendanceSession | undefined {
-  return initialAttendanceSessions[id] || initialAttendanceSessions[id.replace('_geral', '')] || initialAttendanceSessions[`${id}_geral`]
+export function findDemoStudent(id: string): Student | undefined {
+  return demoStudents.find((student) => student.id === id)
 }
 
 export function saveAttendanceSession(session: AttendanceSession) {
-  initialAttendanceSessions[session.id] = session
+  demoAttendanceSessions[session.id] = session
 
-  // Update student streak & average status dynamically
+  // Atualiza a sequência de faltas apenas nos dados fictícios de demonstração.
   Object.entries(session.records).forEach(([studentId, record]) => {
-    const student = findStudent(studentId)
+    const student = findDemoStudent(studentId)
     if (student) {
       if (record.status === 'ausente') {
         student.faltasConsecutivas += 1
@@ -357,13 +262,9 @@ export function saveAttendanceSession(session: AttendanceSession) {
   })
 }
 
-export function addContactToStudent(
-  studentId: string,
-  contact: ContactEntry
-) {
-  const student = findStudent(studentId)
+export function addContactToStudent(studentId: string, contact: ContactEntry) {
+  const student = findDemoStudent(studentId)
   if (student) {
     student.contacts.unshift(contact)
   }
 }
-

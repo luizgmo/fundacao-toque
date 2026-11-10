@@ -5,12 +5,17 @@ import {
   signInWithEmailAndPassword,
   signOut,
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth as getSecondaryAuth } from 'firebase/auth'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db, isFirebaseConfigured } from '../../lib/firebase'
+import { clearDemoData, setDemoModeEnabled } from '../../lib/demoMode'
 import type { UserProfile, UserRole } from '../../types/auth'
 
 interface AuthContextType {
@@ -18,25 +23,24 @@ interface AuthContextType {
   userProfile: UserProfile | null
   loading: boolean
   isConfigured: boolean
+  isGuest: boolean
   login: (email: string, pass: string) => Promise<void>
   loginAsGuest: (papel?: UserRole) => void
   logout: () => Promise<void>
-  setupInitialAdmin: (nome: string, email: string, pass: string) => Promise<void>
   createAuthorUser: (
     nome: string,
     email: string,
     pass: string,
     papel: UserRole
   ) => Promise<string>
+  changePassword: (currentPass: string, newPass: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const secondaryAppName = 'SecondaryAuthAdmin'
-function isUserRole(value: unknown): value is UserRole {
-  return value === 'direcao' || value === 'pedagogia' || value === 'administrativo'
-}
+const GUEST_UID = 'guest-local-uid'
 
+const secondaryAppName = 'SecondaryAuthAdmin'
 function getSecondaryAuthInstance() {
   const existing = getApps().find((a) => a.name === secondaryAppName)
   if (existing) {
@@ -54,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (saved) {
         const parsed = JSON.parse(saved)
         return {
-          uid: parsed.uid || 'guest-local-uid',
+          uid: parsed.uid || GUEST_UID,
           email: parsed.email || '',
           displayName: parsed.nome_completo || '',
         } as unknown as User
@@ -76,37 +80,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Sessão de convidado sempre implica modo demonstração explícito.
+    try {
+      if (localStorage.getItem('ft_guest_session')) setDemoModeEnabled(true)
+    } catch {
+      // ignore
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Usuário real: nunca misturar com dados fictícios de demonstração.
+        setDemoModeEnabled(false)
+        try {
+          localStorage.removeItem('ft_guest_session')
+        } catch {
+          // ignore
+        }
         setCurrentUser(user)
         try {
           const userDoc = await getDoc(doc(db, 'usuarios', user.uid))
           if (userDoc.exists()) {
             const data = userDoc.data()
-            if (!isUserRole(data.papel) || data.ativo !== true) {
-              setUserProfile(null)
-              setCurrentUser(null)
-              await signOut(auth)
-            } else {
-              setUserProfile({
-                uid: user.uid,
-                nome_completo: data.nome_completo || user.displayName || 'Usuário',
-                email: data.email || user.email || '',
-                papel: data.papel,
-                ativo: true,
-              })
+            const validRole = ['direcao', 'pedagogia', 'administrativo'].includes(data.papel)
+            if (data.ativo !== true || !validRole) {
+              throw new Error('Perfil ausente, inativo ou com papel inválido.')
             }
+            setUserProfile({
+              uid: user.uid,
+              nome_completo: data.nome_completo || user.displayName || 'Usuário',
+              email: data.email || user.email || '',
+              papel: data.papel as UserRole,
+              ativo: true,
+              trocar_senha: data.trocar_senha === true,
+            })
           } else {
-            // Uma conta Auth sem perfil deve ser provisionada por um administrador confiável.
-            setUserProfile(null)
-            setCurrentUser(null)
-            await signOut(auth)
+            throw new Error('Conta sem perfil no Firestore; solicite provisionamento à Direção.')
           }
         } catch (err) {
           console.warn('Erro ao carregar perfil do Firestore:', err)
           setUserProfile(null)
           setCurrentUser(null)
-          await signOut(auth).catch(() => undefined)
+          await signOut(auth).catch(() => {})
         }
       } else {
         // Se já havia uma sessão de convidado/local, não limpa
@@ -128,13 +142,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginAsGuest = (papel: UserRole = 'direcao') => {
     const mockUser = {
-      uid: 'guest-local-uid',
-      email: `${papel}@fundacaotoque.org.br`,
-      displayName: papel === 'direcao' ? 'Direção (Modo Teste)' : papel === 'pedagogia' ? 'Pedagoga (Modo Teste)' : 'Administrativo (Modo Teste)',
+      uid: GUEST_UID,
+      email: `${papel}@modo-demonstracao.local`,
+      displayName: papel === 'direcao' ? 'Direção (Modo Demonstração)' : papel === 'pedagogia' ? 'Pedagoga (Modo Demonstração)' : 'Administrativo (Modo Demonstração)',
     } as unknown as User
 
     const mockProfile: UserProfile = {
-      uid: 'guest-local-uid',
+      uid: GUEST_UID,
       nome_completo: mockUser.displayName || 'Colaborador',
       email: mockUser.email || '',
       papel,
@@ -146,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    setDemoModeEnabled(true)
 
     setCurrentUser(mockUser)
     setUserProfile(mockProfile)
@@ -157,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    setDemoModeEnabled(false)
+    clearDemoData()
     try {
       await signOut(auth)
     } catch {
@@ -164,14 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setCurrentUser(null)
     setUserProfile(null)
-  }
-
-  // Cria o primeiro admin Direção (semeador ou setup inicial)
-  const setupInitialAdmin = async (nome: string, email: string, pass: string) => {
-    void nome
-    void email
-    void pass
-    throw new Error('O primeiro perfil de Direção deve ser provisionado por um administrador confiável.')
   }
 
   // Permite à Direção criar outro autor sem deslogar a sessão atual
@@ -185,24 +194,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(secAuth, email, pass)
     const newUid = cred.user.uid
 
-    await setDoc(doc(db, 'usuarios', newUid), {
-      nome_completo: nome,
-      email: email,
-      papel: papel,
-      ativo: true,
-      criado_em: serverTimestamp(),
-      atualizado_em: serverTimestamp(),
-    })
+    try {
+      await setDoc(doc(db, 'usuarios', newUid), {
+        nome_completo: nome,
+        email: email,
+        papel: papel,
+        ativo: true,
+        trocar_senha: true,
+        criado_em: serverTimestamp(),
+        atualizado_em: serverTimestamp(),
+      })
+    } catch (err) {
+      // Sem o perfil no Firestore a conta fica órfã no Auth e bloqueia o e-mail;
+      // desfaz a criação para permitir nova tentativa.
+      await deleteUser(cred.user).catch((delErr) =>
+        console.warn('Não foi possível desfazer a conta criada no Auth:', delErr)
+      )
+      throw err
+    } finally {
+      await signOut(secAuth).catch(() => {})
+    }
 
-    await setDoc(doc(db, 'usuarios_publicos', newUid), {
-      nome_completo: nome,
-      papel,
-      ativo: true,
-      atualizado_em: serverTimestamp(),
-    })
-
-    await signOut(secAuth)
     return newUid
+  }
+
+  // Troca a senha do usuário logado e libera o aviso de senha provisória
+  const changePassword = async (currentPass: string, newPass: string) => {
+    const user = auth.currentUser
+    if (!user || !user.email) {
+      throw new Error('Nenhum usuário autenticado no Firebase.')
+    }
+
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPass))
+    await updatePassword(user, newPass)
+    await updateDoc(doc(db, 'usuarios', user.uid), {
+      trocar_senha: false,
+      atualizado_em: serverTimestamp(),
+    })
+
+    setUserProfile((prev) => (prev ? { ...prev, trocar_senha: false } : prev))
   }
 
   return (
@@ -212,11 +242,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userProfile,
         loading,
         isConfigured: isFirebaseConfigured,
+        isGuest: currentUser?.uid === GUEST_UID,
         login,
         loginAsGuest,
         logout,
-        setupInitialAdmin,
         createAuthorUser,
+        changePassword,
       }}
     >
       {children}
@@ -224,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {

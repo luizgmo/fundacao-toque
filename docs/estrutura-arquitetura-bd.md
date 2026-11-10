@@ -109,7 +109,7 @@ A arquitetura é **serverless**, sem servidor próprio: toda a infraestrutura de
 - Regras de leitura/escrita distintas por coleção (ex.: apenas a Direção apaga registros e gerencia usuários);
 - Ficha médica: leitura restrita a Direção e Pedagogia; escrita apenas pela Direção;
 - Nenhum dado pessoal real é usado em desenvolvimento — apenas dados fictícios;
-- Arquivos ficam no Firestore: metadados em `anexos/{id}` e conteúdo dividido na subcoleção `chunks`, respeitando o limite de 1 MiB por documento. Não há dependência de Firebase Storage.
+- Fotos e anexos de atividade/relatório ficam no Firestore: metadados em `anexos/{id}` e conteúdo dividido na subcoleção `chunks`, respeitando o limite de 1 MiB por documento. Documentos do cadastro de alunos são Data URLs em documentos limitados a 500 KiB. Não há dependência de Firebase Storage.
 
 ---
 
@@ -157,6 +157,7 @@ nome_completo: string          obrigatório
 email: string                  obrigatório
 papel: string                  obrigatório (direcao | pedagogia | administrativo)
 ativo: boolean                 obrigatório
+trocar_senha: boolean          opcional (true = senha provisória criada pela Direção)
 ultimo_login_em: Timestamp     opcional
 criado_em / atualizado_em: Timestamp
 ```

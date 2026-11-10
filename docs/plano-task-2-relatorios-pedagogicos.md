@@ -2,6 +2,8 @@
 
 ## Escopo e diagnóstico
 
+**Atualização da implementação:** o projeto não usa Firebase Storage. Anexos pedagógicos são persistidos no Firestore em partes; referências a Storage neste plano registram somente o diagnóstico inicial e foram substituídas por regras para metadados e chunks do Firestore.
+
 Auditoria realizada em 10/11/2026 para planejar a implementação, sem mudanças de código e sem gravações no Firebase. A modelagem existe, mas o fluxo pedagógico continua essencialmente demonstrativo. Persistência, retomada de rascunho e consulta após novo login não podem ser consideradas entregues.
 
 Os documentos de apresentação não rastreados encontrados no Git devem ser preservados. Não foi encontrado AGENTS.md adicional no projeto nem nos ancestrais verificados. A auditoria seguiu `/home/luizgmo/.codex/RTK.md`.

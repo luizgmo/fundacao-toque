@@ -6,6 +6,8 @@ export interface UserProfile {
   email: string
   papel: UserRole
   ativo: boolean
+  // true quando a conta foi criada pela Direção com senha provisória
+  trocar_senha?: boolean
   criado_em?: string | null
   atualizado_em?: string | null
   ultimo_login_em?: string | null

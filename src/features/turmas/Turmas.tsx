@@ -85,13 +85,21 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
   const [turmaToDelete, setTurmaToDelete] = useState<Turma | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubs = [
-      subscribeToTurmas((data) => {
-        setTurmas(data)
-        setLoading(false)
-      }),
+      subscribeToTurmas(
+        (data) => {
+          setTurmas(data)
+          setLoadError(null)
+          setLoading(false)
+        },
+        (err) => {
+          setLoadError('Não foi possível carregar as turmas do banco de dados: ' + err.message)
+          setLoading(false)
+        }
+      ),
       subscribeToOficinas(setOficinas),
       subscribeToTurmaOficinas(setVinculos),
       subscribeToStudents(setStudentsList),
@@ -214,7 +222,7 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
     if (!turmaToDelete) return
     setDeleting(true)
     try {
-      await deleteTurma(turmaToDelete.id)
+      await deleteTurma(turmaToDelete.id, userProfile?.uid || 'sistema')
       showFeedback(`Turma ${turmaToDelete.nome} inativada com sucesso.`)
       setTurmaToDelete(null)
     } catch (err) {
@@ -242,6 +250,13 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="feedback-banner warning">
+          <AlertCircle size={18} />
+          <span>{loadError}</span>
+        </div>
+      )}
 
       {actionFeedback && (
         <div className="feedback-banner success">

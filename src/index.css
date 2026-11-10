@@ -2,33 +2,87 @@
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  color: #273b50;
-  background: #f4f6f8;
+  color: #2b2f26;
+  background: #f7f4ec;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
   --surface: #ffffff;
-  --surface-subtle: #f4f6f8;
-  --border: #dde4e9;
-  --border-strong: #d3dde4;
-  --navy-900: #172c40;
-  --navy-800: #293d52;
-  --navy-700: #344a60;
-  --text-muted: #77858d;
-  --green-50: #f3faf6;
-  --green-100: #e4f3eb;
-  --green-400: #64b986;
-  --green-500: #39a56b;
-  --green-600: #2d915d;
-  --green-700: #247749;
-  --green-800: #1c603c;
-  --amber-500: #ed9800;
-  --danger-50: #fff4f2;
-  --danger-600: #df3028;
-  --card-shadow: 0 2px 3px rgba(24, 45, 62, 0.05);
+  --surface-subtle: #f7f4ec;
+  --border: #e6e0d2;
+  --border-strong: #c4bba9;
+  --navy-900: #1e3a5f;
+  --navy-800: #2b2f26;
+  --navy-700: #3f4638;
+  --text-muted: #6e6f63;
+  --green-50: #eef6e8;
+  --green-100: #e9f3df;
+  --green-400: #74ac53;
+  --green-500: #4c8c2b;
+  --green-600: #4c8c2b;
+  --green-700: #336b1b;
+  --green-800: #245013;
+  --amber-500: #f2b01e;
+  --danger-50: #fbe6e4;
+  --danger-600: #d43f3a;
+  --card-shadow: 0 2px 3px rgba(43, 47, 38, 0.06);
+
+  /* Laranja / coral (logo) */
+  --orange-50: #fff1e6;
+  --orange-100: #ffe3cc;
+  --orange-400: #f59a52;
+  --orange-500: #ee7b2b;
+  --orange-600: #d9681a;
+  --orange-700: #b6510e;
+  --orange-800: #8a3c0a;
+
+  /* Azul (logo) */
+  --blue-50: #edf4fc;
+  --blue-100: #e1eef9;
+  --blue-400: #4f97d8;
+  --blue-500: #1f6fb5;
+  --blue-600: #1f6fb5;
+  --blue-700: #164f85;
+  --blue-800: #103a63;
+
+  /* Vermelho (logo) */
+  --red-50: #fbe6e4;
+  --red-100: #f8d5d2;
+  --red-400: #e56a66;
+  --red-500: #d43f3a;
+  --red-600: #d43f3a;
+  --red-700: #a92b27;
+  --red-800: #7f1f1c;
+
+  /* Amarelo (logo) */
+  --yellow-50: #fff8e6;
+  --yellow-100: #ffefbf;
+  --yellow-500: #f2b01e;
+  --yellow-700: #c98a00;
 }
+
+/* Classes de cor harmonicas */
+.text-green { color: var(--green-600); }
+.text-orange { color: var(--orange-600); }
+.text-blue { color: var(--blue-600); }
+.text-red { color: var(--red-600); }
+
+.bg-green { background: var(--green-100); }
+.bg-orange { background: var(--orange-100); }
+.bg-blue { background: var(--blue-100); }
+.bg-red { background: var(--red-100); }
+
+.border-green { border-color: var(--green-500); }
+.border-orange { border-color: var(--orange-500); }
+.border-blue { border-color: var(--blue-500); }
+.border-red { border-color: var(--red-500); }
+
+.badge-green { color: var(--green-800); background: var(--green-100); }
+.badge-orange { color: var(--orange-800); background: var(--orange-100); }
+.badge-blue { color: var(--blue-800); background: var(--blue-100); }
+.badge-red { color: var(--red-800); background: var(--red-100); }
 
 * {
   box-sizing: border-box;

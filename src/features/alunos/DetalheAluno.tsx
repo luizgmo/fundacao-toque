@@ -4,6 +4,7 @@ import {
   Cake,
   ChevronLeft,
   ClipboardCheck,
+  Download,
   FileText,
   ListChecks,
   NotebookPen,
@@ -13,13 +14,13 @@ import {
   Printer,
   School,
   ShieldCheck,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
-import { calculateAge, findStudent } from './students-data'
-import type { Student, ContactEntry, Guardian } from './students-data'
-import { getStudentById, getStudentGuardians } from '../../services/studentsService'
+import { calculateAge } from './students-data'
+import type { Student, ContactEntry, DocumentEntry, Guardian } from './students-data'
+import { getStudentById, getDocumentosComUrl, getStudentGuardians } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
-import { listarRelatoriosDoAluno } from '../../services/relatoriosService'
-import type { RelatorioPedagogico } from '../../types/relatoriosPedagogicos'
 import './DetalheAluno.css'
 
 const tabs = [
@@ -45,27 +46,27 @@ export function DetalheAluno({
   onEdit?: (student: Student) => void
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('visao')
-  const [student, setStudent] = useState<Student | null>(() => findStudent(studentId) || null)
-  const [contactState, setContactState] = useState<{ studentId: string; items: ContactEntry[] }>({ studentId, items: [] })
-  const [guardianState, setGuardianState] = useState<{ studentId: string; items: Guardian[]; loaded: boolean; error: boolean }>({ studentId, items: [], loaded: false, error: false })
-  const [reportState, setReportState] = useState<{ studentId: string; items: RelatorioPedagogico[]; loaded: boolean; error: boolean }>({ studentId, items: [], loaded: false, error: false })
+  const [student, setStudent] = useState<Student | null>(null)
+  const [loadedStudentId, setLoadedStudentId] = useState<string | null>(null)
+  const [dbContacts, setDbContacts] = useState<ContactEntry[]>([])
+  const [documentos, setDocumentos] = useState<(DocumentEntry & { url: string | null })[]>([])
+  const [documentosError, setDocumentosError] = useState<string | null>(null)
+  const [documentosLoading, setDocumentosLoading] = useState(false)
+  const [guardians, setGuardians] = useState<Guardian[]>([])
 
   useEffect(() => {
     let isMounted = true
     getStudentById(studentId).then((st) => {
-      if (isMounted && st) {
+      if (isMounted) {
         setStudent(st)
+        setLoadedStudentId(studentId)
       }
     })
 
     const unsubOccurrences = subscribeStudentOccurrences(studentId, (contacts) => {
-      if (isMounted) setContactState({ studentId, items: contacts })
-    })
-    getStudentGuardians(studentId).then((result) => {
-      if (isMounted) setGuardianState({ studentId, items: result, loaded: true, error: false })
-    }).catch((error) => {
-      console.warn('Erro ao carregar responsáveis:', error)
-      if (isMounted) setGuardianState({ studentId, items: [], loaded: true, error: true })
+      if (isMounted && contacts.length > 0) {
+        setDbContacts(contacts)
+      }
     })
 
     return () => {
@@ -75,22 +76,65 @@ export function DetalheAluno({
   }, [studentId])
 
   useEffect(() => {
-    if (activeTab !== 'relatorios') return
-    let isMounted = true
-    listarRelatoriosDoAluno(studentId).then((items) => {
-      if (isMounted) setReportState({ studentId, items, loaded: true, error: false })
+    let active = true
+    getStudentGuardians(studentId).then((items) => {
+      if (active) setGuardians(items)
     }).catch((error) => {
-      console.warn('Erro ao carregar relatórios pedagógicos:', error)
-      if (isMounted) setReportState({ studentId, items: [], loaded: true, error: true })
+      console.warn('Não foi possível carregar responsáveis:', error)
+      if (active) setGuardians([])
     })
-    return () => { isMounted = false }
-  }, [studentId, activeTab])
+    return () => { active = false }
+  }, [studentId])
+
+  useEffect(() => {
+    let isMounted = true
+    let cancel = false
+
+    const carregarDocumentos = async () => {
+      setDocumentosLoading(true)
+      setDocumentosError(null)
+      try {
+        const docs = await getDocumentosComUrl(studentId)
+        if (isMounted && !cancel) {
+          setDocumentos(docs)
+        }
+      } catch (err) {
+        if (isMounted && !cancel) {
+          setDocumentosError(err instanceof Error ? err.message : 'Falha ao carregar documentos')
+          setDocumentos([])
+        }
+      } finally {
+        if (isMounted && !cancel) {
+          setDocumentosLoading(false)
+        }
+      }
+    }
+
+    carregarDocumentos()
+
+    return () => {
+      isMounted = false
+      cancel = true
+    }
+  }, [studentId])
+
+  const loadingStudent = loadedStudentId !== studentId
+
+  if (loadingStudent) {
+    return (
+      <div className="page-container">
+        <div className="form-card">
+          <p>Carregando dados do aluno no banco de dados…</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!student) {
     return (
       <div className="page-container">
         <div className="form-card">
-          <p>Aluno não encontrado.</p>
+          <p>Aluno não encontrado no banco de dados.</p>
           <button className="button secondary" onClick={onBack} type="button">
             <ChevronLeft size={18} /> Voltar para Alunos
           </button>
@@ -100,11 +144,7 @@ export function DetalheAluno({
   }
 
   // Combina contatos do Firestore com contatos locais sem duplicação
-  const dbContacts = contactState.studentId === studentId ? contactState.items : []
-  const guardians = guardianState.studentId === studentId ? guardianState.items : []
-  const guardiansLoading = guardianState.studentId !== studentId || !guardianState.loaded
-  const pedagogicalReports = reportState.studentId === studentId ? reportState.items : []
-  const allContacts = dbContacts.length ? dbContacts : student.contacts
+  const allContacts = dbContacts.length > 0 ? dbContacts : student.contacts
 
   return (
     <div className="page-container student-detail-page">
@@ -206,16 +246,21 @@ export function DetalheAluno({
                 </p>
               </div>
               <div>
-                <h3>Responsáveis</h3>
-                {guardiansLoading ? <p>Carregando responsáveis…</p> : guardians.length ? guardians.map((guardian) => (
-                  <article className="guardian-profile-card" key={guardian.id}>
-                    <p><strong>{guardian.nome}</strong>{guardian.principal && <span className="guardian-primary-badge">Principal</span>}{!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}</p>
+                <h3>Responsável</h3>
+                {guardians.length ? guardians.map((guardian) => (
+                  <article className="guardian-profile-card" key={guardian.id || guardian.nome}>
+                    <p><strong>{guardian.nome}</strong> {guardian.principal && <span className="guardian-primary-badge">Principal</span>} {!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}</p>
                     <p><strong>Parentesco:</strong> {guardian.parentesco}</p>
                     <p><strong>Telefone:</strong> {guardian.telefone || 'Não informado'}</p>
                     <p><strong>Telefone alternativo:</strong> {guardian.telefoneAlternativo || 'Não informado'}</p>
                     <p><strong>E-mail:</strong> {guardian.email || 'Não informado'}</p>
                   </article>
-                )) : <><p><strong>{student.responsavelNome}</strong> <span className="guardian-primary-badge">Principal · legado</span></p><p><strong>Parentesco:</strong> {student.parentesco}</p><p><strong>Telefone:</strong> {student.telefone || 'Não informado'}</p><p><strong>E-mail:</strong> {student.email || 'Não informado'}</p></>}
+                )) : <>
+                  <p><strong>{student.responsavelNome}</strong> <span className="guardian-primary-badge">Principal · legado</span></p>
+                  <p><strong>Parentesco:</strong> {student.parentesco}</p>
+                  <p><strong>Telefone:</strong> {student.telefone || 'Não informado'}</p>
+                  <p><strong>E-mail:</strong> {student.email || 'Não informado'}</p>
+                </>}
               </div>
             </div>
 
@@ -248,16 +293,83 @@ export function DetalheAluno({
             </div>
 
             <h3 className="student-section-title">Documentos</h3>
+
+            {documentosLoading && (
+              <div className="student-empty">Carregando documentos…</div>
+            )}
+
+            {documentosError && (
+              <div style={{ padding: '14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '12px', marginBottom: '10px' }}>
+                <AlertCircle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                {documentosError}
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setDocumentosLoading(true)
+                    setDocumentosError(null)
+                    void getDocumentosComUrl(studentId).then((docs) => {
+                      setDocumentos(docs)
+                      setDocumentosLoading(false)
+                    }).catch((err) => {
+                      setDocumentosError(err.message || 'Falha ao carregar documentos')
+                      setDocumentosLoading(false)
+                    })
+                  }}
+                  type="button"
+                  style={{ marginTop: '6px', padding: '4px 10px', fontSize: '11px' }}
+                >
+                  <RefreshCw size={14} /> Tentar novamente
+                </button>
+              </div>
+            )}
+
             <div className="student-documents-grid">
-              {student.documentos.map((doc) => (
-                <div className="student-document-card" key={doc.name}>
-                  {doc.kind === 'lgpd' ? <ShieldCheck size={28} /> : <FileText size={28} />}
-                  <p>{doc.name}</p>
-                  <span>
-                    {doc.kind === 'lgpd' ? '✅ Autorizado' : 'Anexado em ' + doc.attachedAt}
-                  </span>
-                </div>
-              ))}
+              {(documentos.length > 0 ? documentos : student.documentos).map((doc) => {
+                const nome = doc.nomeArquivoOriginal
+                const tipo = doc.tipo
+                const dataUrl = doc.dataUrl
+                const enviadoEm = doc.enviadoEm
+                const ehImagem = dataUrl.startsWith('data:image/')
+                const ehPdf = dataUrl.startsWith('data:application/pdf') || tipo === 'ficha_medica'
+                return (
+                  <div className="student-document-card" key={doc.id}>
+                    {tipo === 'autorizacao_imagem' ? <ShieldCheck size={28} /> : <FileText size={28} />}
+                    <p title={nome}>{nome}</p>
+                    {ehImagem && dataUrl ? (
+                      <img
+                        src={dataUrl}
+                        alt={nome}
+                        style={{
+                          width: '100%',
+                          height: 'auto',
+                          maxHeight: 200,
+                          objectFit: 'contain',
+                          borderRadius: '6px',
+                          marginTop: '8px',
+                          border: '1px solid var(--border)',
+                        }}
+                      />
+                    ) : ehPdf && dataUrl ? (
+                      <a
+                        href={dataUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="button secondary"
+                        style={{ padding: '4px 10px', fontSize: '11px', marginTop: '8px', width: '100%' }}
+                      >
+                        <Download size={14} /> Abrir PDF
+                      </a>
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#6b7280', marginTop: '8px', display: 'block' }}>
+                        {enviadoEm ? 'Anexado em ' + enviadoEm : 'Sem arquivo'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              {(documentos.length === 0 && student.documentos.length === 0) && (
+                <p className="student-empty">Nenhum documento anexado.</p>
+              )}
             </div>
           </div>
         )}
@@ -271,23 +383,20 @@ export function DetalheAluno({
               </button>
             </div>
             <div className="timeline">
-              {(!reportState.loaded || reportState.studentId !== studentId) && <p className="student-empty">Carregando relatórios...</p>}
-              {reportState.error && reportState.studentId === studentId && <p className="student-empty">Não foi possível carregar os relatórios. Tente novamente.</p>}
-              {pedagogicalReports.map((report) => (
-                <article key={report.id}>
+              {student.reports.map((report) => (
+                <article key={report.date}>
                   <span className="timeline-dot">
                     <FileText size={15} />
                   </span>
                   <div>
                     <small>
-                      {report.periodo_inicio} a {report.periodo_fim} — {report.tipo_relatorio} · {report.status}
+                      {report.date} — {report.title}
                     </small>
-                    <p>{report.evolucao || report.avancos || report.dificuldades || 'Relatório sem resumo preenchido.'}</p>
-                    <small>Responsável: {report.usuario_responsavel_nome}</small>
+                    <p>{report.summary}</p>
                   </div>
                 </article>
               ))}
-              {reportState.loaded && !reportState.error && reportState.studentId === studentId && pedagogicalReports.length === 0 && (
+              {student.reports.length === 0 && (
                 <p className="student-empty">Nenhum relatório registrado ainda.</p>
               )}
             </div>
@@ -403,7 +512,6 @@ export function DetalheAluno({
                     <p>
                       {contact.note} <em>— {contact.responsible}</em>
                     </p>
-                    <p><strong>Familiar contatado:</strong> {contact.guardianName || 'Responsável não identificado no registro original'}{contact.guardianRelationship ? ` · ${contact.guardianRelationship}` : ''}{contact.guardianContact ? ` · ${contact.guardianContact}` : ''}</p>
                   </div>
                 </article>
               ))}

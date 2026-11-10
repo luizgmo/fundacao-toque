@@ -35,12 +35,12 @@ beforeEach(async () => {
       setDoc(doc(db, 'usuarios/admin-1'), { papel: 'administrativo', ativo: true, nome_completo: 'Administrativo' }),
       setDoc(doc(db, 'usuarios/inativo-1'), { papel: 'direcao', ativo: false }),
       setDoc(doc(db, 'alunos/aluno-1'), { nome_completo: 'Aluno fictício', responsavel_principal_id: 'principal-1' }),
-      setDoc(doc(db, 'alunos/aluno-1/responsaveis/principal-1'), { nome_completo: 'Principal', ativo: true, principal: true }),
+      setDoc(doc(db, 'alunos/aluno-1/responsaveis/principal-1'), { nome_completo: 'Principal', parentesco: 'Mãe', telefone: '0000', ativo: true, principal: true }),
       setDoc(doc(db, 'registros_atividade/atividade-1'), { turma_id: 'turma-1' }),
       setDoc(doc(db, 'relatorios_pedagogicos/rascunho-1'), { status: 'rascunho', aluno_id: 'aluno-1' }),
       setDoc(doc(db, 'relatorios_pedagogicos/concluido-1'), { status: 'concluido', aluno_id: 'aluno-1' }),
       setDoc(doc(db, 'contatos_familia/contato-1'), {
-        aluno_id: 'aluno-1', responsavel_id: 'familiar-1',
+        aluno_id: 'aluno-1', responsavel_id: 'principal-1',
         responsavel_snapshot: { nome: 'Nome da época', contato: '0000' },
       }),
     ])
@@ -135,7 +135,14 @@ describe('Firestore security rules', () => {
 
   it('permite criar contatos sem permitir reescrita do snapshot histórico', async () => {
     const db = firestore('pedagogia-1')
-    await assertSucceeds(setDoc(doc(db, 'contatos_familia/novo'), { aluno_id: 'aluno-1', responsavel_id: 'familiar-1', responsavel_snapshot: { nome: 'Contato no momento' } }))
+    await assertSucceeds(setDoc(doc(db, 'contatos_familia/novo'), {
+      aluno_id: 'aluno-1', responsavel_id: 'principal-1',
+      responsavel_snapshot: { nome: 'Principal', parentesco: 'Mãe', contato: '0000' },
+    }))
+    await assertFails(setDoc(doc(db, 'contatos_familia/forjado'), {
+      aluno_id: 'aluno-1', responsavel_id: 'principal-1',
+      responsavel_snapshot: { nome: 'Nome forjado', parentesco: 'Mãe', contato: '0000' },
+    }))
     await assertFails(updateDoc(doc(db, 'contatos_familia/contato-1'), { responsavel_snapshot: { nome: 'Nome alterado' } }))
     await assertSucceeds(getDoc(doc(db, 'contatos_familia/contato-1')))
   })

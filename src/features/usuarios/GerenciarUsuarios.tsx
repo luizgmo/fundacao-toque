@@ -14,18 +14,18 @@ import {
   X,
   Sparkles,
 } from 'lucide-react'
-import { collection, onSnapshot } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
 import { useAuth } from '../auth/AuthContext'
+import { subscribeToUsuarios } from '../../services/usuariosService'
 import type { UserProfile, UserRole } from '../../types/auth'
 import { ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../types/auth'
 import './GerenciarUsuarios.css'
 
 export function GerenciarUsuarios() {
-  const { userProfile, createAuthorUser } = useAuth()
+  const { userProfile, createAuthorUser, isGuest } = useAuth()
 
   const [usuarios, setUsuarios] = useState<UserProfile[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!isGuest)
+  const [listError, setListError] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
 
   // Form states
@@ -40,33 +40,23 @@ export function GerenciarUsuarios() {
 
   // Carrega lista de usuários do Firestore em tempo real
   useEffect(() => {
-    const colRef = collection(db, 'usuarios')
-    const unsubscribe = onSnapshot(
-      colRef,
-      (snapshot) => {
-        const list: UserProfile[] = []
-        snapshot.forEach((d) => {
-          const data = d.data()
-          list.push({
-            uid: d.id,
-            nome_completo: data.nome_completo || 'Sem nome',
-            email: data.email || '',
-            papel: (data.papel as UserRole) || 'administrativo',
-            ativo: data.ativo !== false,
-            criado_em: data.criado_em?.toDate?.()?.toLocaleDateString('pt-BR') || null,
-          })
-        })
+    // O modo demonstração não autentica no Firebase, então as regras negam a leitura
+    if (isGuest) return
+
+    const unsubscribe = subscribeToUsuarios(
+      (list) => {
         setUsuarios(list)
+        setListError(null)
         setLoading(false)
       },
       (err) => {
-        console.warn('Erro ao escutar usuários:', err)
+        setListError('Não foi possível carregar a equipe: ' + err.message)
         setLoading(false)
       }
     )
 
     return () => unsubscribe()
-  }, [])
+  }, [isGuest])
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault()
@@ -92,14 +82,17 @@ export function GerenciarUsuarios() {
         setSuccessMsg(null)
         setShowModal(false)
       }, 1500)
-    } catch (err: any) {
-      console.error('Erro ao cadastrar autor:', err)
-      if (err.code === 'auth/email-already-in-use') {
+    } catch (err) {
+      const authError = err as { code?: string; message?: string }
+      console.error('Erro ao cadastrar autor:', authError)
+      if (authError.code === 'permission-denied') {
+        setErrorMsg('Sem permissão para salvar o perfil no banco. Confirme que você está logado com uma conta de Direção.')
+      } else if (authError.code === 'auth/email-already-in-use') {
         setErrorMsg('Este e-mail já está em uso por outro usuário.')
-      } else if (err.code === 'auth/weak-password') {
+      } else if (authError.code === 'auth/weak-password') {
         setErrorMsg('A senha informada é fraca. Escolha uma senha mais segura.')
       } else {
-        setErrorMsg('Não foi possível cadastrar o usuário: ' + (err.message || 'Erro desconhecido.'))
+        setErrorMsg('Não foi possível cadastrar o usuário: ' + (authError.message || 'Erro desconhecido.'))
       }
     } finally {
       setSubmitting(false)
@@ -129,11 +122,30 @@ export function GerenciarUsuarios() {
           </p>
         </div>
         <div className="report-heading-actions">
-          <button className="button primary" onClick={() => setShowModal(true)} type="button">
+          <button
+            className="button primary"
+            disabled={isGuest}
+            onClick={() => setShowModal(true)}
+            title={isGuest ? 'Indisponível no modo demonstração' : undefined}
+            type="button"
+          >
             <UserPlus size={18} /> Cadastrar Novo Membro
           </button>
         </div>
       </div>
+
+      {isGuest && (
+        <div className="modal-error-banner">
+          <AlertCircle size={18} /> Você está no modo demonstração, sem conexão autenticada com o banco.
+          Para listar e cadastrar membros da equipe, entre com uma conta de Direção.
+        </div>
+      )}
+
+      {listError && (
+        <div className="modal-error-banner">
+          <AlertCircle size={18} /> {listError}
+        </div>
+      )}
 
       {/* Role explanation cards */}
       <div className="roles-summary-grid">
@@ -181,7 +193,9 @@ export function GerenciarUsuarios() {
               ) : usuarios.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
-                    Nenhum profissional cadastrado no Firestore.
+                    {isGuest || listError
+                      ? 'Lista indisponível.'
+                      : 'Nenhum profissional cadastrado no Firestore.'}
                   </td>
                 </tr>
               ) : (
@@ -215,6 +229,15 @@ export function GerenciarUsuarios() {
                       <span className={`status-pill ${u.ativo ? 'success' : 'danger'}`}>
                         {u.ativo ? 'Ativo' : 'Inativo'}
                       </span>
+                      {u.trocar_senha && (
+                        <span
+                          className="status-pill warning"
+                          style={{ marginLeft: 6 }}
+                          title="Ainda não trocou a senha provisória"
+                        >
+                          Senha provisória
+                        </span>
+                      )}
                     </td>
                     <td>{u.criado_em || '—'}</td>
                   </tr>
@@ -319,7 +342,8 @@ export function GerenciarUsuarios() {
               <div className="role-preview-hint">
                 <Sparkles size={16} />
                 <span>
-                  O usuário poderá utilizar este e-mail e senha para realizar o login imediatamente.
+                  O usuário poderá entrar com este e-mail e senha imediatamente e será obrigado a
+                  definir uma senha pessoal no primeiro acesso.
                 </span>
               </div>
 

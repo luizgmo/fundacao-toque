@@ -205,6 +205,11 @@
   font-size: 13px;
 }
 
+.guardian-profile-card { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--border, #d8dee8); border-radius: 10px; background: var(--surface-subtle, #f8fafc); }
+.guardian-profile-card p { margin: 4px 0; }
+.guardian-primary-badge, .guardian-inactive-badge { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #dcfce7; color: #166534; }
+.guardian-inactive-badge { background: #f1f5f9; color: #475569; }
+
 @media (max-width: 780px) {
   .student-header-card {
     flex-wrap: wrap;
@@ -216,7 +221,11 @@
     grid-template-columns: 1fr;
   }
 }
-.guardian-profile-card { padding: .85rem 0; border-bottom: 1px solid var(--border-color, #e5e7eb); }
-.guardian-primary-badge, .guardian-inactive-badge { display: inline-flex; margin-left: .5rem; padding: .15rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 700; }
-.guardian-primary-badge { color: #14532d; background: #dcfce7; }
-.guardian-inactive-badge { color: #475569; background: #e2e8f0; }
+
+.student-document-card button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+}

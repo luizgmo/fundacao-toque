@@ -100,8 +100,14 @@ service cloud.firestore {
 
       // Subcoleção: documentos do aluno (ficha médica, matrícula, autorização de imagem)
       match /documentos/{documentId} {
-        allow read: if canUseSystem();
-        allow create, update, delete: if isDirection() || isAdministrative();
+        allow read: if canUseSystem() &&
+          (resource.data.tipo_documento != 'ficha_medica' || isDirection() || isPedagogue());
+        allow create: if (isDirection() || isAdministrative()) &&
+          request.resource.data.tamanho_bytes <= 512000 &&
+          request.resource.data.data_url is string &&
+          request.resource.data.data_url.size() <= 700000;
+        allow update, delete: if (isDirection() || isAdministrative()) &&
+          (resource.data.tipo_documento != 'ficha_medica' || isDirection() || isPedagogue());
       }
     }
 
@@ -239,7 +245,13 @@ service cloud.firestore {
     match /contatos_familia/{contactId} {
       allow read: if canUseSystem();
       allow create: if (isDirection() || isPedagogue() || isAdministrative()) &&
-        exists(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id));
+        exists(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)) &&
+        request.resource.data.responsavel_id is string &&
+        exists(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)) &&
+        get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.ativo == true &&
+        request.resource.data.responsavel_snapshot.nome == get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.nome_completo &&
+        request.resource.data.responsavel_snapshot.parentesco == get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.parentesco &&
+        request.resource.data.responsavel_snapshot.contato == get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.telefone;
       // Registros de contato preservam o destinatário e os dados usados naquele momento.
       allow update: if false;
       allow delete: if isDirection();

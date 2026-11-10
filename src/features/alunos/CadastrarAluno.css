@@ -290,6 +290,98 @@
   background: var(--green-100);
 }
 
+.upload-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+
+.upload-area:hover {
+  border-color: var(--green-400);
+}
+
+.upload-area input {
+  display: none;
+}
+
+.upload-icon {
+  display: grid;
+  place-items: center;
+  color: var(--green-600);
+}
+
+.upload-area strong {
+  color: var(--navy-800);
+  font-size: 13px;
+}
+
+.upload-area span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.upload-area input {
+  width: 0.1px;
+  height: 0.1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  z-index: -1;
+}
+
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11.5px;
+}
+
+.upload-progress {
+  width: 140px;
+  height: 6px;
+  background: var(--surface-subtle);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.upload-progress-bar {
+  height: 100%;
+  background: var(--green-600);
+  border-radius: 3px;
+  transition: width 200ms ease;
+}
+
+.upload-caption {
+  color: var(--text-muted);
+}
+
+.upload-caption.success {
+  color: var(--green-700);
+  font-weight: 600;
+}
+
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.upload-error span {
+  font-size: 11.5px;
+}
+
 @media (max-width: 720px) {
   .wizard-stepper {
     display: none;
@@ -313,4 +405,9 @@
 .guardian-editor-card { padding: 1rem; border: 1px solid var(--border-color, #d8dee8); border-radius: 12px; background: var(--surface-soft, #f8fafc); }
 .guardian-editor-card > header { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; }
 .guardian-editor-card > header label { display: inline-flex; align-items: center; gap: .35rem; margin-right: auto; }
+.guardian-editor { display: grid; gap: 1rem; }
+.guardian-editor-row { padding: 1rem; border: 1px solid var(--border, #d8dee8); border-radius: 12px; background: var(--surface-subtle, #f8fafc); }
+.guardian-editor-heading { display: flex; align-items: center; gap: .75rem; }
+.guardian-editor-heading strong { margin-right: auto; }
+.guardian-primary-note { margin: 0; color: var(--text-muted, #64748b); font-size: .875rem; }
 @media (max-width: 600px) { .guardian-editor-card > header { flex-wrap: wrap; } }

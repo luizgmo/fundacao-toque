@@ -2,6 +2,8 @@
 
 Auditoria local em 10/11/2026. Nenhuma regra, código funcional, dado remoto ou deploy foi alterado nesta etapa. Este plano não representa aprovação institucional da matriz e não comprova quais regras estão publicadas atualmente.
 
+**Atualização da implementação:** não existe uso de Firebase Storage no projeto. As regras de anexos e conteúdo binário ficam integralmente em `firestore.rules`, com conteúdo dividido em chunks Firestore.
+
 ## Diagnóstico
 
 **A tarefa precisa ser executada.** A negação padrão e a divisão por coleções já existem, mas há escalada de privilégio pelo próprio usuário, ausência de bloqueio por `ativo`, acesso excessivo por autenticação simples e divergências entre regras, documentação e serviços. Não há suíte automatizada de Security Rules localizada no repositório.

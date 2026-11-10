@@ -15,9 +15,13 @@ import {
 import { calculateAge } from './students-data'
 import type { Student } from './students-data'
 import { subscribeToStudents, inactivateStudent } from '../../services/studentsService'
+import type { StudentsSource } from '../../services/studentsService'
+import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
+import type { Turma } from '../../types/turmas'
+import { DataNotice } from '../../components/DataNotice'
 import './ListarAlunos.css'
 
-const turmaOptions = ['Todas as turmas', 'Turma A', 'Turma B', 'Turma C', 'Turma D']
+const TODAS_TURMAS = 'todas'
 const statusOptions = ['Todos', 'Ativo', 'Inativo']
 
 export function ListarAlunos({
@@ -30,8 +34,11 @@ export function ListarAlunos({
   onEditStudent: (student: Student) => void
 }) {
   const [studentsList, setStudentsList] = useState<Student[]>([])
+  const [source, setSource] = useState<StudentsSource | 'loading'>('loading')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [turma, setTurma] = useState(turmaOptions[0])
+  const [turma, setTurma] = useState(TODAS_TURMAS)
+  const [turmas, setTurmas] = useState<Turma[]>([])
   const [status, setStatus] = useState(statusOptions[0])
 
   // Delete modal states
@@ -40,23 +47,30 @@ export function ListarAlunos({
   const [actionFeedback, setActionFeedback] = useState<string | null>(null)
 
   // Escuta dados do Firestore em tempo real
+  useEffect(() => subscribeToTurmas(setTurmas), [])
+
   useEffect(() => {
-    const unsubscribe = subscribeToStudents((data) => {
-      setStudentsList(data)
-    })
+    const unsubscribe = subscribeToStudents(
+      (data) => {
+        setStudentsList(data)
+        setLoadError(null)
+      },
+      (err) => setLoadError(err.message),
+      (nextSource) => setSource(nextSource)
+    )
     return () => unsubscribe()
   }, [])
 
   const filtered = useMemo(() => {
     return studentsList.filter((student) => {
       const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase())
+      const turmaSelecionada = turmas.find((t) => t.id === turma)
       const matchesTurma =
-        turma === turmaOptions[0] ||
-        student.turma.toLowerCase().includes(turma.toLowerCase())
+        turma === TODAS_TURMAS || (!!turmaSelecionada && studentBelongsToTurma(student, turmaSelecionada))
       const matchesStatus = status === statusOptions[0] || student.status === status
       return matchesSearch && matchesTurma && matchesStatus
     })
-  }, [studentsList, search, turma, status])
+  }, [studentsList, turmas, search, turma, status])
 
   const totals = useMemo(
     () => ({
@@ -75,9 +89,9 @@ export function ListarAlunos({
       setActionFeedback(`Aluno ${studentToDelete.name} inativado com sucesso.`)
       setStudentToDelete(null)
       setTimeout(() => setActionFeedback(null), 3500)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erro ao inativar aluno:', err)
-      alert('Erro ao inativar aluno: ' + (err.message || 'Erro desconhecido.'))
+      alert('Erro ao inativar aluno: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
     } finally {
       setDeleting(false)
     }
@@ -97,6 +111,24 @@ export function ListarAlunos({
           </button>
         </div>
       </div>
+
+      {source === 'demo' && (
+        <DataNotice kind="demo">
+          <strong>Modo demonstração:</strong> os alunos exibidos são fictícios e ficam apenas
+          neste navegador. Nada é gravado no Firebase.
+        </DataNotice>
+      )}
+
+      {source === 'loading' && (
+        <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
+      )}
+
+      {(source === 'error' || loadError) && (
+        <DataNotice kind="error">
+          <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
+          {loadError ? `Detalhes: ${loadError}` : 'Verifique a conexão e as permissões de acesso.'}
+        </DataNotice>
+      )}
 
       {actionFeedback && (
         <div
@@ -165,8 +197,12 @@ export function ListarAlunos({
           <label className="field">
             <span>Turma</span>
             <select onChange={(event) => setTurma(event.target.value)} value={turma}>
-              {turmaOptions.map((option) => (
-                <option key={option}>{option}</option>
+              <option value={TODAS_TURMAS}>Todas as turmas</option>
+              {turmas.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                  {t.ativo ? '' : ' (inativa)'}
+                </option>
               ))}
             </select>
           </label>
@@ -213,7 +249,7 @@ export function ListarAlunos({
                       ? `${calculateAge(student.birthDate)} anos`
                       : '—'}
                   </td>
-                  <td>{student.turma}</td>
+                  <td>{turmas.find((t) => t.id === student.turmaId)?.nome || student.turma}</td>
                   <td>
                     {student.deficiencia} / {student.cid}
                   </td>
@@ -261,7 +297,13 @@ export function ListarAlunos({
               {filtered.length === 0 && (
                 <tr>
                   <td className="students-table-empty" colSpan={7}>
-                    Nenhum aluno encontrado para os filtros selecionados.
+                    {source === 'loading'
+                      ? 'Carregando alunos do banco de dados…'
+                      : source === 'error'
+                        ? 'Não foi possível carregar os alunos. Veja o aviso acima.'
+                        : studentsList.length === 0
+                          ? 'Nenhum aluno cadastrado no banco de dados.'
+                          : 'Nenhum aluno encontrado para os filtros selecionados.'}
                   </td>
                 </tr>
               )}
