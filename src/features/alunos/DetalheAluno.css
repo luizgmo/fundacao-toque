@@ -140,6 +140,56 @@
   font-size: 13px;
 }
 
+.image-consent-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.image-consent-card.ok {
+  background: #f0f9f4;
+  border-color: #bfe5cd;
+}
+
+.image-consent-card.blocked {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.image-consent-card.ok .image-consent-icon {
+  color: #1f6b45;
+}
+
+.image-consent-card.blocked .image-consent-icon {
+  color: #991b1b;
+}
+
+.image-consent-icon {
+  flex-shrink: 0;
+}
+
+.image-consent-card strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--navy-800);
+  font-size: 13.5px;
+}
+
+.image-consent-card p {
+  margin: 0 0 6px;
+  color: var(--navy-700);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.image-consent-card.blocked strong,
+.image-consent-card.blocked p {
+  color: #7f1d1d;
+}
+
 .student-chip-row {
   display: flex;
   flex-wrap: wrap;

@@ -343,6 +343,13 @@
   line-height: 1.5;
 }
 
+.prestacao-lgpd-acao {
+  padding: 7px 9px;
+  margin-top: 7px !important;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 7px;
+}
+
 .prestacao-lgpd-turmas {
   display: flex;
   flex-wrap: wrap;

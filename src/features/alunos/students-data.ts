@@ -52,6 +52,12 @@ export type Student = {
   cid: string
   status: StudentStatus
   observacoes: string
+  /** Consentimento persistido do responsável para uso de imagem (LGPD). */
+  usoImagemAutorizado: boolean
+  /** Data/hora ISO em que o consentimento de imagem foi registrado. */
+  consentimentoImagemEm?: string
+  /** Consentimento persistido para tratamento de dados pessoais (LGPD). */
+  tratamentoDadosAutorizado: boolean
   responsavelNome: string
   parentesco: string
   telefone: string
@@ -96,6 +102,9 @@ export const demoStudents: Student[] = [
     cid: 'Exemplo',
     status: 'Ativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
+    usoImagemAutorizado: true,
+    consentimentoImagemEm: '2026-01-10T13:00:00.000Z',
+    tratamentoDadosAutorizado: true,
     responsavelNome: 'Responsável Exemplo 01',
     parentesco: 'Responsável',
     telefone: '(00) 00000-0000',
@@ -124,6 +133,9 @@ export const demoStudents: Student[] = [
     cid: 'Exemplo',
     status: 'Ativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
+    usoImagemAutorizado: true,
+    consentimentoImagemEm: '2026-02-12T14:30:00.000Z',
+    tratamentoDadosAutorizado: true,
     responsavelNome: 'Responsável Exemplo 02',
     parentesco: 'Responsável',
     telefone: '(00) 00000-0000',
@@ -148,6 +160,8 @@ export const demoStudents: Student[] = [
     cid: 'Exemplo',
     status: 'Ativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
+    usoImagemAutorizado: false,
+    tratamentoDadosAutorizado: true,
     responsavelNome: 'Responsável Exemplo 03',
     parentesco: 'Responsável',
     telefone: '(00) 00000-0000',
@@ -172,6 +186,9 @@ export const demoStudents: Student[] = [
     cid: 'Exemplo',
     status: 'Inativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
+    usoImagemAutorizado: true,
+    consentimentoImagemEm: '2026-03-05T10:15:00.000Z',
+    tratamentoDadosAutorizado: true,
     responsavelNome: 'Responsável Exemplo 04',
     parentesco: 'Responsável',
     telefone: '(00) 00000-0000',

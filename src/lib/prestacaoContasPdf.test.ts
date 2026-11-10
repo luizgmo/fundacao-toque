@@ -16,7 +16,6 @@ function criarDados(
       turmaIds: [],
       tipo: 'consolidado',
       incluirFotos: true,
-      confirmacaoImagem: true,
     },
     geradoEm: '2026-10-25T15:30:00.000Z',
     periodoLabel: '01/09/2026 a 30/09/2026',
@@ -127,14 +126,9 @@ function criarDados(
       },
     ],
     restricaoImagem: {
-      possuiAlunoSemAutorizacao: true,
-      turmas: [
-        {
-          turmaId: 'turma-a',
-          turmaNome: 'Turma A',
-          alunosSemAutorizacao: ['Bruno Alves'],
-        },
-      ],
+      possuiAlunoSemAutorizacao: false,
+      fotosBloqueadas: 0,
+      turmas: [],
     },
     avisos: ['1 foto(s) sem arquivo acessível no Storage.'],
     ...overrides,
@@ -183,6 +177,34 @@ describe('generatePrestacaoContasPdf', () => {
 
     await expect(generatePrestacaoContasPdf(dados)).resolves.toMatchObject({
       fotosComErro: 1,
+    })
+  })
+
+  it('gera PDF com o bloqueio de fotos por falta de autorização', async () => {
+    const dados = criarDados({
+      fotos: [],
+      atividades: [
+        {
+          ...criarDados().atividades[0],
+          fotos: [],
+        },
+      ],
+      restricaoImagem: {
+        possuiAlunoSemAutorizacao: true,
+        fotosBloqueadas: 1,
+        turmas: [
+          {
+            turmaId: 'turma-a',
+            turmaNome: 'Turma A',
+            alunosSemAutorizacao: ['Bruno Alves'],
+            fotosBloqueadas: 1,
+          },
+        ],
+      },
+    })
+
+    await expect(generatePrestacaoContasPdf(dados)).resolves.toMatchObject({
+      fotosComErro: 0,
     })
   })
 })
@@ -260,10 +282,34 @@ describe('buildPrintHtml', () => {
     expect(html).toContain('Foto indisponível')
   })
 
-  it('exibe aviso de restrição de imagem quando houver aluno sem autorização', () => {
-    const html = buildPrintHtml(criarDados())
+  it('exibe o bloqueio das fotos quando houver aluno sem autorização', () => {
+    const html = buildPrintHtml(
+      criarDados({
+        fotos: [],
+        atividades: [
+          {
+            ...criarDados().atividades[0],
+            fotos: [],
+          },
+        ],
+        restricaoImagem: {
+          possuiAlunoSemAutorizacao: true,
+          fotosBloqueadas: 1,
+          turmas: [
+            {
+              turmaId: 'turma-a',
+              turmaNome: 'Turma A',
+              alunosSemAutorizacao: ['Bruno Alves'],
+              fotosBloqueadas: 1,
+            },
+          ],
+        },
+      })
+    )
 
-    expect(html).toContain('Restrição de uso de imagem (LGPD)')
-    expect(html).toContain('A Direção confirmou a responsabilidade pelo uso das imagens.')
+    expect(html).toContain('Fotos omitidas por falta de autorização de uso de imagem')
+    expect(html).toContain('Bruno Alves')
+    expect(html).toContain('Ação necessária')
+    expect(html).not.toContain('A Direção confirmou a responsabilidade')
   })
 })

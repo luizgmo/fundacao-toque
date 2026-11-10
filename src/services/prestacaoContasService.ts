@@ -4,6 +4,7 @@ import { getDownloadURL, ref } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
 import {
   buildPrestacaoContasReport,
+  normalizeKey,
   secaoFotosAtiva,
   validatePrestacaoContasFiltros,
 } from '../lib/reportBuilder'
@@ -144,6 +145,58 @@ function mapUsuario(id: string, data: DocumentData): RelatorioUsuarioRaw {
   }
 }
 
+// Turmas com pelo menos um aluno ativo sem consentimento persistido de imagem.
+// Usado para evitar baixar do Storage fotos que não poderão ser incluídas.
+function calcularTurmasSemAutorizacao(
+  turmas: RelatorioTurmaRaw[],
+  alunos: RelatorioAlunoRaw[],
+  matriculas: RelatorioMatriculaRaw[]
+): Set<string> {
+  const turmasById = new Map(turmas.map((turma) => [turma.id, turma]))
+  const turmasByNome = new Map<string, RelatorioTurmaRaw>()
+  for (const turma of turmas) {
+    const key = normalizeKey(turma.nome)
+    if (!turmasByNome.has(key)) turmasByNome.set(key, turma)
+  }
+  const resolverTurma = (value: string | null | undefined) => {
+    if (!value) return undefined
+    return turmasById.get(value) || turmasByNome.get(normalizeKey(value))
+  }
+
+  const membrosPorTurma = new Map<string, Set<string>>()
+  const adicionarVinculo = (turmaId: string, alunoId: string) => {
+    const atuais = membrosPorTurma.get(turmaId) || new Set<string>()
+    atuais.add(alunoId)
+    membrosPorTurma.set(turmaId, atuais)
+  }
+
+  const alunosById = new Map(alunos.map((aluno) => [aluno.id, aluno]))
+
+  for (const matricula of matriculas) {
+    if (normalizeKey(matricula.status) !== 'ativo') continue
+    if (!turmasById.has(matricula.turmaId)) continue
+    if (!alunosById.has(matricula.alunoId)) continue
+    adicionarVinculo(matricula.turmaId, matricula.alunoId)
+  }
+
+  for (const aluno of alunos) {
+    if (normalizeKey(aluno.status) !== 'ativo') continue
+    const turma = resolverTurma(aluno.turmaId) || resolverTurma(aluno.turmaNome)
+    if (turma) adicionarVinculo(turma.id, aluno.id)
+  }
+
+  const bloqueadas = new Set<string>()
+  for (const [turmaId, membros] of membrosPorTurma) {
+    for (const alunoId of membros) {
+      if (alunosById.get(alunoId)?.usoImagemAutorizado !== true) {
+        bloqueadas.add(turmaId)
+        break
+      }
+    }
+  }
+  return bloqueadas
+}
+
 export async function loadTurmasParaFiltro(): Promise<RelatorioTurmaRaw[]> {
   try {
     const snapshot = await getDocs(collection(db, TURMAS_COLLECTION))
@@ -211,6 +264,16 @@ export async function loadPrestacaoContasData(
     const atividades = atividadesSnapshot.docs.map((item) => mapAtividade(item.id, item.data()))
     const sessoes = sessoesSnapshot.docs.map((item) => mapSessao(item.id, item.data()))
 
+    const turmasBloqueadas = calcularTurmasSemAutorizacao(turmas, alunos, matriculas)
+    const turmaIdPorReferencia = new Map<string, string>()
+    for (const turma of turmas) {
+      turmaIdPorReferencia.set(turma.id, turma.id)
+      const key = normalizeKey(turma.nome)
+      if (!turmaIdPorReferencia.has(key)) turmaIdPorReferencia.set(key, turma.id)
+    }
+    const resolverTurmaId = (value: string) =>
+      turmaIdPorReferencia.get(value) || turmaIdPorReferencia.get(normalizeKey(value)) || value
+
     const deveCarregarUrls = secaoFotosAtiva(filtros)
     const anexos: RelatorioAnexoRaw[] = []
     let anexosComFalha = 0
@@ -229,8 +292,16 @@ export async function loadPrestacaoContasData(
               const tipoAnexo = data.tipo_anexo === 'documento' ? 'documento' : 'imagem'
               const caminhoStorage = stringValue(data.caminho_storage)
               let url: string | null = null
+              const turmaBloqueada = turmasBloqueadas.has(
+                resolverTurmaId(atividade.turmaId)
+              )
 
-              if (deveCarregarUrls && tipoAnexo === 'imagem' && caminhoStorage) {
+              if (
+                deveCarregarUrls &&
+                !turmaBloqueada &&
+                tipoAnexo === 'imagem' &&
+                caminhoStorage
+              ) {
                 try {
                   url = await getDownloadURL(ref(storage, caminhoStorage))
                 } catch (error) {

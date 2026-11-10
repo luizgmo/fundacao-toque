@@ -21,8 +21,11 @@ PDFs gerados**. O relatório deve ser baixado e arquivado pela própria Direçã
 
 A opção **Imprimir** abre uma versão HTML em nova janela e também não salva arquivo no servidor.
 
-Se as turmas selecionadas tiverem alunos sem autorização de uso de imagem, a prévia é exibida com
-alerta e o PDF/impressão ficam bloqueados até a confirmação explícita da Direção.
+Se as turmas selecionadas tiverem alunos sem autorização de uso de imagem, as fotos das
+atividades dessas turmas são omitidas da prévia, do PDF e da impressão. O mesmo critério é
+aplicado nos três formatos, com aviso listando os alunos bloqueados e a ação necessária. A
+autorização considerada é a persistida em `alunos.uso_imagem_autorizado` (com a data em
+`alunos.consentimento_imagem_em`); nenhum checkbox visual da tela substitui esse registro.
 
 ## Migração de turmas legadas
 

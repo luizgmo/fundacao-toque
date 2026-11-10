@@ -14,6 +14,7 @@ import {
   Printer,
   School,
   ShieldCheck,
+  ShieldAlert,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react'
@@ -33,6 +34,13 @@ const tabs = [
 ] as const
 
 type TabId = (typeof tabs)[number]['id']
+
+function formatConsentimentoISO(value?: string): string | null {
+  if (!value) return null
+  const data = new Date(value)
+  if (Number.isNaN(data.getTime())) return null
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(data)
+}
 
 export function DetalheAluno({
   studentId,
@@ -134,6 +142,12 @@ export function DetalheAluno({
   // Combina contatos do Firestore com contatos locais sem duplicação
   const allContacts = dbContacts.length > 0 ? dbContacts : student.contacts
 
+  const autorizacaoDoc = [...documentos, ...student.documentos].some(
+    (doc) =>
+      (doc.tipo === 'autorizacao_imagem' || doc.kind === 'lgpd') && Boolean(doc.dataUrl)
+  )
+  const consentimentoLabel = formatConsentimentoISO(student.consentimentoImagemEm)
+
   return (
     <div className="page-container student-detail-page">
       <div className="report-page-heading">
@@ -183,6 +197,13 @@ export function DetalheAluno({
                 ⚠️ {student.faltasConsecutivas} faltas consecutivas
               </span>
             )}
+            <span
+              className={
+                'status-pill ' + (student.usoImagemAutorizado ? 'success' : 'danger')
+              }
+            >
+              {student.usoImagemAutorizado ? 'Imagem autorizada' : 'Imagem não autorizada'}
+            </span>
           </div>
         </div>
         <span
@@ -246,6 +267,52 @@ export function DetalheAluno({
                 </p>
                 <p>
                   <strong>E-mail:</strong> {student.email || 'Não informado'}
+                </p>
+              </div>
+            </div>
+
+            <h3 className="student-section-title">Autorização de uso de imagem (LGPD)</h3>
+            <div
+              className={
+                'image-consent-card ' + (student.usoImagemAutorizado ? 'ok' : 'blocked')
+              }
+            >
+              <span className="image-consent-icon">
+                {student.usoImagemAutorizado ? (
+                  <ShieldCheck size={24} />
+                ) : (
+                  <ShieldAlert size={24} />
+                )}
+              </span>
+              <div>
+                <strong>
+                  {student.usoImagemAutorizado
+                    ? 'Uso de imagem autorizado'
+                    : 'Uso de imagem NÃO autorizado'}
+                </strong>
+                {student.usoImagemAutorizado ? (
+                  <p>
+                    {consentimentoLabel
+                      ? `Consentimento registrado em ${consentimentoLabel}.`
+                      : 'Consentimento registrado, mas sem data de registro (cadastro legado).'}
+                  </p>
+                ) : (
+                  <p>
+                    As fotos de atividades que incluam <strong>{student.name}</strong> serão
+                    omitidas da prévia, do PDF e da impressão dos relatórios de prestação de contas.
+                  </p>
+                )}
+                <p>
+                  <strong>Ação necessária:</strong>{' '}
+                  {student.usoImagemAutorizado
+                    ? autorizacaoDoc
+                      ? 'manter o termo de autorização arquivado nos documentos do aluno.'
+                      : 'anexar o termo assinado em Documentos.'
+                    : 'edite o cadastro, marque a autorização de uso de imagem e salve; se houver termo assinado, anexe-o em Documentos.'}
+                </p>
+                <p>
+                  Termo de autorização:{' '}
+                  {autorizacaoDoc ? 'anexado aos documentos.' : 'não anexado.'}
                 </p>
               </div>
             </div>

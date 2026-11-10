@@ -440,9 +440,18 @@ async function drawPhotos(
   if (data.fotos.length === 0) {
     const cursor = sectionTitle(doc, data, logo, y, 'Registro fotográfico')
     return {
-      y: drawParagraph(doc, data, logo, cursor, 'Nenhuma foto anexada no período.', {
-        color: MUTED,
-      }),
+      y: drawParagraph(
+        doc,
+        data,
+        logo,
+        cursor,
+        data.restricaoImagem.fotosBloqueadas > 0
+          ? 'Fotos omitidas: as turmas selecionadas possuem alunos sem autorização de uso de imagem.'
+          : 'Nenhuma foto anexada no período.',
+        {
+          color: MUTED,
+        }
+      ),
       fotosComErro: 0,
     }
   }
@@ -523,6 +532,57 @@ async function drawPhotos(
   }
 
   return { y: cursor, fotosComErro }
+}
+
+function drawRestricaoImagem(
+  doc: jsPDF,
+  data: RelatorioPrestacaoDados,
+  logo: ImagemPdf | null,
+  y: number
+): number {
+  if (!secaoFotosAtiva(data.filtros)) return y
+  if (!data.restricaoImagem.possuiAlunoSemAutorizacao) return y
+
+  let cursor = sectionTitle(
+    doc,
+    data,
+    logo,
+    y,
+    'Fotos omitidas por falta de autorização de imagem'
+  )
+  cursor = drawParagraph(
+    doc,
+    data,
+    logo,
+    cursor,
+    `As fotos das atividades das turmas abaixo não foram incluídas neste relatório${
+      data.restricaoImagem.fotosBloqueadas > 0
+        ? ` (${data.restricaoImagem.fotosBloqueadas} foto(s) omitida(s))`
+        : ''
+    }. O consentimento só é válido quando está gravado no cadastro do aluno.`,
+    { size: 8, color: DANGER }
+  )
+  cursor = drawParagraph(
+    doc,
+    data,
+    logo,
+    cursor,
+    'Ação necessária: registre a autorização de uso de imagem no cadastro do aluno ou anexe o termo assinado em Documentos e gere o relatório novamente.',
+    { size: 8, color: MUTED }
+  )
+  for (const turma of data.restricaoImagem.turmas) {
+    cursor = drawParagraph(
+      doc,
+      data,
+      logo,
+      cursor,
+      `• ${turma.turmaNome}: ${turma.alunosSemAutorizacao.join(', ')}${
+        turma.fotosBloqueadas > 0 ? ` — ${turma.fotosBloqueadas} foto(s) omitida(s)` : ''
+      }`,
+      { size: 8 }
+    )
+  }
+  return cursor
 }
 
 function ajustarDimensoes(
@@ -646,6 +706,8 @@ export async function generatePrestacaoContasPdf(
     fotosComErro = resultadoFotos.fotosComErro
   }
 
+  cursor = drawRestricaoImagem(doc, data, logo, cursor)
+
   if (data.avisos.length > 0) {
     cursor = sectionTitle(doc, data, logo, cursor, 'Observações de integridade dos dados')
     for (const aviso of data.avisos) {
@@ -662,7 +724,15 @@ export async function generatePrestacaoContasPdf(
     data,
     logo,
     cursor,
-    `${data.filtros.confirmacaoImagem ? 'A Direção confirmou a responsabilidade pelo uso das imagens.' : !secaoFotosAtiva(data.filtros) ? 'Relatório gerado sem registro fotográfico.' : data.restricaoImagem.possuiAlunoSemAutorizacao ? 'Relatório sem confirmação explícita de uso de imagem.' : 'Não há alunos sem autorização de imagem registrada nas turmas selecionadas.'}`,
+    `${
+      !secaoFotosAtiva(data.filtros)
+        ? 'Relatório gerado sem registro fotográfico.'
+        : data.restricaoImagem.possuiAlunoSemAutorizacao
+          ? data.restricaoImagem.fotosBloqueadas > 0
+            ? `${data.restricaoImagem.fotosBloqueadas} foto(s) de turmas com aluno sem autorização de uso de imagem foram omitidas do relatório.`
+            : 'Há alunos sem autorização de uso de imagem; as fotos dessas turmas não foram incluídas no relatório.'
+          : 'Todos os alunos das turmas selecionadas possuem autorização de uso de imagem registrada.'
+    }`,
     { size: 7.5, color: MUTED }
   )
   cursor = ensureSpace(doc, data, logo, cursor, 30)

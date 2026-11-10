@@ -56,7 +56,6 @@ function criarFiltrosIniciais(): PrestacaoContasFiltros {
     turmaIds: [],
     tipo: 'consolidado',
     incluirFotos: true,
-    confirmacaoImagem: false,
   }
 }
 
@@ -94,7 +93,6 @@ export function PrestacaoContas() {
   const [turmasErro, setTurmasErro] = useState<string | null>(null)
   const [data, setData] = useState<RelatorioPrestacaoDados | null>(null)
   const [carregandoDados, setCarregandoDados] = useState(false)
-  const [lgpdConfirmado, setLgpdConfirmado] = useState(false)
   const [processando, setProcessando] = useState(false)
   const [progresso, setProgresso] = useState<PdfProgress | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
@@ -126,13 +124,11 @@ export function PrestacaoContas() {
   const possuiRestricaoImagem = Boolean(
     data && secaoFotosAtiva(data.filtros) && data.restricaoImagem.possuiAlunoSemAutorizacao
   )
-  const bloqueioLgpd = possuiRestricaoImagem && !lgpdConfirmado
-  const podeExportar = Boolean(data) && !bloqueioLgpd && !processando
+  const podeExportar = Boolean(data) && !processando
 
   const atualizarFiltros = (patch: Partial<PrestacaoContasFiltros>) => {
-    setFiltros((atual) => ({ ...atual, ...patch, confirmacaoImagem: false }))
+    setFiltros((atual) => ({ ...atual, ...patch }))
     setData(null)
-    setLgpdConfirmado(false)
     setProgresso(null)
     setFeedback(null)
   }
@@ -167,17 +163,19 @@ export function PrestacaoContas() {
 
     setCarregandoDados(true)
     setFeedback(null)
-    setLgpdConfirmado(false)
     setData(null)
 
     try {
       const relatorio = await loadPrestacaoContasData(filtros)
       setData(relatorio)
       if (secaoFotosAtiva(relatorio.filtros) && relatorio.restricaoImagem.possuiAlunoSemAutorizacao) {
+        const fotosBloqueadas = relatorio.restricaoImagem.fotosBloqueadas
         setFeedback({
           tone: 'warning',
           message:
-            'Prévia carregada. Há alunos sem autorização de uso de imagem nas turmas selecionadas. Confirme a responsabilidade abaixo para liberar o PDF e a impressão.',
+            fotosBloqueadas > 0
+              ? `Prévia carregada com ${fotosBloqueadas} foto(s) omitida(s): há alunos sem autorização de uso de imagem nas turmas selecionadas. Veja abaixo os nomes e a ação necessária.`
+              : 'Prévia carregada. Há alunos sem autorização de uso de imagem: as fotos dessas turmas não entram no PDF nem na impressão. Veja abaixo a ação necessária.',
         })
       } else {
         setFeedback({
@@ -198,21 +196,9 @@ export function PrestacaoContas() {
     }
   }
 
-  const prepararDadosExportacao = (): RelatorioPrestacaoDados | null => {
-    if (!data) return null
-    return {
-      ...data,
-      filtros: {
-        ...data.filtros,
-        confirmacaoImagem: lgpdConfirmado,
-      },
-    }
-  }
-
   const baixarPdf = async () => {
-    if (!data || bloqueioLgpd || processando) return
-    const dados = prepararDadosExportacao()
-    if (!dados) return
+    if (!data || processando) return
+    const dados = data
 
     setProcessando(true)
     setProgresso(null)
@@ -246,9 +232,8 @@ export function PrestacaoContas() {
   }
 
   const imprimir = () => {
-    if (!data || bloqueioLgpd) return
-    const dados = prepararDadosExportacao()
-    if (!dados) return
+    if (!data) return
+    const dados = data
 
     try {
       printPrestacaoContas(dados)
@@ -506,37 +491,35 @@ export function PrestacaoContas() {
       </form>
 
       {data && possuiRestricaoImagem && (
-        <div className={'prestacao-lgpd' + (lgpdConfirmado ? ' confirmado' : '')}>
+        <div className="prestacao-lgpd">
           <div className="prestacao-lgpd-icon">
-            {lgpdConfirmado ? <CheckCircle2 size={22} /> : <ShieldAlert size={22} />}
+            <ShieldAlert size={22} />
           </div>
           <div className="prestacao-lgpd-copy">
-            <strong>
-              {lgpdConfirmado
-                ? 'Uso de imagem confirmado pela Direção'
-                : 'Confirmação obrigatória de uso de imagem'}
-            </strong>
+            <strong>Fotos omitidas por falta de autorização de uso de imagem</strong>
             <p>
-              {lgpdConfirmado
-                ? 'O PDF e a impressão estão liberados. A confirmação da Direção consta nesta prévia e na versão de impressão.'
-                : 'As turmas selecionadas possuem alunos sem autorização registrada para uso de imagem. Confirme a responsabilidade antes de gerar o material.'}
+              {data.restricaoImagem.fotosBloqueadas > 0
+                ? `${data.restricaoImagem.fotosBloqueadas} foto(s) das turmas abaixo não foram incluídas na prévia, no PDF nem na impressão.`
+                : 'Nenhuma foto dessas turmas foi encontrada no período, mas o impedimento permanece registrado.'}{' '}
+              O consentimento só é considerado válido quando está gravado no cadastro do aluno —a
+              confirmação visual desta tela não substitui essa autorização.
+            </p>
+            <p className="prestacao-lgpd-acao">
+              <strong>Ação necessária:</strong> edite o cadastro dos alunos abaixo, marque a
+              autorização de uso de imagem e salve. Se houver termo assinado, anexe-o em
+              Documentos. Depois, gere a prévia novamente.
             </p>
             <div className="prestacao-lgpd-turmas">
               {data.restricaoImagem.turmas.map((turma) => (
                 <span key={turma.turmaId}>
-                  <strong>{turma.turmaNome}</strong> · {turma.alunosSemAutorizacao.join(', ')}
+                  <strong>{turma.turmaNome}</strong>: {turma.alunosSemAutorizacao.join(', ')}
+                  {turma.fotosBloqueadas > 0
+                    ? ` — ${turma.fotosBloqueadas} foto(s) omitida(s)`
+                    : ''}
                 </span>
               ))}
             </div>
           </div>
-          <label className="prestacao-lgpd-check">
-            <input
-              checked={lgpdConfirmado}
-              onChange={(event) => setLgpdConfirmado(event.target.checked)}
-              type="checkbox"
-            />
-            <span>Confirmo que a Direção assume a responsabilidade pelo uso das imagens.</span>
-          </label>
         </div>
       )}
 
@@ -544,13 +527,11 @@ export function PrestacaoContas() {
         <div className="prestacao-preview-coluna">
           {data ? (
             <>
-              <PrestacaoContasPreview confirmacaoImagem={lgpdConfirmado} data={data} />
+              <PrestacaoContasPreview data={data} />
               <div className="prestacao-exportacao">
                 <div>
                   <strong>Exportar relatório</strong>
-                  <span>
-                    Arquivo: {buildReportFileName(prepararDadosExportacao()?.filtros || filtros)}
-                  </span>
+                  <span>Arquivo: {buildReportFileName(data.filtros)}</span>
                 </div>
                 <div className="prestacao-exportacao-acoes">
                   <button
@@ -572,12 +553,6 @@ export function PrestacaoContas() {
                   </button>
                 </div>
               </div>
-              {bloqueioLgpd && (
-                <p className="prestacao-bloqueio">
-                  <ShieldAlert size={15} /> Confirme o uso de imagem para liberar o PDF e a
-                  impressão.
-                </p>
-              )}
             </>
           ) : (
             <section className="prestacao-vazia section-card">
@@ -617,7 +592,11 @@ export function PrestacaoContas() {
           {data && data.resumo.totalFotos === 0 && secaoFotosAtiva(data.filtros) && (
             <div className="prestacao-aside-nota">
               <ImageOff size={17} />
-              <p>Nenhuma foto foi encontrada para o período e as turmas selecionadas.</p>
+              <p>
+                {data.restricaoImagem.fotosBloqueadas > 0
+                  ? 'As fotos do período foram omitidas por falta de autorização de uso de imagem.'
+                  : 'Nenhuma foto foi encontrada para o período e as turmas selecionadas.'}
+              </p>
             </div>
           )}
         </aside>

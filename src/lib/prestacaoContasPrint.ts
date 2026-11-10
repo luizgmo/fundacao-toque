@@ -231,10 +231,14 @@ function renderFrequencia(data: RelatorioPrestacaoDados): string {
 
 function renderFotos(data: RelatorioPrestacaoDados): string {
   if (data.fotos.length === 0) {
+    const motivo =
+      data.restricaoImagem.fotosBloqueadas > 0
+        ? 'Fotos omitidas: as turmas selecionadas possuem alunos sem autorização de uso de imagem.'
+        : 'Nenhuma foto anexada no período.'
     return `
       <section class="bloco">
         <h2>Registro fotográfico</h2>
-        ${emptyState('Nenhuma foto anexada no período.')}
+        ${emptyState(motivo)}
       </section>`
   }
 
@@ -283,17 +287,29 @@ function renderRestricaoImagem(data: RelatorioPrestacaoDados): string {
       (turma) => `
         <li>
           <strong>${escapeHtml(turma.turmaNome)}:</strong>
-          ${escapeHtml(turma.alunosSemAutorizacao.join(', '))}
+          ${escapeHtml(turma.alunosSemAutorizacao.join(', '))}${
+            turma.fotosBloqueadas > 0
+              ? ` — ${turma.fotosBloqueadas} foto(s) omitida(s)`
+              : ''
+          }
         </li>`
     )
     .join('')
 
   return `
     <section class="bloco alerta">
-      <h2>Restrição de uso de imagem (LGPD)</h2>
+      <h2>Fotos omitidas por falta de autorização de uso de imagem</h2>
       <p>
-        As turmas abaixo possuem alunos sem autorização registrada para uso de imagem.
-        A Direção confirmou a responsabilidade pelo tratamento e pela destinação deste material.
+        As fotos das atividades das turmas abaixo não foram incluídas neste relatório
+        ${
+          data.restricaoImagem.fotosBloqueadas > 0
+            ? `(${data.restricaoImagem.fotosBloqueadas} foto(s) omitida(s))`
+            : ''
+        }. O consentimento só é válido quando está gravado no cadastro do aluno.
+      </p>
+      <p>
+        Ação necessária: registre a autorização de uso de imagem no cadastro do aluno ou
+        anexe o termo assinado em Documentos e gere o relatório novamente.
       </p>
       <ul>${turmas}</ul>
     </section>`
@@ -305,13 +321,13 @@ function renderAssinatura(data: RelatorioPrestacaoDados): string {
       <h2>Responsável pela emissão</h2>
       <p>
         ${
-          data.filtros.confirmacaoImagem
-            ? 'A Direção confirmou a responsabilidade pelo uso das imagens.'
-            : !secaoFotosAtiva(data.filtros)
-              ? 'Relatório gerado sem registro fotográfico.'
-              : data.restricaoImagem.possuiAlunoSemAutorizacao
-                ? 'Relatório sem confirmação explícita de uso de imagem.'
-                : 'Não há alunos sem autorização de imagem registrada nas turmas selecionadas.'
+          !secaoFotosAtiva(data.filtros)
+            ? 'Relatório gerado sem registro fotográfico.'
+            : data.restricaoImagem.possuiAlunoSemAutorizacao
+              ? data.restricaoImagem.fotosBloqueadas > 0
+                ? `${data.restricaoImagem.fotosBloqueadas} foto(s) de turmas com aluno sem autorização de uso de imagem foram omitidas do relatório.`
+                : 'Há alunos sem autorização de uso de imagem; as fotos dessas turmas não foram incluídas no relatório.'
+              : 'Todos os alunos das turmas selecionadas possuem autorização de uso de imagem registrada.'
         }
       </p>
       <div class="linha-assinatura"></div>

@@ -33,7 +33,6 @@ const filtrosBase: PrestacaoContasFiltros = {
   turmaIds: [],
   tipo: 'consolidado',
   incluirFotos: true,
-  confirmacaoImagem: false,
 }
 
 const turmas: RelatorioTurmaRaw[] = [
@@ -263,7 +262,7 @@ describe('buildPrestacaoContasReport', () => {
       totalAtividades: 2,
       totalOficinasRealizadas: 2,
       totalSessoes: 3,
-      totalFotos: 3,
+      totalFotos: 1,
       frequenciaMedia: 80,
       presentes: 3,
       ausentes: 1,
@@ -319,17 +318,17 @@ describe('buildPrestacaoContasReport', () => {
     expect(atividade1?.oficinas).toEqual(['Musicalização'])
   })
 
-  it('conta fotos pelos anexos reais, ignorando documentos e total_anexos', () => {
+  it('conta fotos pelos anexos reais e omite fotos de turma sem autorização', () => {
     const relatorio = buildPrestacaoContasReport(criarInput())
     const atividade1 = relatorio.atividades.find((atividade) => atividade.id === 'atividade-1')
 
-    expect(relatorio.resumo.totalFotos).toBe(3)
-    expect(atividade1?.fotos).toHaveLength(2)
-    expect(atividade1?.fotos.map((foto) => foto.nomeArquivo)).toEqual([
-      'instrumentos.jpg',
-      'roda.jpg',
-    ])
-    expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-2', 'foto-1', 'foto-3'])
+    expect(relatorio.resumo.totalFotos).toBe(1)
+    expect(atividade1?.fotos).toHaveLength(0)
+    expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-3'])
+    expect(relatorio.restricaoImagem.fotosBloqueadas).toBe(2)
+    expect(relatorio.avisos).toContain(
+      '2 foto(s) de turma(s) com aluno sem autorização de uso de imagem foram omitidas do relatório.'
+    )
   })
 
   it('ordena atividades por data e ignora registros de turma inexistente ou fora do período', () => {
@@ -349,8 +348,26 @@ describe('buildPrestacaoContasReport', () => {
         turmaId: 'turma-a',
         turmaNome: 'Turma A',
         alunosSemAutorizacao: ['Bruno Alves'],
+        fotosBloqueadas: 2,
       },
     ])
+  })
+
+  it('inclui fotos quando todos os alunos ativos têm autorização persistida', () => {
+    const relatorio = buildPrestacaoContasReport(
+      criarInput({
+        alunos: alunos.map((aluno) =>
+          aluno.id === 'aluno-bruno'
+            ? { ...aluno, usoImagemAutorizado: true }
+            : aluno
+        ),
+      })
+    )
+
+    expect(relatorio.restricaoImagem.possuiAlunoSemAutorizacao).toBe(false)
+    expect(relatorio.restricaoImagem.fotosBloqueadas).toBe(0)
+    expect(relatorio.resumo.totalFotos).toBe(3)
+    expect(relatorio.fotos.map((foto) => foto.id)).toEqual(['foto-2', 'foto-1', 'foto-3'])
   })
 
   it('filtra por turma selecionada', () => {
@@ -401,18 +418,18 @@ describe('buildPrestacaoContasReport', () => {
       criarInput({ filtros: { ...filtrosBase, tipo: 'frequencia', incluirFotos: false } })
     )
 
-    expect(relatorio.resumo.totalFotos).toBe(3)
+    expect(relatorio.resumo.totalFotos).toBe(1)
     expect(relatorio.avisos.some((aviso) => aviso.includes('foto(s) sem arquivo'))).toBe(false)
   })
 
-  it('emite avisos de integridade para turma inexistente, chamada órfã e foto sem URL', () => {
+  it('emite avisos de integridade para turma inexistente, chamada órfã e fotos omitidas', () => {
     const relatorio = buildPrestacaoContasReport(criarInput())
 
     expect(relatorio.avisos).toEqual(
       expect.arrayContaining([
         '1 atividade(s) descartada(s) por turma não identificada.',
         '1 chamada(s) descartada(s) por turma não identificada.',
-        '1 foto(s) sem arquivo acessível no Storage; o PDF mostrará um espaço reservado.',
+        '2 foto(s) de turma(s) com aluno sem autorização de uso de imagem foram omitidas do relatório.',
       ])
     )
   })

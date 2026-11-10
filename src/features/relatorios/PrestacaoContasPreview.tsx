@@ -25,13 +25,7 @@ const RESUMO_ITENS: {
   { label: 'Frequência média', key: 'frequenciaMedia', suffix: '%' },
 ]
 
-export function PrestacaoContasPreview({
-  data,
-  confirmacaoImagem = false,
-}: {
-  data: RelatorioPrestacaoDados
-  confirmacaoImagem?: boolean
-}) {
+export function PrestacaoContasPreview({ data }: { data: RelatorioPrestacaoDados }) {
   const mostrarAtividades = secaoAtividadesAtiva(data.filtros.tipo)
   const mostrarFrequencia = secaoFrequenciaAtiva(data.filtros.tipo)
   const mostrarFotos = secaoFotosAtiva(data.filtros)
@@ -246,7 +240,11 @@ export function PrestacaoContasPreview({
           </div>
 
           {data.fotos.length === 0 ? (
-            <div className="prestacao-vazio">Nenhuma foto anexada no período.</div>
+            <div className="prestacao-vazio">
+              {data.restricaoImagem.fotosBloqueadas > 0
+                ? 'Fotos omitidas: as turmas selecionadas possuem alunos sem autorização de uso de imagem.'
+                : 'Nenhuma foto anexada no período.'}
+            </div>
           ) : (
             <div className="prestacao-fotos-grid">
               {data.fotos.map((foto) => (
@@ -283,16 +281,24 @@ export function PrestacaoContasPreview({
         <section className="prestacao-alerta imagem">
           <AlertTriangle size={20} />
           <div>
-            <strong>Restrição de uso de imagem (LGPD)</strong>
+            <strong>Fotos omitidas por falta de autorização de uso de imagem</strong>
             <p>
-              {confirmacaoImagem
-                ? 'A Direção confirmou a responsabilidade pelo uso das imagens. O registro das turmas e alunos sem autorização permanece listado abaixo.'
-                : 'As turmas abaixo possuem alunos sem autorização registrada para uso de imagem. A Direção deve confirmar a responsabilidade antes de gerar o PDF ou imprimir.'}
+              As fotos das atividades das turmas abaixo não foram incluídas nesta prévia. O mesmo
+              critério é aplicado ao PDF e à impressão. O consentimento só é válido quando está
+              gravado no cadastro do aluno.
+            </p>
+            <p>
+              <strong>Ação necessária:</strong> registre a autorização de uso de imagem no cadastro
+              do aluno (ou anexe o termo assinado em Documentos) e gere a prévia novamente.
             </p>
             <ul>
               {data.restricaoImagem.turmas.map((turma) => (
                 <li key={turma.turmaId}>
-                  <strong>{turma.turmaNome}:</strong> {turma.alunosSemAutorizacao.join(', ')}
+                  <strong>{turma.turmaNome}:</strong>{' '}
+                  {turma.alunosSemAutorizacao.join(', ')}
+                  {turma.fotosBloqueadas > 0
+                    ? ` (${turma.fotosBloqueadas} foto(s) omitida(s))`
+                    : ''}
                 </li>
               ))}
             </ul>
