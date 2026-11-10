@@ -264,6 +264,6 @@ describe('buildPrintHtml', () => {
     const html = buildPrintHtml(criarDados())
 
     expect(html).toContain('Restrição de uso de imagem (LGPD)')
-    expect(html).toContain('A Direção confirmou a responsabilidade pelo uso das imagens.')
+    expect(html).toContain('Imagens incluídas somente quando a autorização foi comprovada')
   })
 })

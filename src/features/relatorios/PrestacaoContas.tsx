@@ -126,7 +126,8 @@ export function PrestacaoContas() {
   const possuiRestricaoImagem = Boolean(
     data && secaoFotosAtiva(data.filtros) && data.restricaoImagem.possuiAlunoSemAutorizacao
   )
-  const bloqueioLgpd = possuiRestricaoImagem && !lgpdConfirmado
+  // A prévia já omite as fotos sem autorização comprovada antes de gerar URLs.
+  const bloqueioLgpd = false
   const podeExportar = Boolean(data) && !bloqueioLgpd && !processando
 
   const atualizarFiltros = (patch: Partial<PrestacaoContasFiltros>) => {
@@ -173,11 +174,11 @@ export function PrestacaoContas() {
     try {
       const relatorio = await loadPrestacaoContasData(filtros)
       setData(relatorio)
-      if (secaoFotosAtiva(relatorio.filtros) && relatorio.restricaoImagem.possuiAlunoSemAutorizacao) {
+      if (secaoFotosAtiva(relatorio.filtros) && (relatorio.fotosOmitidasPorAutorizacao || 0) > 0) {
         setFeedback({
           tone: 'warning',
           message:
-            'Prévia carregada. Há alunos sem autorização de uso de imagem nas turmas selecionadas. Confirme a responsabilidade abaixo para liberar o PDF e a impressão.',
+            `Prévia carregada. ${relatorio.fotosOmitidasPorAutorizacao} foto(s) sem autorização comprovada foram omitidas; apenas imagens elegíveis podem ser exportadas.`,
         })
       } else {
         setFeedback({
@@ -506,20 +507,16 @@ export function PrestacaoContas() {
       </form>
 
       {data && possuiRestricaoImagem && (
-        <div className={'prestacao-lgpd' + (lgpdConfirmado ? ' confirmado' : '')}>
+        <div className="prestacao-lgpd">
           <div className="prestacao-lgpd-icon">
-            {lgpdConfirmado ? <CheckCircle2 size={22} /> : <ShieldAlert size={22} />}
+            <ShieldAlert size={22} />
           </div>
           <div className="prestacao-lgpd-copy">
             <strong>
-              {lgpdConfirmado
-                ? 'Uso de imagem confirmado pela Direção'
-                : 'Confirmação obrigatória de uso de imagem'}
+              Fotos sem autorização comprovada foram omitidas
             </strong>
             <p>
-              {lgpdConfirmado
-                ? 'O PDF e a impressão estão liberados. A confirmação da Direção consta nesta prévia e na versão de impressão.'
-                : 'As turmas selecionadas possuem alunos sem autorização registrada para uso de imagem. Confirme a responsabilidade antes de gerar o material.'}
+              A exportação contém somente fotos de atividades com matrícula histórica identificada e autorização registrada para todos os alunos vinculados à turma naquela data. A regra institucional ainda precisa ser confirmada.
             </p>
             <div className="prestacao-lgpd-turmas">
               {data.restricaoImagem.turmas.map((turma) => (
@@ -529,14 +526,6 @@ export function PrestacaoContas() {
               ))}
             </div>
           </div>
-          <label className="prestacao-lgpd-check">
-            <input
-              checked={lgpdConfirmado}
-              onChange={(event) => setLgpdConfirmado(event.target.checked)}
-              type="checkbox"
-            />
-            <span>Confirmo que a Direção assume a responsabilidade pelo uso das imagens.</span>
-          </label>
         </div>
       )}
 
@@ -617,7 +606,9 @@ export function PrestacaoContas() {
           {data && data.resumo.totalFotos === 0 && secaoFotosAtiva(data.filtros) && (
             <div className="prestacao-aside-nota">
               <ImageOff size={17} />
-              <p>Nenhuma foto foi encontrada para o período e as turmas selecionadas.</p>
+              <p>{(data.fotosOmitidasPorAutorizacao || 0) > 0
+                ? `Nenhuma foto elegível para exportação. ${data.fotosOmitidasPorAutorizacao} foto(s) foram omitidas por autorização não comprovada.`
+                : 'Nenhuma foto foi encontrada para o período e as turmas selecionadas.'}</p>
             </div>
           )}
         </aside>

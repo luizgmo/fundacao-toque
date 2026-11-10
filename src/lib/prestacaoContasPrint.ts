@@ -249,7 +249,7 @@ function renderFotos(data: RelatorioPrestacaoDados): string {
         <figure class="foto">
           ${
             url
-              ? `<img alt="${escapeAttr(foto.legenda || foto.nomeArquivo)}" src="${escapeAttr(url)}" />`
+              ? `<img alt="${escapeAttr(foto.legenda || foto.nomeArquivo)}" src="${escapeAttr(url)}" onerror="this.outerHTML='<div class=&quot;foto-indisponivel&quot;>Foto indisponível</div>'" />`
               : '<div class="foto-indisponivel">Foto indisponível</div>'
           }
           <figcaption>${escapeHtml(legenda)}</figcaption>
@@ -292,8 +292,8 @@ function renderRestricaoImagem(data: RelatorioPrestacaoDados): string {
     <section class="bloco alerta">
       <h2>Restrição de uso de imagem (LGPD)</h2>
       <p>
-        As turmas abaixo possuem alunos sem autorização registrada para uso de imagem.
-        A Direção confirmou a responsabilidade pelo tratamento e pela destinação deste material.
+        As fotos que poderiam envolver alunos sem autorização registrada foram omitidas do relatório.
+        A regra de autorização por matrícula e turma permanece pendente de validação institucional.
       </p>
       <ul>${turmas}</ul>
     </section>`
@@ -305,13 +305,11 @@ function renderAssinatura(data: RelatorioPrestacaoDados): string {
       <h2>Responsável pela emissão</h2>
       <p>
         ${
-          data.filtros.confirmacaoImagem
-            ? 'A Direção confirmou a responsabilidade pelo uso das imagens.'
+          data.fotosOmitidasPorAutorizacao
+            ? `${data.fotosOmitidasPorAutorizacao} foto(s) omitida(s) por falta de autorização comprovada.`
             : !secaoFotosAtiva(data.filtros)
               ? 'Relatório gerado sem registro fotográfico.'
-              : data.restricaoImagem.possuiAlunoSemAutorizacao
-                ? 'Relatório sem confirmação explícita de uso de imagem.'
-                : 'Não há alunos sem autorização de imagem registrada nas turmas selecionadas.'
+              : 'Imagens incluídas somente quando a autorização foi comprovada para os alunos vinculados.'
         }
       </p>
       <div class="linha-assinatura"></div>
