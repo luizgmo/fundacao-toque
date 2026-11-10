@@ -6,7 +6,6 @@ import {
   User,
   ShieldCheck,
   AlertCircle,
-  CheckCircle2,
   Sparkles,
   ArrowRight,
   Eye,
@@ -17,14 +16,14 @@ import logoUrl from '../../assets/logo.png'
 import './LoginScreen.css'
 
 export function LoginScreen() {
-  const { login, loginAsGuest, setupInitialAdmin, isConfigured } = useAuth()
+  const { login, loginAsGuest, isConfigured } = useAuth()
 
-  const [mode, setMode] = useState<'login' | 'setup-admin'>('login')
+  // O provisionamento inicial não é oferecido pela interface pública.
+  const [mode] = useState<'login' | 'setup-admin'>('login')
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-
-  // Setup initial admin fields
   const [adminNome, setAdminNome] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
@@ -32,7 +31,6 @@ export function LoginScreen() {
 
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -63,33 +61,7 @@ export function LoginScreen() {
 
   const handleSetupAdmin = async (e: FormEvent) => {
     e.preventDefault()
-    setErrorMsg(null)
-
-    if (adminPassword.length < 6) {
-      setErrorMsg('A senha deve conter no mínimo 6 caracteres.')
-      return
-    }
-
-    if (adminPassword !== confirmPassword) {
-      setErrorMsg('As senhas digitadas não coincidem.')
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      await setupInitialAdmin(adminNome.trim(), adminEmail.trim(), adminPassword)
-      setSuccessMsg('Usuário Administrador (Direção) criado com sucesso! Redirecionando...')
-    } catch (err: any) {
-      console.error('Erro ao criar admin inicial:', err)
-      if (err.code === 'auth/email-already-in-use') {
-        setErrorMsg('Este e-mail já está cadastrado. Tente fazer login.')
-      } else if (err.code === 'auth/weak-password') {
-        setErrorMsg('A senha escolhida é muito fraca.')
-      } else {
-        setErrorMsg('Erro ao criar administrador: ' + (err.message || 'Erro desconhecido.'))
-      }
-      setSubmitting(false)
-    }
+    setErrorMsg('O primeiro perfil de Direção precisa ser provisionado por um administrador confiável.')
   }
 
   return (
@@ -105,28 +77,7 @@ export function LoginScreen() {
         </div>
 
         {/* Mode Switcher */}
-        <div className="login-mode-tabs">
-          <button
-            className={`tab-btn ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('login')
-              setErrorMsg(null)
-            }}
-            type="button"
-          >
-            Entrar no Sistema
-          </button>
-          <button
-            className={`tab-btn ${mode === 'setup-admin' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('setup-admin')
-              setErrorMsg(null)
-            }}
-            type="button"
-          >
-            <ShieldCheck size={16} /> Primeiro Acesso (Admin)
-          </button>
-        </div>
+        <div className="login-mode-tabs"><span>Entrar no Sistema</span></div>
 
         {/* Alerts */}
         {errorMsg && (
@@ -136,12 +87,6 @@ export function LoginScreen() {
           </div>
         )}
 
-        {successMsg && (
-          <div className="login-alert success">
-            <CheckCircle2 size={18} />
-            <span>{successMsg}</span>
-          </div>
-        )}
 
         {mode === 'login' ? (
           <form className="login-form" onSubmit={handleLogin}>

@@ -13,8 +13,30 @@ service firebase.storage {
     }
 
     function isDirection() {
+      return isActiveUser() && userRole() == 'direcao';
+    }
+
+    function isActiveUser() {
       return isSignedIn() &&
-        firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.papel == 'direcao';
+        firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.ativo == true;
+    }
+
+    function userRole() {
+      return firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.papel;
+    }
+
+    function canUseSystem() {
+      return isActiveUser() && userRole() in ['direcao', 'pedagogia', 'administrativo'];
+    }
+
+    function canManagePedagogicalFiles() {
+      return isActiveUser() && userRole() in ['direcao', 'pedagogia'];
+    }
+
+    function isReportDraft(reportId) {
+      return firestore.exists(/databases/(default)/documents/relatorios_pedagogicos/$(reportId)) &&
+        firestore.get(/databases/(default)/documents/relatorios_pedagogicos/$(reportId)).data.status == 'rascunho';
     }
 
     function isImageUpTo5MB() {
@@ -24,15 +46,19 @@ service firebase.storage {
 
     // Fotos dos registros de atividade (metadados em registros_atividade/{id}/anexos)
     match /registros_atividade/{activityId}/{fileName} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isImageUpTo5MB();
+      allow read: if canUseSystem();
+      allow create: if canUseSystem() && isImageUpTo5MB();
+      allow update: if false;
       allow delete: if isDirection();
     }
 
     // Anexos dos relatórios pedagógicos (fotos e PDFs até 10 MB)
     match /relatorios_pedagogicos/{reportId}/{fileName} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.size < 10 * 1024 * 1024;
+      allow read: if canManagePedagogicalFiles();
+      allow create: if canManagePedagogicalFiles() && isReportDraft(reportId) &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('(image/.*|application/pdf)');
+      allow update: if false;
       allow delete: if isDirection();
     }
   }

@@ -1,8 +1,8 @@
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { UserProfile, UserRole } from '../types/auth'
 
-const USUARIOS_COLLECTION = 'usuarios'
+const USUARIOS_COLLECTION = 'usuarios_publicos'
 
 // Escuta a equipe cadastrada (usada nos selects de profissional responsável)
 export function subscribeToUsuarios(
@@ -10,7 +10,7 @@ export function subscribeToUsuarios(
   onError?: (error: Error) => void
 ) {
   return onSnapshot(
-    collection(db, USUARIOS_COLLECTION),
+    query(collection(db, USUARIOS_COLLECTION), where('ativo', '==', true)),
     (snapshot) => {
       const list: UserProfile[] = []
       snapshot.forEach((d) => {
@@ -18,7 +18,7 @@ export function subscribeToUsuarios(
         list.push({
           uid: d.id,
           nome_completo: data.nome_completo || 'Sem nome',
-          email: data.email || '',
+          email: '',
           papel: (data.papel as UserRole) || 'administrativo',
           ativo: data.ativo !== false,
         })

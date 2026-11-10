@@ -14,39 +14,72 @@ service cloud.firestore {
     }
 
     function hasUserDoc() {
-      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function isActiveUser() {
+      return hasUserDoc() &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.ativo == true;
     }
 
     function userRole() {
-      return hasUserDoc()
+      return isActiveUser()
         ? get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.papel
         : null;
     }
 
     function isDirection() {
-      return isSignedIn() && userRole() == 'direcao';
+      return isActiveUser() && userRole() == 'direcao';
     }
 
     function isPedagogue() {
-      return isSignedIn() && userRole() == 'pedagogia';
+      return isActiveUser() && userRole() == 'pedagogia';
     }
 
     function isAdministrative() {
-      return isSignedIn() && userRole() == 'administrativo';
+      return isActiveUser() && userRole() == 'administrativo';
     }
 
-    // usuarios — usuário autenticado pode criar seu próprio doc ou Direção gerencia
+    function canUseSystem() {
+      return isDirection() || isPedagogue() || isAdministrative();
+    }
+
+    function validPrincipalAfterWrite(studentId) {
+      return request.resource.data.responsavel_principal_id is string &&
+        existsAfter(/databases/$(database)/documents/alunos/$(studentId)/responsaveis/$(request.resource.data.responsavel_principal_id)) &&
+        getAfter(/databases/$(database)/documents/alunos/$(studentId)/responsaveis/$(request.resource.data.responsavel_principal_id)).data.ativo == true &&
+        getAfter(/databases/$(database)/documents/alunos/$(studentId)/responsaveis/$(request.resource.data.responsavel_principal_id)).data.principal == true;
+    }
+
+    function isReportDraft(reportId) {
+      return exists(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)) &&
+        get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)).data.status == 'rascunho';
+    }
+
+    // Perfis são provisionados por Direção; usuário não pode criar, alterar ou remover o próprio papel.
     match /usuarios/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (request.auth.uid == userId || isDirection());
-      allow update, delete: if isDirection() || (isSignedIn() && request.auth.uid == userId);
+      allow get: if isSignedIn() && (request.auth.uid == userId || isDirection());
+      allow list: if isDirection();
+      allow create, update: if isDirection();
+      allow delete: if false;
+    }
+
+    // Diretório mínimo usado pelos seletores de profissional e autoria dos registros.
+    match /usuarios_publicos/{userId} {
+      allow read: if canUseSystem() && resource.data.ativo == true;
+      allow create, update: if isDirection();
+      allow delete: if false;
     }
 
     // alunos — Direção e Administrativo gerenciam cadastro; Pedagogia lê e atualiza.
     match /alunos/{studentId} {
-      allow read: if isSignedIn();
-      allow create, delete: if isDirection() || isAdministrative();
-      allow update: if isSignedIn();
+      allow read: if canUseSystem();
+      allow create: if (isDirection() || isAdministrative()) && validPrincipalAfterWrite(studentId);
+      allow delete: if isDirection() || isAdministrative();
+      allow update: if (isDirection() || isAdministrative() || isPedagogue()) &&
+        (!request.resource.data.keys().hasAny(['responsavel_principal_id']) ||
+          validPrincipalAfterWrite(studentId));
 
       // Subcoleção do aluno: ficha médica 1:1 — dados sensíveis (LGPD); ajustar com a Fundação.
       match /ficha_medica/{fichaId} {
@@ -56,75 +89,81 @@ service cloud.firestore {
 
       // Subcoleção: responsáveis do aluno
       match /responsaveis/{guardianId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isDirection() || isAdministrative();
+        allow read: if canUseSystem();
+        allow create, update: if (isDirection() || isAdministrative()) &&
+          existsAfter(/databases/$(database)/documents/alunos/$(studentId)) &&
+          request.resource.data.principal == (guardianId == getAfter(/databases/$(database)/documents/alunos/$(studentId)).data.responsavel_principal_id) &&
+          (request.resource.data.ativo == true || request.resource.data.principal == false);
+        allow delete: if isDirection() || isAdministrative();
       }
 
       // Subcoleção: documentos do aluno (ficha médica, matrícula, autorização de imagem)
       match /documentos/{documentId} {
-        allow read: if isSignedIn();
+        allow read: if canUseSystem();
         allow create, update, delete: if isDirection() || isAdministrative();
       }
     }
 
     match /turmas/{classId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
 
     match /oficinas/{workshopId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
 
     match /turma_oficinas/{classWorkshopId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
 
     match /matriculas/{enrollmentId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
 
     match /aluno_oficinas/{assignmentId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue();
     }
 
     match /registros_atividade/{activityId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow read: if canUseSystem();
+      allow create, update: if canUseSystem();
       allow delete: if isDirection();
 
       // Subcoleção: anexos do registro de atividade (fotos e documentos)
       match /anexos/{attachmentId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
+        allow read: if canUseSystem();
+        allow create: if canUseSystem() && exists(/databases/$(database)/documents/registros_atividade/$(activityId));
         allow update, delete: if isDirection();
       }
     }
 
     match /registros_evolucao/{progressId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow read: if canUseSystem();
+      allow create, update: if isDirection() || isPedagogue();
       allow delete: if isDirection();
     }
 
     match /modelos_formulario/{templateId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue();
     }
 
     match /relatorios_pedagogicos/{reportId} {
-      allow read: if isSignedIn();
+      allow read: if isDirection() || isPedagogue();
       allow create, update: if isDirection() || isPedagogue();
       allow delete: if isDirection();
 
       // Subcoleção: anexos do relatório pedagógico
       match /anexos/{attachmentId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
+        allow read: if canUseSystem();
+        allow create: if (isDirection() || isPedagogue()) &&
+          isReportDraft(reportId) &&
+          request.resource.data.enviado_por == request.auth.uid;
         allow update, delete: if isDirection();
       }
     }
@@ -132,23 +171,26 @@ service cloud.firestore {
     // Presenças ficam embutidas no map `presencas` da própria sessão —
     // um documento por chamada, sem coleção auxiliar.
     match /sessoes_chamada/{sessionId} {
-      allow read: if isSignedIn();
+      allow read: if canUseSystem();
       allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
     }
 
     match /contatos_familia/{contactId} {
-      allow read: if isSignedIn();
-      allow create, update: if isDirection() || isPedagogue() || isAdministrative();
+      allow read: if canUseSystem();
+      allow create: if (isDirection() || isPedagogue() || isAdministrative()) &&
+        exists(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id));
+      // Registros de contato preservam o destinatário e os dados usados naquele momento.
+      allow update: if false;
       allow delete: if isDirection();
     }
 
     match /relatorios_gerados/{reportId} {
-      allow read: if isSignedIn();
+      allow read: if isDirection();
       allow create, update, delete: if isDirection();
     }
 
     match /configuracoes_sistema/{settingId} {
-      allow read: if isSignedIn();
+      allow read: if isDirection();
       allow write: if isDirection();
     }
   }

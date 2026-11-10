@@ -33,6 +33,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const secondaryAppName = 'SecondaryAuthAdmin'
+function isUserRole(value: unknown): value is UserRole {
+  return value === 'direcao' || value === 'pedagogia' || value === 'administrativo'
+}
+
 function getSecondaryAuthInstance() {
   const existing = getApps().find((a) => a.name === secondaryAppName)
   if (existing) {
@@ -79,41 +83,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userDoc = await getDoc(doc(db, 'usuarios', user.uid))
           if (userDoc.exists()) {
             const data = userDoc.data()
-            setUserProfile({
-              uid: user.uid,
-              nome_completo: data.nome_completo || user.displayName || 'Usuário',
-              email: data.email || user.email || '',
-              papel: (data.papel as UserRole) || 'direcao',
-              ativo: data.ativo !== false,
-            })
-          } else {
-            // Se o usuário foi criado no Auth mas ainda não tem doc no Firestore
-            const defaultProfile: UserProfile = {
-              uid: user.uid,
-              nome_completo: user.displayName || user.email?.split('@')[0] || 'Administrador',
-              email: user.email || '',
-              papel: 'direcao',
-              ativo: true,
+            if (!isUserRole(data.papel) || data.ativo !== true) {
+              setUserProfile(null)
+              setCurrentUser(null)
+              await signOut(auth)
+            } else {
+              setUserProfile({
+                uid: user.uid,
+                nome_completo: data.nome_completo || user.displayName || 'Usuário',
+                email: data.email || user.email || '',
+                papel: data.papel,
+                ativo: true,
+              })
             }
-            await setDoc(doc(db, 'usuarios', user.uid), {
-              nome_completo: defaultProfile.nome_completo,
-              email: defaultProfile.email,
-              papel: 'direcao',
-              ativo: true,
-              criado_em: serverTimestamp(),
-              atualizado_em: serverTimestamp(),
-            })
-            setUserProfile(defaultProfile)
+          } else {
+            // Uma conta Auth sem perfil deve ser provisionada por um administrador confiável.
+            setUserProfile(null)
+            setCurrentUser(null)
+            await signOut(auth)
           }
         } catch (err) {
           console.warn('Erro ao carregar perfil do Firestore:', err)
-          setUserProfile({
-            uid: user.uid,
-            nome_completo: user.email?.split('@')[0] || 'Administrador',
-            email: user.email || '',
-            papel: 'direcao',
-            ativo: true,
-          })
+          setUserProfile(null)
+          setCurrentUser(null)
+          await signOut(auth).catch(() => undefined)
         }
       } else {
         // Se já havia uma sessão de convidado/local, não limpa
@@ -175,27 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Cria o primeiro admin Direção (semeador ou setup inicial)
   const setupInitialAdmin = async (nome: string, email: string, pass: string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass)
-    const user = userCredential.user
-
-    const profileData: UserProfile = {
-      uid: user.uid,
-      nome_completo: nome,
-      email: email,
-      papel: 'direcao',
-      ativo: true,
-    }
-
-    await setDoc(doc(db, 'usuarios', user.uid), {
-      nome_completo: nome,
-      email: email,
-      papel: 'direcao',
-      ativo: true,
-      criado_em: serverTimestamp(),
-      atualizado_em: serverTimestamp(),
-    })
-
-    setUserProfile(profileData)
+    void nome
+    void email
+    void pass
+    throw new Error('O primeiro perfil de Direção deve ser provisionado por um administrador confiável.')
   }
 
   // Permite à Direção criar outro autor sem deslogar a sessão atual
@@ -215,6 +191,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       papel: papel,
       ativo: true,
       criado_em: serverTimestamp(),
+      atualizado_em: serverTimestamp(),
+    })
+
+    await setDoc(doc(db, 'usuarios_publicos', newUid), {
+      nome_completo: nome,
+      papel,
+      ativo: true,
       atualizado_em: serverTimestamp(),
     })
 

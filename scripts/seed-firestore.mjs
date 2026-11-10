@@ -190,18 +190,28 @@ const usuarios = {
   [ADMIN_UID]: { nome_completo: 'Carlos Lima (Administrativo)', email: 'admin@exemplo.com', papel: 'administrativo', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
   [USER_1]: { nome_completo: 'Rita Ferreira (Pedagoga)', email: 'pedagoga2@exemplo.com', papel: 'pedagogia', ativo: true, ultimo_login_em: null, criado_em: now(), atualizado_em: now() },
 }
+const usuariosPublicos = Object.fromEntries(
+  Object.entries(usuarios).map(([id, user]) => [id, {
+    nome_completo: user.nome_completo,
+    papel: user.papel,
+    ativo: user.ativo,
+    atualizado_em: user.atualizado_em,
+  }])
+)
 
 const alunos = {
   [STUDENT_1]: {
     nome_completo: 'Ana Souza Pereira', nome_busca: 'ana souza pereira',
     data_nascimento: '2015-03-12', status: 'ativo', uso_imagem_autorizado: true,
     consentimento_imagem_em: now(), caminho_foto: null,
+    responsavel_principal_id: GUARDIAN_1,
     criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [STUDENT_2]: {
     nome_completo: 'Bruno Alves Santos', nome_busca: 'bruno alves santos',
     data_nascimento: '2013-07-25', status: 'ativo', uso_imagem_autorizado: false,
     consentimento_imagem_em: null, caminho_foto: null,
+    responsavel_principal_id: GUARDIAN_2,
     criado_por: ADMIN_UID, criado_em: now(), atualizado_por: ADMIN_UID, atualizado_em: now(),
   },
   [STUDENT_3]: {
@@ -368,6 +378,7 @@ const systemSettings = {
 // Cada entrada: [caminho da coleção (pode ser subcoleção), {id: dados}]
 const TARGETS = [
   ['usuarios', usuarios],
+  ['usuarios_publicos', usuariosPublicos],
   ['alunos', alunos],
   [fichasMedicasPaths[STUDENT_1], { ficha: healthRecords[STUDENT_1] }],
   [fichasMedicasPaths[STUDENT_2], { ficha: healthRecords[STUDENT_2] }],
@@ -409,7 +420,7 @@ const LEGACY_COLLECTIONS = [
 
 // Coleções atuais (dados de seed antigos têm campos desatualizados — limpar tudo)
 const CURRENT_COLLECTIONS = [
-  'usuarios', 'alunos', 'turmas', 'oficinas', 'turma_oficinas', 'matriculas',
+  'usuarios', 'usuarios_publicos', 'alunos', 'turmas', 'oficinas', 'turma_oficinas', 'matriculas',
   'aluno_oficinas', 'registros_atividade', 'sessoes_chamada',
   'contatos_familia', 'registros_evolucao', 'modelos_formulario',
   'relatorios_pedagogicos', 'configuracoes_sistema',
