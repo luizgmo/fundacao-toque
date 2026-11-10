@@ -443,13 +443,7 @@ async function wipeCollection(path) {
 
 async function cleanup() {
   let total = 0
-  for (const c of LEGACY_COLLECTIONS) {
-    total += await wipeCollection(c)
-  }
-  for (const c of CURRENT_COLLECTIONS) {
-    total += await wipeCollection(c)
-  }
-  // Subcoleções dos alunos não são apagadas em cascata — tratar explicitamente
+  // Firestore não remove subcoleções ao apagar o documento pai; listar antes.
   const alunos = await restListDocs('alunos')
   for (const docPath of alunos) {
     const alunoId = docPath.split('/')[1]
@@ -457,6 +451,21 @@ async function cleanup() {
     total += await wipeCollection(`alunos/${alunoId}/responsaveis`)
     total += await wipeCollection(`alunos/${alunoId}/documentos`)
   }
+  const atividades = await restListDocs('registros_atividade')
+  for (const docPath of atividades) {
+    total += await wipeCollection(`${docPath}/anexos`)
+  }
+  const relatorios = await restListDocs('relatorios_pedagogicos')
+  for (const docPath of relatorios) {
+    total += await wipeCollection(`${docPath}/anexos`)
+  }
+  for (const c of LEGACY_COLLECTIONS) {
+    total += await wipeCollection(c)
+  }
+  for (const c of CURRENT_COLLECTIONS.filter((name) => name !== 'alunos')) {
+    total += await wipeCollection(c)
+  }
+  total += await wipeCollection('alunos')
   console.log(`✅ Cleanup concluído (${total} documentos apagados).`)
 }
 
