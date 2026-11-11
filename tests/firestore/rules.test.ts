@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 import {
   assertFails,
   assertSucceeds,
@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  serverTimestamp,
   setDoc,
   updateDoc,
   writeBatch,
@@ -165,6 +166,60 @@ describe('Firestore security rules', () => {
     await assertSucceeds(getDoc(doc(db, 'contatos_familia/contato-1')))
   })
 
+  it('restringe relatórios gerados à Direção e preserva filtros após a criação', async () => {
+    const relatorio = {
+      tipo_relatorio: 'prestacao_contas',
+      status: 'processando',
+      gerado_por: 'direcao-1',
+      periodo_inicio: '2026-01-01',
+      periodo_fim: '2026-01-31',
+      filtros: { tipo: 'geral', turmaIds: [], incluirFotos: true },
+      gerado_em: serverTimestamp(),
+    }
+
+    await assertFails(
+      setDoc(doc(firestore('pedagogia-1'), 'relatorios_gerados/pedagogia'), relatorio)
+    )
+    await assertFails(
+      setDoc(doc(firestore('direcao-1'), 'relatorios_gerados/forjado'), {
+        ...relatorio,
+        gerado_por: 'pedagogia-1',
+      })
+    )
+    await assertFails(
+      setDoc(doc(firestore('direcao-1'), 'relatorios_gerados/concluido-direto'), {
+        ...relatorio,
+        status: 'concluido',
+      })
+    )
+
+    const db = firestore('direcao-1')
+    await assertSucceeds(setDoc(doc(db, 'relatorios_gerados/r1'), relatorio))
+    await assertFails(getDoc(doc(firestore('pedagogia-1'), 'relatorios_gerados/r1')))
+
+    await assertFails(
+      updateDoc(doc(db, 'relatorios_gerados/r1'), { periodo_fim: '2026-02-28' })
+    )
+    await assertFails(
+      updateDoc(doc(db, 'relatorios_gerados/r1'), {
+        status: 'concluido',
+        gerado_em: serverTimestamp(),
+        gerado_por: 'pedagogia-1',
+      })
+    )
+    await assertSucceeds(
+      updateDoc(doc(db, 'relatorios_gerados/r1'), {
+        status: 'concluido',
+        gerado_em: serverTimestamp(),
+      })
+    )
+    await assertFails(
+      updateDoc(doc(db, 'relatorios_gerados/r1'), {
+        status: 'processando',
+        gerado_em: serverTimestamp(),
+      })
+    )
+  })
 
   describe('turma_oficinas', () => {
     const vinculo = (extra: Record<string, unknown> = {}) => ({
@@ -277,6 +332,7 @@ describe('Firestore security rules', () => {
       const ref = 'sessoes_chamada/legada'
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const { versao: _versao, ...semVersao } = geral()
+        void _versao
         await setDoc(doc(context.firestore(), ref), semVersao)
       })
       await assertSucceeds(setDoc(doc(firestore('admin-1'), ref), geral({ versao: 1 })))

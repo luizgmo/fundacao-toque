@@ -322,9 +322,13 @@ observacoes, usuario_responsavel_id
 \begin{verbatim}
 tipo_relatorio (acompanhamento_aluno | prestacao_contas)
 periodo_inicio, periodo_fim, filtros: map (opcional)
-status (processando | concluido | falhou), caminho_storage (PDF)
+status (processando | concluido | falhou)
 gerado_por, gerado_em
 \end{verbatim}
+
+O PDF não é persistido: o documento guarda apenas metadados e a regeneração reutiliza os filtros e o
+período para consultar os dados atuais. A Direção pode ler, criar e excluir; a atualização é restrita
+à transição \texttt{processando -> concluido|falhou}, sem alterar filtros, período ou autor.
 
 \subsubsection*{\texttt{configuracoes\_sistema/geral}}
 

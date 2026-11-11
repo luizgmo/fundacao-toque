@@ -356,7 +356,19 @@ service cloud.firestore {
 
     match /relatorios_gerados/{reportId} {
       allow read: if isDirection();
-      allow create, update, delete: if isDirection();
+      allow create: if isDirection()
+        && request.resource.data.tipo_relatorio in ['acompanhamento_aluno', 'prestacao_contas']
+        && request.resource.data.status == 'processando'
+        && request.resource.data.gerado_por == request.auth.uid
+        && request.resource.data.gerado_em == request.time
+        && request.resource.data.periodo_inicio is string
+        && request.resource.data.periodo_fim is string;
+      allow update: if isDirection()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'gerado_em'])
+        && resource.data.status == 'processando'
+        && request.resource.data.status in ['concluido', 'falhou']
+        && request.resource.data.gerado_em == request.time;
+      allow delete: if isDirection();
     }
 
     match /configuracoes_sistema/{settingId} {

@@ -60,7 +60,7 @@ export function DetalheAluno({
   const [activeTab, setActiveTab] = useState<TabId>('visao')
   // Estados separados de carregando / erro / dados. `null` com status "ready"
   // significa aluno inexistente; falha de leitura aparece como erro.
-  const { currentUser, userProfile } = useAuth()
+  const { userProfile } = useAuth()
   const studentQuery = useQuery<Student | null>(() => getStudentById(studentId), null, studentId)
   const student = studentQuery.data
   const contactsSub = useSubscription<ContactEntry[]>(

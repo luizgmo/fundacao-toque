@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore'
 import { db, isFirebaseConfigured } from '../lib/firebase'
 import type { Student, StudentStatus, DocumentoTipo, DocumentEntry, Guardian } from '../features/alunos/students-data'
-import type { UserRole } from '../../types/auth'
+import type { UserRole } from '../types/auth'
 import { demoStudents } from '../features/alunos/students-data'
 import { DEMO_STUDENTS_STORAGE_KEY, isDemoModeEnabled } from '../lib/demoMode'
 import { confirmWrite } from '../lib/persistence'
@@ -684,10 +684,14 @@ export async function getDocumentosComUrl(
     return getStoredDocumentos(alunoId).map((entry) => ({ ...entry, url: entry.dataUrl || null }))
   }
 
-  let ref = collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`)
-  if (papel === 'administrativo') {
-    ref = query(ref, where('tipo_documento', '!=', 'ficha_medica'))
-  }
+  const documentosRef = collection(
+    db,
+    `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`
+  )
+  const ref =
+    papel === 'administrativo'
+      ? query(documentosRef, where('tipo_documento', '!=', 'ficha_medica'))
+      : documentosRef
 
   const snap = await getDocs(ref)
   return snap.docs.map((d) => {

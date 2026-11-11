@@ -17,11 +17,18 @@ Matrículas com `data_inicio`/`data_fim` são avaliadas pela vigência do perío
 ## Geração e download
 
 O PDF é montado no navegador com `jspdf` + `jspdf-autotable` e baixado diretamente pelo navegador.
-O PDF gerado não é salvo; portanto, **não existe histórico de PDFs gerados**. O relatório deve ser
-baixado e arquivado pela própria Direção. As fotos das atividades são salvas no Firestore em partes,
-na subcoleção `anexos/{id}/chunks`, e reconstruídas na prévia, impressão e PDF.
+O arquivo não é armazenado no servidor nem no Firestore: cada download ou impressão grava apenas
+metadados em `relatorios_gerados` (tipo, período, filtros, status, usuário e data). O histórico na
+tela permite **regerar a prévia** com os filtros registrados e **baixar o PDF novamente** a partir dos
+dados atuais, sempre criando um novo registro. O arquivo original não fica arquivado; a Direção deve
+guardar a via que efetivamente usou na prestação de contas. As fotos das atividades são salvas no
+Firestore em partes, na subcoleção `anexos/{id}/chunks`, e reconstruídas na prévia, impressão e PDF.
 
-A opção **Imprimir** abre uma versão HTML em nova janela e também não salva arquivo no servidor.
+A opção **Imprimir** abre uma versão HTML em nova janela e também não salva arquivo no servidor; a
+impressão também é registrada no histórico. Registros ficam como `processando` até a conclusão e
+passam a `concluido` ou `falhou`; se a gravação falhar, a exportação continua disponível para o
+usuário, mas o registro aparece como falho. Apenas a Direção lê e grava `relatorios_gerados`, e as
+regras impedem alterar filtros, período ou autor após a criação.
 
 Uma foto só é incluída quando todos os alunos com matrícula identificada na turma na data da atividade têm `uso_imagem_autorizado == true`. Sem roster histórico ou autorização comprovável, a foto é omitida antes de gerar URL de download. O mesmo critério é aplicado na prévia, no PDF e na impressão, com aviso listando os alunos bloqueados, a contagem de fotos omitidas e a ação necessária. A autorização considerada é a persistida em `alunos.uso_imagem_autorizado` (com a data em `alunos.consentimento_imagem_em`); nenhum checkbox visual da tela substitui esse registro. A Fundação confirmou a manutenção desta política conservadora em 10/11/2026; confirmação genérica da Direção não libera fotos sem autorização comprovada.
 

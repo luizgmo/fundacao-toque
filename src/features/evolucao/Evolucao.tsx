@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ROLE_LABELS } from '../../types/auth'
 import type { UserProfile, UserRole } from '../../types/auth'
 import {
@@ -8,7 +8,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
-import type { Student, EvolutionEntry } from '../alunos/students-data'
+import type { EvolutionEntry } from '../alunos/students-data'
 import { useStudents } from '../alunos/useStudents'
 import { LoadError } from '../../components/LoadError'
 import { DataNotice } from '../../components/DataNotice'

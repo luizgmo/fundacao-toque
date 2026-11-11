@@ -2,6 +2,7 @@ export const DEMO_MODE_STORAGE_KEY = 'ft_demo_mode'
 export const DEMO_STUDENTS_STORAGE_KEY = 'ft_demo_students'
 export const DEMO_SESSIONS_STORAGE_KEY = 'ft_demo_sessions'
 export const DEMO_CONTACTS_STORAGE_KEY = 'ft_demo_contacts'
+export const DEMO_GENERATED_REPORTS_STORAGE_KEY = 'ft_demo_generated_reports'
 
 // O modo demonstração é sempre explícito: só é ativado pelo botão de convidado
 // na tela de login e nunca se mistura com dados reais do Firestore.
@@ -33,6 +34,7 @@ export function clearDemoData(): void {
     window.localStorage.removeItem(DEMO_STUDENTS_STORAGE_KEY)
     window.localStorage.removeItem(DEMO_SESSIONS_STORAGE_KEY)
     window.localStorage.removeItem(DEMO_CONTACTS_STORAGE_KEY)
+    window.localStorage.removeItem(DEMO_GENERATED_REPORTS_STORAGE_KEY)
   } catch {
     // ignore
   }

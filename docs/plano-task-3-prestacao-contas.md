@@ -154,7 +154,7 @@ Sem resposta ainda é possível preparar datas de matrícula, rastreabilidade, t
 - Agente 5: consultas finais por período/turma/vigência e evidência dos índices; não inferir necessidade apenas pelo modelo.
 - Compartilhados a coordenar: `activitiesService.ts`, migração, arquivos de pacote/configuração.
 
-Histórico de PDFs não é exigido por este card. Só incluir `relatorios_gerados` e arquivamento se o escopo for ampliado explicitamente.
+Histórico de PDFs não era exigido por este card. O escopo foi ampliado explicitamente em 11/11/2026: `relatorios_gerados` agora guarda metadados e permite regeração/download, mas o arquivo continua sem ser armazenado.
 
 ## Verificação executada e limites
 
