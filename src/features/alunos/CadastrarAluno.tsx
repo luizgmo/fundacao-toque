@@ -19,11 +19,17 @@ import {
 } from 'lucide-react'
 import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
 import type { Student, StudentStatus, DocumentoTipo, Guardian } from './students-data'
-import { createStudent, getStudentGuardians, updateStudent, uploadDocumento, MAX_DOCUMENTO_BYTES } from '../../services/studentsService'
+import { createStudent, gerarIdAluno, getStudentGuardians, updateStudent, uploadDocumento, MAX_DOCUMENTO_BYTES } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
 import { subscribeToOficinas } from '../../services/oficinasService'
 import { useAuth } from '../../features/auth/AuthContext'
+import { isDemoModeEnabled } from '../../lib/demoMode'
+import { describePersistenceError, failureMessage } from '../../lib/persistence'
+import { useSubscription } from '../../lib/useSubscription'
+import type { LoadStatus } from '../../lib/useSubscription'
+import { LoadError } from '../../components/LoadError'
+import type { ArquivoComFalha } from '../../lib/persistence'
 import type { Turma } from '../../types/turmas'
 import { PERIODO_LABELS } from '../../types/turmas'
 import type { Oficina } from '../../types/oficinas'
@@ -138,6 +144,35 @@ function studentToForm(st: Student): AlunoForm {
 // Componentes de upload de documento (com progresso, erro e reenvio)
 // ============================================================================
 
+const LIMITE_DOCUMENTO_LABEL = `${Math.round(MAX_DOCUMENTO_BYTES / 1024)} KB`
+
+const draftStorageKey = (studentId?: string) => `ft_rascunho_aluno_${studentId || 'novo'}`
+
+type RascunhoAluno = {
+  form: AlunoForm
+  additionalGuardians: Guardian[]
+  lgpdImagem: boolean
+  lgpdDados: boolean
+  salvoEm: string
+}
+
+function lerRascunho(key: string): RascunhoAluno | null {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as RascunhoAluno) : null
+  } catch {
+    return null
+  }
+}
+
+function apagarRascunho(key: string) {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // ignore
+  }
+}
+
 type UploadDocumentoFieldProps = {
   label: string
   tipo: string
@@ -167,7 +202,7 @@ function UploadDocumentoField({
           <Upload size={23} />
         </span>
         <strong>{file ? file.name : placeholder}</strong>
-        <span>PDF, JPG ou PNG · máximo de 10 MB</span>
+        <span>PDF, JPG ou PNG · máximo de {LIMITE_DOCUMENTO_LABEL}</span>
       </div>
       <UploadDocumentoStatus
         status={status}
@@ -265,15 +300,36 @@ export function CadastrarAluno({
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // ID reservado para o novo aluno: reutilizado nas novas tentativas para não
+  // duplicar o cadastro se uma gravação sem confirmação acabar chegando ao banco.
+  const [novoAlunoId, setNovoAlunoId] = useState<string | null>(null)
+  // Preenchido quando os dados do aluno já foram confirmados no banco, mas algum
+  // documento ficou pendente. Novas tentativas atualizam este aluno em vez de criar outro.
+  const [alunoSalvoId, setAlunoSalvoId] = useState<string | null>(null)
+  const draftKey = draftStorageKey(initialStudent?.id)
+  const [rascunhoDisponivel, setRascunhoDisponivel] = useState<RascunhoAluno | null>(() =>
+    lerRascunho(draftKey)
+  )
   const [uploadStatus, setUploadStatus] = useState<Record<string, 'idle' | 'uploading' | 'success' | 'error'>>({})
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const [uploadError, setUploadError] = useState<Record<string, string>>({})
-  const [firestoreTurmas, setFirestoreTurmas] = useState<Turma[]>([])
-  const [firestoreOficinas, setFirestoreOficinas] = useState<Oficina[]>([])
+  const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
+  const oficinasSub = useSubscription<Oficina[]>(subscribeToOficinas, [])
+  const firestoreTurmas = turmasSub.data
+  const firestoreOficinas = oficinasSub.data
+
+  // Na edição, os responsáveis gravados definem quais documentos são mantidos.
+  // Sem essa leitura, salvar criaria um responsável novo e desativaria os atuais.
+  const [guardiansAttempt, setGuardiansAttempt] = useState(0)
+  const [guardiansLoad, setGuardiansLoad] = useState<{ status: LoadStatus; error: unknown }>(() => ({
+    status: initialStudent?.id ? 'loading' : 'ready',
+    error: null,
+  }))
 
   useEffect(() => {
     if (!initialStudent?.id) return
     getStudentGuardians(initialStudent.id).then((guardians) => {
+      setGuardiansLoad({ status: 'ready', error: null })
       const principal = guardians.find((item) => item.principal && item.ativo)
       setGuardianId(principal?.id)
       setAdditionalGuardians(guardians.filter((item) => item.id !== principal?.id))
@@ -287,13 +343,16 @@ export function CadastrarAluno({
           email: principal.email,
         }))
       }
-    }).catch((error) => console.warn('Não foi possível carregar responsáveis:', error))
-  }, [initialStudent?.id])
+    }).catch((error) => {
+      console.warn('Não foi possível carregar responsáveis:', error)
+      setGuardiansLoad({ status: 'error', error })
+    })
+  }, [initialStudent?.id, guardiansAttempt])
 
-  useEffect(() => {
-    const unsubs = [subscribeToTurmas(setFirestoreTurmas), subscribeToOficinas(setFirestoreOficinas)]
-    return () => unsubs.forEach((unsub) => unsub())
-  }, [])
+  const retryGuardians = () => {
+    setGuardiansLoad({ status: 'loading', error: null })
+    setGuardiansAttempt((n) => n + 1)
+  }
 
   const turmasOptions = useMemo<TurmaOption[]>(() => {
     return firestoreTurmas
@@ -350,7 +409,7 @@ export function CadastrarAluno({
       return `Tipo de arquivo não suportado: ${file.type || 'desconhecido'}`
     }
     if (file.size > MAX_DOCUMENTO_BYTES) {
-      return `Arquivo excede ${Math.round(MAX_DOCUMENTO_BYTES / 1024 / 1024)} MB`
+      return `Arquivo excede o limite de ${LIMITE_DOCUMENTO_LABEL}`
     }
     return null
   }
@@ -415,17 +474,52 @@ export function CadastrarAluno({
     setStep((current) => (current > 1 ? ((current - 1) as WizardStep) : current))
   }
 
+  // O rascunho fica apenas neste navegador: não é um salvamento no sistema.
   const saveDraft = () => {
-    setDraftMessage(
-      'Rascunho salvo às ' +
-        new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date())
-    )
+    const hora = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date())
+    try {
+      const rascunho: RascunhoAluno = {
+        form,
+        additionalGuardians,
+        lgpdImagem,
+        lgpdDados,
+        salvoEm: new Date().toISOString(),
+      }
+      localStorage.setItem(draftKey, JSON.stringify(rascunho))
+      setRascunhoDisponivel(null)
+      setDraftMessage(
+        `Rascunho guardado só neste navegador às ${hora}. Ainda não foi enviado ao sistema e não inclui os arquivos anexados.`
+      )
+    } catch {
+      setDraftMessage('Não foi possível guardar o rascunho neste navegador.')
+    }
+  }
+
+  const recuperarRascunho = () => {
+    if (!rascunhoDisponivel) return
+    setForm(rascunhoDisponivel.form)
+    setAdditionalGuardians(rascunhoDisponivel.additionalGuardians || [])
+    setLgpdImagem(rascunhoDisponivel.lgpdImagem)
+    setLgpdDados(rascunhoDisponivel.lgpdDados)
+    setRascunhoDisponivel(null)
+    setDraftMessage('Rascunho recuperado deste navegador. Conclua o cadastro para gravá-lo no sistema.')
+  }
+
+  const descartarRascunho = () => {
+    apagarRascunho(draftKey)
+    setRascunhoDisponivel(null)
   }
 
   const { currentUser, userProfile } = useAuth()
 
   const finishRegistration = async () => {
     if (!validateStep(1) || !validateStep(2) || !validateStep(4)) {
+      return
+    }
+    if (guardiansLoad.status !== 'ready') {
+      setSaveError(
+        'Os responsáveis cadastrados deste aluno ainda não foram carregados. Use “Tentar novamente” no aviso antes de salvar, para não substituí-los por engano.'
+      )
       return
     }
     setSaving(true)
@@ -483,53 +577,90 @@ export function CadastrarAluno({
         status: form.status,
       }
 
+      // 1) Dados principais do aluno. Se falhar, nada foi salvo e o formulário fica intacto.
+      const alunoExistenteId = initialStudent?.id || alunoSalvoId
       let alunoId: string
-
-      if (initialStudent) {
-        // Edição: envia/substitui documentos primeiro, depois atualiza o aluno
-        await uploadDocumentosParaAluno(initialStudent.id, userId)
-        await updateStudent(initialStudent.id, payload)
-        alunoId = initialStudent.id
-      } else {
-        // Novo: cria o aluno primeiro para obter o ID, depois envia documentos
-        alunoId = await createStudent(payload)
-        await uploadDocumentosParaAluno(alunoId, userId)
+      try {
+        if (alunoExistenteId) {
+          await updateStudent(alunoExistenteId, payload)
+          alunoId = alunoExistenteId
+        } else {
+          const idReservado = novoAlunoId || gerarIdAluno(payload.nome)
+          setNovoAlunoId(idReservado)
+          // IDs fixos para os responsáveis: uma nova tentativa (ou a atualização
+          // após documentos pendentes) regrava os mesmos documentos em vez de criar cópias.
+          const responsaveis = (payload.responsaveis || []).map((guardian, index) =>
+            guardian.id ? guardian : { ...guardian, id: `${idReservado}-resp-${index + 1}` }
+          )
+          setGuardianId(responsaveis[0]?.id)
+          setAdditionalGuardians(responsaveis.slice(1))
+          alunoId = await createStudent({ ...payload, id: idReservado, responsaveis })
+          setAlunoSalvoId(alunoId)
+        }
+      } catch (err) {
+        console.error('Erro ao salvar aluno:', err)
+        setSaveError(
+          failureMessage(err, alunoExistenteId ? 'atualizar os dados do aluno' : 'cadastrar o aluno')
+        )
+        return
       }
 
+      // 2) Documentos. Falhas não desfazem o aluno: informam o que foi gravado e o que falta.
+      const { enviados, falhas } = await uploadDocumentosParaAluno(alunoId, userId)
+      if (falhas.length > 0) {
+        const nome = payload.nome || 'aluno'
+        const gravados = enviados.length ? ` Documentos gravados: ${enviados.join(', ')}.` : ''
+        const pendentes = falhas.map((f) => `${f.nome} (${f.motivo})`).join('; ')
+        setSaveError(
+          `Os dados de ${nome} foram salvos no sistema, mas o envio ficou incompleto.${gravados} ` +
+            `Não enviados: ${pendentes}. Os arquivos pendentes continuam na etapa Documentos: ` +
+            `corrija-os se necessário e clique novamente em salvar para reenviar apenas o que falta.`
+        )
+        return
+      }
+
+      apagarRascunho(draftKey)
       setSubmitted(true)
       if (onSaveSuccess) onSaveSuccess(alunoId)
     } catch (err) {
       console.error('Erro ao salvar aluno:', err)
-      setSaveError(
-        'Erro ao gravar dados no Firestore: ' +
-          (err instanceof Error ? err.message : 'Tente novamente.')
-      )
+      setSaveError(failureMessage(err, 'salvar o cadastro do aluno'))
     } finally {
       setSaving(false)
     }
   }
 
-  // Envia todos os documentos selecionados para o aluno. Arquivos que falham
-  // não geram metadados; o erro é exibido na UI por meio do estado uploadError.
+  // Envia os documentos selecionados para o aluno. Cada arquivo confirmado sai do
+  // formulário (não é reenviado numa nova tentativa); os que falham permanecem
+  // selecionados e são devolvidos em `falhas` com o motivo.
   async function uploadDocumentosParaAluno(
     alunoId: string,
     userId: string
-  ): Promise<void> {
-    const envios: { tipo: DocumentoTipo; file: File | null; label: string }[] = [
-      { tipo: 'ficha_medica', file: fichaMedicaFile, label: 'Ficha médica' },
-      { tipo: 'ficha_matricula', file: fichaMatriculaFile, label: 'Ficha de matrícula' },
-      { tipo: 'autorizacao_imagem', file: autorizacaoImagemFile, label: 'Autorização de imagem' },
-      { tipo: 'outro', file: outroFile, label: outroLabel || 'Outro documento' },
+  ): Promise<{ enviados: string[]; falhas: ArquivoComFalha[] }> {
+    const envios: {
+      tipo: DocumentoTipo
+      file: File | null
+      label: string
+      limpar: () => void
+    }[] = [
+      { tipo: 'ficha_medica', file: fichaMedicaFile, label: 'Ficha médica', limpar: () => setFichaMedicaFile(null) },
+      { tipo: 'ficha_matricula', file: fichaMatriculaFile, label: 'Ficha de matrícula', limpar: () => setFichaMatriculaFile(null) },
+      { tipo: 'autorizacao_imagem', file: autorizacaoImagemFile, label: 'Autorização de imagem', limpar: () => setAutorizacaoImagemFile(null) },
+      { tipo: 'outro', file: outroFile, label: outroLabel || 'Outro documento', limpar: () => setOutroFile(null) },
     ]
+    const enviados: string[] = []
+    const falhas: ArquivoComFalha[] = []
 
     for (const envio of envios) {
       if (!envio.file) continue
+      const nomeArquivo = `${envio.label} (${envio.file.name})`
 
       const erroValidacao = validarArquivo(envio.file)
       if (erroValidacao) {
         setUploadError((prev) => ({ ...prev, [envio.tipo]: erroValidacao }))
         setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'error' }))
         setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 0 }))
+        falhas.push({ nome: nomeArquivo, motivo: erroValidacao })
         continue
       }
 
@@ -541,21 +672,22 @@ export function CadastrarAluno({
         await uploadDocumento(alunoId, envio.file, envio.tipo, userId)
         setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
         setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'success' }))
-        // Limpa erro anterior se houver
         setUploadError((prev) => {
           const next = { ...prev }
           delete next[envio.tipo]
           return next
         })
+        enviados.push(nomeArquivo)
+        envio.limpar()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Falha ao enviar arquivo'
-        // O uploadDocumento já salvou localmente mesmo quando o Firebase falha,
-        // então consideramos sucesso (pode ser apenas local).
-        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 100 }))
-        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'success' }))
-        setUploadError((prev) => ({ ...prev, [envio.tipo]: msg }))
+        const motivo = describePersistenceError(err)
+        setUploadProgress((prev) => ({ ...prev, [envio.tipo]: 0 }))
+        setUploadStatus((prev) => ({ ...prev, [envio.tipo]: 'error' }))
+        setUploadError((prev) => ({ ...prev, [envio.tipo]: `Não enviado: ${motivo}` }))
+        falhas.push({ nome: nomeArquivo, motivo })
       }
     }
+    return { enviados, falhas }
   }
 
   const resetForm = () => {
@@ -571,6 +703,8 @@ export function CadastrarAluno({
     setDraftMessage('')
     setSubmitted(false)
     setSaveError(null)
+    setNovoAlunoId(null)
+    setAlunoSalvoId(null)
     setUploadStatus({})
     setUploadProgress({})
     setUploadError({})
@@ -586,8 +720,17 @@ export function CadastrarAluno({
           </span>
           <h2>{isEditing ? 'Cadastro Atualizado!' : 'Cadastro Concluído!'}</h2>
           <p>
-            Os dados de <strong>{form.nome || 'aluno'}</strong> foram gravados com sucesso no banco
-            de dados (Firestore).
+            {isDemoModeEnabled() ? (
+              <>
+                Modo demonstração: os dados de <strong>{form.nome || 'aluno'}</strong> ficaram
+                apenas neste navegador e não foram enviados ao sistema.
+              </>
+            ) : (
+              <>
+                Os dados de <strong>{form.nome || 'aluno'}</strong> e os documentos anexados foram
+                confirmados no banco de dados.
+              </>
+            )}
           </p>
           <div className="mobile-form-actions register-success-actions">
             {!isEditing && (
@@ -639,6 +782,34 @@ export function CadastrarAluno({
         >
           <AlertCircle size={20} />
           <span>{saveError}</span>
+        </div>
+      )}
+
+      {guardiansLoad.status === 'error' && (
+        <LoadError
+          error={guardiansLoad.error}
+          impact="Salvar fica bloqueado para não substituir os responsáveis atuais."
+          onRetry={retryGuardians}
+          what="os responsáveis cadastrados"
+        />
+      )}
+
+      {rascunhoDisponivel && (
+        <div className="privacy-note" role="status" style={{ marginBottom: '1rem' }}>
+          <AlertCircle size={19} />
+          <p>
+            Há um rascunho guardado só neste navegador em{' '}
+            {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
+              new Date(rascunhoDisponivel.salvoEm)
+            )}
+            . Ele não foi enviado ao sistema.{' '}
+            <button className="text-button" onClick={recuperarRascunho} type="button">
+              Recuperar rascunho
+            </button>{' '}
+            <button className="text-button" onClick={descartarRascunho} type="button">
+              Descartar
+            </button>
+          </p>
         </div>
       )}
 
@@ -956,7 +1127,7 @@ export function CadastrarAluno({
                   <Upload size={23} />
                 </span>
                 <strong>{outroFile ? outroFile.name : outroLabel || 'Selecione um arquivo para anexar'}</strong>
-                <span>PDF, JPG ou PNG · máximo de 10 MB</span>
+                <span>PDF, JPG ou PNG · máximo de {LIMITE_DOCUMENTO_LABEL}</span>
               </div>
               {outroFile && (
                 <input
@@ -1048,8 +1219,14 @@ export function CadastrarAluno({
 
             <label className="field field-wide">
               <span>Turma(s) *</span>
-              {turmasOptions.length === 0 && (
-                <small>Nenhuma turma ativa cadastrada. Cadastre turmas na tela Turmas.</small>
+              {turmasSub.status === 'error' ? (
+                <LoadError error={turmasSub.error} onRetry={turmasSub.retry} what="as turmas" />
+              ) : turmasSub.status === 'loading' ? (
+                <small>Carregando turmas…</small>
+              ) : (
+                turmasOptions.length === 0 && (
+                  <small>Nenhuma turma ativa cadastrada. Cadastre turmas na tela Turmas.</small>
+                )
               )}
               <div className="chip-checkbox-grid">
                 {turmasOptions.map((turma) => (
@@ -1070,11 +1247,22 @@ export function CadastrarAluno({
 
             <label className="field field-wide">
               <span>Oficinas *</span>
-              <small>
-                {oficinasOptions.length === 0
-                  ? 'Nenhuma oficina ativa cadastrada. Cadastre oficinas na tela Oficinas.'
-                  : 'Selecione as oficinas conforme o plano individual do aluno.'}
-              </small>
+              {oficinasSub.status === 'error' ? (
+                <LoadError
+                  error={oficinasSub.error}
+                  impact="As oficinas já salvas no aluno são mantidas."
+                  onRetry={oficinasSub.retry}
+                  what="as oficinas"
+                />
+              ) : (
+                <small>
+                  {oficinasSub.status === 'loading'
+                    ? 'Carregando oficinas…'
+                    : oficinasOptions.length === 0
+                      ? 'Nenhuma oficina ativa cadastrada. Cadastre oficinas na tela Oficinas.'
+                      : 'Selecione as oficinas conforme o plano individual do aluno.'}
+                </small>
+              )}
               <div className="chip-checkbox-grid">
                 {oficinasOptions.map((oficina) => (
                   <label
@@ -1197,25 +1385,25 @@ export function CadastrarAluno({
                   <div>
                     <dt>Ficha médica</dt>
                     <dd>
-                      {fichaMedicaFile ? 'Anexada' : uploadStatus['ficha_medica'] === 'error' ? 'Erro' : 'Pendente'}
+                      {uploadStatus['ficha_medica'] === 'error' ? 'Não enviada — reenviar' : fichaMedicaFile ? 'Anexada' : uploadStatus['ficha_medica'] === 'success' ? 'Enviada ao sistema' : 'Pendente'}
                     </dd>
                   </div>
                   <div>
                     <dt>Ficha de matrícula</dt>
                     <dd>
-                      {fichaMatriculaFile ? 'Anexada' : uploadStatus['ficha_matricula'] === 'error' ? 'Erro' : 'Pendente'}
+                      {uploadStatus['ficha_matricula'] === 'error' ? 'Não enviada — reenviar' : fichaMatriculaFile ? 'Anexada' : uploadStatus['ficha_matricula'] === 'success' ? 'Enviada ao sistema' : 'Pendente'}
                     </dd>
                   </div>
                   <div>
                     <dt>Autorização de imagem</dt>
                     <dd>
-                      {autorizacaoImagemFile ? 'Anexada' : uploadStatus['autorizacao_imagem'] === 'error' ? 'Erro' : 'Pendente'}
+                      {uploadStatus['autorizacao_imagem'] === 'error' ? 'Não enviada — reenviar' : autorizacaoImagemFile ? 'Anexada' : uploadStatus['autorizacao_imagem'] === 'success' ? 'Enviada ao sistema' : 'Pendente'}
                     </dd>
                   </div>
                   <div>
                     <dt>Outro documento</dt>
                     <dd>
-                      {outroFile ? 'Anexado' : uploadStatus['outro'] === 'error' ? 'Erro' : 'Pendente'}
+                      {uploadStatus['outro'] === 'error' ? 'Não enviado — reenviar' : outroFile ? 'Anexado' : uploadStatus['outro'] === 'success' ? 'Enviado ao sistema' : 'Pendente'}
                     </dd>
                   </div>
                   <div>
@@ -1290,7 +1478,7 @@ export function CadastrarAluno({
           <div className="wizard-footer-actions">
             {draftMessage && <span className="wizard-draft-message">{draftMessage}</span>}
             <button className="button secondary" onClick={saveDraft} type="button">
-              <Save size={18} /> Salvar rascunho
+              <Save size={18} /> Guardar rascunho neste navegador
             </button>
             {step < 5 ? (
               <button className="button primary" onClick={goNext} type="button">

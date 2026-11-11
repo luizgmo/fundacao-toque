@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertTriangle,
@@ -43,6 +43,8 @@ import type { RelatorioTurmaRaw } from '../../types/relatorios'
 import { useAuth } from '../auth/AuthContext'
 import { HistoricoRelatoriosGerados } from './HistoricoRelatoriosGerados'
 import { PrestacaoContasPreview } from './PrestacaoContasPreview'
+import { useQuery } from '../../lib/useSubscription'
+import { LoadError } from '../../components/LoadError'
 import './PrestacaoContas.css'
 
 type PeriodoPreset = 'hoje' | 'mes' | 'semestre' | 'ano'
@@ -89,9 +91,10 @@ export function PrestacaoContas() {
       'Usuário não identificado',
   }
   const [filtros, setFiltros] = useState<PrestacaoContasFiltros>(criarFiltrosIniciais)
-  const [turmas, setTurmas] = useState<RelatorioTurmaRaw[]>([])
-  const [turmasCarregando, setTurmasCarregando] = useState(true)
-  const [turmasErro, setTurmasErro] = useState<string | null>(null)
+  // Estados separados de carregando / erro / dados, com nova tentativa.
+  const turmasQuery = useQuery<RelatorioTurmaRaw[]>(loadTurmasParaFiltro, [])
+  const turmas = turmasQuery.data
+  const turmasCarregando = turmasQuery.status === 'loading'
   const [data, setData] = useState<RelatorioPrestacaoDados | null>(null)
   const [carregandoDados, setCarregandoDados] = useState(false)
   const [processando, setProcessando] = useState(false)
@@ -99,29 +102,6 @@ export function PrestacaoContas() {
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [historicoVersao, setHistoricoVersao] = useState(0)
 
-  useEffect(() => {
-    let ativo = true
-    loadTurmasParaFiltro()
-      .then((lista) => {
-        if (ativo) {
-          setTurmas(lista)
-          setTurmasErro(null)
-        }
-      })
-      .catch((error: unknown) => {
-        if (ativo) {
-          setTurmasErro(
-            error instanceof Error ? error.message : 'Não foi possível carregar as turmas.'
-          )
-        }
-      })
-      .finally(() => {
-        if (ativo) setTurmasCarregando(false)
-      })
-    return () => {
-      ativo = false
-    }
-  }, [])
 
   const possuiRestricaoImagem = Boolean(
     data && secaoFotosAtiva(data.filtros) && data.restricaoImagem.possuiAlunoSemAutorizacao
@@ -443,11 +423,8 @@ export function PrestacaoContas() {
             {turmasCarregando && <Loader2 className="spin" size={17} />}
           </div>
 
-          {turmasErro ? (
-            <div className="prestacao-alerta avisos compacto">
-              <AlertTriangle size={17} />
-              <span>{turmasErro}</span>
-            </div>
+          {turmasQuery.status === 'error' ? (
+            <LoadError error={turmasQuery.error} onRetry={turmasQuery.retry} what="as turmas" />
           ) : (
             <div className="prestacao-turmas-grid">
               <label
@@ -491,7 +468,7 @@ export function PrestacaoContas() {
             </div>
           )}
 
-          {!turmasCarregando && !turmasErro && turmas.length === 0 && (
+          {turmasQuery.status === 'ready' && turmas.length === 0 && (
             <p className="prestacao-hint">Nenhuma turma cadastrada no Firestore.</p>
           )}
         </div>

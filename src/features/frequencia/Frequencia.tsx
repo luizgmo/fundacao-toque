@@ -19,23 +19,34 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import type { AttendanceStatus, ContactEntry, Guardian, Student } from '../alunos/students-data'
+import type { AttendanceSession, AttendanceStatus, ContactEntry, Guardian, Student } from '../alunos/students-data'
 import { addContactToStudent, saveAttendanceSession } from '../alunos/students-data'
-import { getStudentGuardians, subscribeToStudents } from '../../services/studentsService'
-import type { StudentsSource } from '../../services/studentsService'
-import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
-import { subscribeToOficinas, subscribeToTurmaOficinas } from '../../services/oficinasService'
-import type { Turma } from '../../types/turmas'
-import type { Oficina, TurmaOficina } from '../../types/oficinas'
+import { getStudentGuardians } from '../../services/studentsService'
+import { subscribeToTurmas } from '../../services/turmasService'
 import {
+  subscribeToAlunoOficinas,
+  subscribeToOficinas,
+  subscribeToTurmaOficinas,
+} from '../../services/oficinasService'
+import type { Turma } from '../../types/turmas'
+import type { AlunoOficina, Oficina, TurmaOficina } from '../../types/oficinas'
+import { vinculoPrevistoEm, vinculosAtivosDaTurma } from '../../types/oficinas'
+import {
+  ChamadaConflitoError,
   getAttendanceFromFirestore,
   saveAttendanceToFirestore,
   saveOccurrenceToFirestore,
 } from '../../services/attendanceService'
 import { isDemoModeEnabled } from '../../lib/demoMode'
+import { failureMessage } from '../../lib/persistence'
+import { useSubscription } from '../../lib/useSubscription'
+import type { LoadStatus } from '../../lib/useSubscription'
+import { LoadError, LoadErrors } from '../../components/LoadError'
+import { useStudents } from '../alunos/useStudents'
 import { DataNotice } from '../../components/DataNotice'
 import { maskPhone } from '../../lib/masks'
 import { useAuth } from '../auth/AuthContext'
+import { alunosDaChamada, alunosElegiveis, hojeLocalISO, montarPresencas, sessaoChamadaId } from './chamada'
 import './Frequencia.css'
 
 type Props = {
@@ -44,43 +55,23 @@ type Props = {
 
 export function Frequencia({ onViewStudentProfile }: Props) {
   const { userProfile } = useAuth()
-  const [allStudents, setAllStudents] = useState<Student[]>([])
-  const [studentsSource, setStudentsSource] = useState<StudentsSource | 'loading'>('loading')
-  const [studentsError, setStudentsError] = useState<string | null>(null)
-
-  // Inscrição na lista de alunos do Firestore em tempo real
-  useEffect(() => {
-    const unsub = subscribeToStudents(
-      (data) => {
-        setAllStudents(data)
-        setStudentsError(null)
-      },
-      (err) => setStudentsError(err.message),
-      (source) => setStudentsSource(source)
-    )
-    return () => unsub()
-  }, [])
-
-  const [turmas, setTurmas] = useState<Turma[]>([])
-  const [oficinas, setOficinas] = useState<Oficina[]>([])
-  const [vinculos, setVinculos] = useState<TurmaOficina[]>([])
-
-  useEffect(() => {
-    const unsubs = [
-      subscribeToTurmas(setTurmas),
-      subscribeToOficinas(setOficinas),
-      subscribeToTurmaOficinas(setVinculos),
-    ]
-    return () => unsubs.forEach((unsub) => unsub())
-  }, [])
+  // Estados separados de carregando / erro / dados para cada fonte.
+  const studentsSub = useStudents()
+  const allStudents = studentsSub.data
+  const studentsSource = studentsSub.source
+  const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
+  const oficinasSub = useSubscription<Oficina[]>(subscribeToOficinas, [])
+  const vinculosSub = useSubscription<TurmaOficina[]>(subscribeToTurmaOficinas, [])
+  const alunoOficinasSub = useSubscription<AlunoOficina[]>(subscribeToAlunoOficinas, [])
+  const turmas = turmasSub.data
+  const oficinas = oficinasSub.data
+  const vinculos = vinculosSub.data
 
   // Chamada states (IDs do Firestore)
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>('')
   const [selectedTurmaOficinaId, setSelectedTurmaOficinaId] = useState<string>('')
-  const [dateStr, setDateStr] = useState<string>(() => {
-    const today = new Date()
-    return today.toISOString().split('T')[0]
-  })
+  // Data local: em UTC, à noite a tela abriria a chamada do dia seguinte.
+  const [dateStr, setDateStr] = useState<string>(() => hojeLocalISO())
   const [scope, setScope] = useState<'turma' | 'oficina'>('turma')
 
   // Attendance values per student for current selected parameters
@@ -93,54 +84,87 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   const turmaAtual = turmasAtivas.find((t) => t.id === selectedTurmaId) || turmasAtivas[0]
   const turmaId = turmaAtual?.id || ''
 
-  // Oficinas oferecidas na turma (vínculos ativos de turma_oficinas)
+  // Oficinas oferecidas na turma: vínculos ativos de turma_oficinas (com oficina
+  // ativa). O id é o turma_oficina_id gravado na sessão de chamada. As previstas
+  // para o dia da semana (dentro da vigência) aparecem primeiro.
   const oficinasDaTurma = useMemo(
     () =>
-      vinculos
-        .filter((v) => v.turmaId === turmaId && v.ativo)
-        .map((v) => ({
-          id: v.id,
-          nome: oficinas.find((o) => o.id === v.oficinaId)?.nome || 'Oficina',
+      vinculosAtivosDaTurma(vinculos, oficinas, turmaId)
+        .map(({ vinculo, oficina }) => ({
+          id: vinculo.id,
+          nome: oficina.nome,
+          previstaHoje: vinculoPrevistoEm(vinculo, dateStr),
         }))
-        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
-    [vinculos, oficinas, turmaId]
+        .sort((a, b) => Number(b.previstaHoje) - Number(a.previstaHoje)),
+    [vinculos, oficinas, turmaId, dateStr]
   )
   const oficinaAtual =
     oficinasDaTurma.find((o) => o.id === selectedTurmaOficinaId) || oficinasDaTurma[0]
   const chamadaPorOficina = scope === 'oficina'
+  // ID determinístico do contexto: data + turma + (vínculo da oficina | geral).
+  // A chamada de oficina é outro documento e não altera a chamada geral da turma.
   const sessionId =
-    turmaId && (!chamadaPorOficina || oficinaAtual)
-      ? `${dateStr}_${turmaId}_${chamadaPorOficina ? oficinaAtual.id : 'geral'}`
+    turmaId && dateStr && (!chamadaPorOficina || oficinaAtual)
+      ? sessaoChamadaId({ data: dateStr, turmaId, escopo: scope, turmaOficinaId: oficinaAtual?.id })
       : ''
 
-  // Sincroniza com a sessão do Firestore quando os filtros mudam
+  // Sincroniza com a sessão do Firestore quando os filtros mudam. Uma falha de
+  // leitura não pode parecer "chamada ainda não feita": salvar ficaria
+  // sobrescrevendo a chamada existente com uma lista em branco.
+  const [sessionAttempt, setSessionAttempt] = useState(0)
+  const sessionKey = `${sessionId}|${sessionAttempt}`
+  const [sessionLoad, setSessionLoad] = useState<{
+    key: string
+    error: unknown
+    session: AttendanceSession | null
+  } | null>(null)
   useEffect(() => {
     let isMounted = true
+    // Sempre lê a sessão real antes de permitir iniciar/editar a chamada
     const load = sessionId ? getAttendanceFromFirestore(sessionId) : Promise.resolve(null)
-    load.then((existing) => {
-      if (isMounted) {
-        if (existing) {
-          setAttendanceRecords({ ...existing.records })
-        } else {
-          setAttendanceRecords({})
-        }
+    load.then(
+      (existing) => {
+        if (!isMounted) return
+        setAttendanceRecords(existing ? { ...existing.records } : {})
+        setSessionLoad({ key: sessionKey, error: null, session: existing })
+      },
+      (error: unknown) => {
+        if (!isMounted) return
+        console.warn('Erro ao carregar sessão do Firestore:', error)
+        setAttendanceRecords({})
+        setSessionLoad({ key: sessionKey, error, session: null })
       }
-    })
+    )
     return () => {
       isMounted = false
     }
-  }, [sessionId])
+  }, [sessionId, sessionKey])
+  const sessionStatus: LoadStatus =
+    sessionLoad?.key !== sessionKey ? 'loading' : sessionLoad.error ? 'error' : 'ready'
+  // Sessão salva no banco para o contexto atual (null = ainda não registrada)
+  const savedSession = sessionStatus === 'ready' ? sessionLoad?.session ?? null : null
+  const reloadSession = () => {
+    setSaveError(null)
+    setSessionAttempt((n) => n + 1)
+  }
 
   // Threshold X for alerts
   const [absenceThreshold, setAbsenceThreshold] = useState<number>(3)
 
   // Feedback states
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
+  // Erro do último salvamento, amarrado ao contexto em que ocorreu
+  const [saveErrorState, setSaveErrorState] = useState<{ message: string; conflito: boolean; sessionId: string } | null>(null)
+  const setSaveError = (value: { message: string; conflito: boolean } | null) =>
+    setSaveErrorState(value ? { ...value, sessionId } : null)
+  const saveError = saveErrorState?.sessionId === sessionId ? saveErrorState : null
   const [savingChamada, setSavingChamada] = useState(false)
 
   // Modal contact / occurrence state
   const [selectedStudentForContact, setSelectedStudentForContact] = useState<Student | null>(null)
   const [contactGuardians, setContactGuardians] = useState<Guardian[]>([])
+  const [guardiansAttempt, setGuardiansAttempt] = useState(0)
+  const [guardiansError, setGuardiansError] = useState<unknown>(null)
   const [selectedGuardianId, setSelectedGuardianId] = useState('')
   const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
   const [contactType, setContactType] = useState<string>('WhatsApp')
@@ -154,6 +178,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   const [contactNote, setContactNote] = useState<string>('')
   const [familyContactSuccess, setFamilyContactSuccess] = useState<string | null>(null)
   const [savingContact, setSavingContact] = useState(false)
+  // ID reservado para a ocorrência em edição; reutilizado se o usuário repetir o envio.
+  const [pendingContactId, setPendingContactId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -166,27 +192,48 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       if (!active) return
       const eligible = items.filter((item) => item.ativo && item.id)
       setContactGuardians(eligible)
+      setGuardiansError(null)
       setSelectedGuardianId(eligible.find((item) => item.principal)?.id || eligible[0]?.id || '')
     }).catch((error) => {
       console.warn('Não foi possível carregar responsáveis para o contato:', error)
-      if (active) setContactGuardians([])
+      if (!active) return
+      setContactGuardians([])
+      setGuardiansError(error)
     })
     return () => { active = false }
-  }, [selectedStudentForContact])
+  }, [selectedStudentForContact, guardiansAttempt])
 
   // Search filter for attendance list
   const [studentSearch, setStudentSearch] = useState<string>('')
 
-  // Filter students by selected Turma
+  // Alunos elegíveis no contexto: turma (chamada geral) ou participantes do
+  // vínculo na data (chamada de oficina)
+  const elegiveis = useMemo(
+    () =>
+      alunosElegiveis({
+        students: allStudents,
+        turma: turmaAtual,
+        escopo: scope,
+        turmaOficinaId: oficinaAtual?.id,
+        alunoOficinas: alunoOficinasSub.data,
+        data: dateStr,
+      }),
+    [allStudents, turmaAtual, scope, oficinaAtual?.id, alunoOficinasSub.data, dateStr]
+  )
+  // Elegíveis + quem já consta na sessão salva (reabrir mostra exatamente o salvo)
+  const listaChamada = useMemo(
+    () => alunosDaChamada(elegiveis, allStudents, savedSession?.records ?? null),
+    [elegiveis, allStudents, savedSession]
+  )
+  const elegivelIds = useMemo(() => new Set(elegiveis.map((s) => s.id)), [elegiveis])
+  // A busca só filtra a exibição; salvar sempre considera a lista completa.
   const turmaStudents = useMemo(() => {
-    return allStudents.filter((s) => {
-      const matchTurma = !!turmaAtual && studentBelongsToTurma(s, turmaAtual)
-      const matchSearch = studentSearch
-        ? s.name.toLowerCase().includes(studentSearch.toLowerCase())
-        : true
-      return matchTurma && matchSearch
-    })
-  }, [allStudents, turmaAtual, studentSearch])
+    const term = studentSearch.toLowerCase()
+    return listaChamada
+      .map((item) => item.student)
+      .filter((s) => !term || s.name.toLowerCase().includes(term))
+  }, [listaChamada, studentSearch])
+  const participantesStatus: LoadStatus = chamadaPorOficina ? alunoOficinasSub.status : 'ready'
 
   // Get current status for a student in local form state
   const getStudentStatus = (studentId: string): AttendanceStatus => {
@@ -224,24 +271,25 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setAttendanceRecords(next)
   }
 
-  // Attendance metrics for current turma & local state
+  // Totais da chamada inteira (independem da busca)
   const stats = useMemo(() => {
     let presentes = 0
     let ausentes = 0
     let justificados = 0
+    const todos = listaChamada.map((item) => item.student)
 
-    turmaStudents.forEach((st) => {
+    todos.forEach((st) => {
       const status = attendanceRecords[st.id]?.status ?? 'presente'
       if (status === 'presente') presentes++
       else if (status === 'ausente') ausentes++
       else if (status === 'justificado') justificados++
     })
 
-    const total = turmaStudents.length
+    const total = todos.length
     const pctPresente = total > 0 ? Math.round(((presentes + justificados) / total) * 100) : 0
 
     return { total, presentes, ausentes, justificados, pctPresente }
-  }, [turmaStudents, attendanceRecords])
+  }, [listaChamada, attendanceRecords])
 
   // Students with consecutive absences >= threshold
   const recurrentAbsenceStudents = useMemo(() => {
@@ -268,25 +316,39 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     }).format(dateObj)
   }, [dateStr])
 
-  // Save attendance handler integrado ao Firestore
+  // Salva a chamada do contexto atual. Bloqueado enquanto a sessão real, os
+  // alunos ou os participantes da oficina não estiverem carregados.
   const handleSaveAttendance = async () => {
+    setSaveError(null)
     if (!sessionId) {
-      alert(
-        chamadaPorOficina
+      setSaveError({
+        message: chamadaPorOficina
           ? 'Selecione uma turma com oficina vinculada para registrar a chamada.'
-          : 'Cadastre uma turma ativa para registrar a chamada.'
-      )
+          : 'Cadastre uma turma ativa para registrar a chamada.',
+        conflito: false,
+      })
       return
     }
-    setSavingChamada(true)
-    const recordsMap: Record<string, { status: AttendanceStatus; observation: string }> = {}
-    turmaStudents.forEach((st) => {
-      recordsMap[st.id] = {
-        status: getStudentStatus(st.id),
-        observation: getStudentObservation(st.id),
-      }
-    })
+    if (dateStr > hojeLocalISO()) {
+      setSaveError({ message: 'Não é possível registrar chamada em data futura.', conflito: false })
+      return
+    }
+    if (sessionStatus !== 'ready' || studentsSub.status !== 'ready' || participantesStatus !== 'ready') {
+      setSaveError({
+        message:
+          'A chamada não pode ser salva enquanto os alunos, os participantes da oficina e a chamada já registrada ' +
+          'para este contexto não forem carregados. Use “Tentar novamente” no aviso exibido na página.',
+        conflito: false,
+      })
+      return
+    }
+    if (elegiveis.length === 0 && !savedSession) {
+      setSaveError({ message: 'Não há alunos elegíveis neste contexto para registrar a chamada.', conflito: false })
+      return
+    }
 
+    setSavingChamada(true)
+    const recordsMap = montarPresencas(elegiveis, attendanceRecords, savedSession?.records ?? null)
     const professional = userProfile?.nome_completo || 'Equipe'
     const turmaOficinaId = chamadaPorOficina ? oficinaAtual?.id : undefined
     const oficinaName = chamadaPorOficina ? oficinaAtual?.nome : undefined
@@ -301,14 +363,17 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         oficinaName,
         registeredBy: professional,
         records: recordsMap,
+        versaoEsperada: savedSession ? savedSession.versao ?? 0 : null,
       })
 
       if (isDemoModeEnabled()) {
+        // Atualiza a sequência de faltas dos alunos fictícios
         saveAttendanceSession({
           id: sessionId,
           date: dateStr,
           turmaId,
           scope,
+          turmaOficinaId,
           oficinaName,
           registeredBy: professional,
           registeredAt: new Date().toISOString(),
@@ -316,11 +381,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         })
       }
 
-      setSaveSuccessMessage('Chamada salva no Firestore com sucesso! O histórico foi atualizado.')
+      setSaveSuccessMessage(
+        isDemoModeEnabled()
+          ? 'Modo demonstração: chamada guardada apenas neste navegador (não enviada ao sistema).'
+          : 'Chamada confirmada no banco de dados. O histórico foi atualizado.'
+      )
       setTimeout(() => setSaveSuccessMessage(null), 4000)
+      // Relê a sessão gravada (nova versão) para que o próximo salvamento parta dela
+      setSessionAttempt((n) => n + 1)
     } catch (err) {
       console.error('Erro ao salvar chamada no Firestore:', err)
-      alert('Erro ao salvar chamada: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
+      const conflito = err instanceof ChamadaConflitoError
+      setSaveError({ message: conflito ? err.message : failureMessage(err, 'salvar a chamada'), conflito })
     } finally {
       setSavingChamada(false)
     }
@@ -345,6 +417,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setContactStatus('Aberta / Em acompanhamento')
     setContactNote('')
     setFamilyContactSuccess(null)
+    setPendingContactId(null)
+    setGuardiansError(null)
   }
 
   // Handle submit contact log / occurrence integrado ao Firestore
@@ -359,6 +433,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setSavingContact(true)
 
     const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
+
+    const contactId = pendingContactId || `contato-${selectedStudentForContact.id}-${Date.now()}`
+    setPendingContactId(contactId)
 
     try {
       await saveOccurrenceToFirestore({
@@ -377,7 +454,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         reason: contactReason,
         status: contactStatus,
         note: contactNote,
-      })
+      }, contactId)
+      setPendingContactId(null)
 
       const newContact: ContactEntry = {
         faltaDate: contactFaltaDate,
@@ -396,7 +474,11 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       if (isDemoModeEnabled()) {
         addContactToStudent(selectedStudentForContact.id, newContact)
       }
-      setFamilyContactSuccess('Ocorrência e contato salvos com sucesso no Firestore!')
+      setFamilyContactSuccess(
+        isDemoModeEnabled()
+          ? 'Modo demonstração: ocorrência guardada apenas neste navegador (não enviada ao sistema).'
+          : 'Ocorrência e contato confirmados no banco de dados.'
+      )
 
       setTimeout(() => {
         setFamilyContactSuccess(null)
@@ -404,7 +486,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       }, 1800)
     } catch (err) {
       console.error('Erro ao salvar ocorrência no Firestore:', err)
-      alert('Erro ao salvar ocorrência: ' + (err instanceof Error ? err.message : 'Erro desconhecido.'))
+      alert(failureMessage(err, 'registrar a ocorrência / contato com a família'))
     } finally {
       setSavingContact(false)
     }
@@ -423,11 +505,40 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
       )}
 
-      {(studentsSource === 'error' || studentsError) && (
-        <DataNotice kind="error">
-          <strong>Não foi possível carregar os alunos do Firestore.</strong>{' '}
-          {studentsError ? `Detalhes: ${studentsError}` : 'Verifique a conexão e as permissões de acesso.'}
-        </DataNotice>
+      {studentsSub.status === 'error' && (
+        <LoadError
+          error={studentsSub.error}
+          impact="A chamada e os alertas de faltas não estão disponíveis."
+          onRetry={studentsSub.retry}
+          what="os alunos"
+        />
+      )}
+
+      <LoadErrors
+        impact="A seleção de turma e oficina pode estar incompleta."
+        sources={[
+          { what: 'as turmas', ...turmasSub },
+          { what: 'as oficinas', ...oficinasSub },
+          { what: 'os vínculos turma-oficina', ...vinculosSub },
+        ]}
+      />
+
+      {sessionStatus === 'error' && (
+        <LoadError
+          error={sessionLoad?.error}
+          impact="Para não sobrescrever a chamada, salvar fica bloqueado até a leitura funcionar."
+          onRetry={reloadSession}
+          what="a chamada já registrada para este dia"
+        />
+      )}
+
+      {chamadaPorOficina && alunoOficinasSub.status === 'error' && (
+        <LoadError
+          error={alunoOficinasSub.error}
+          impact="Sem eles não dá para saber quem participa da oficina; salvar fica bloqueado."
+          onRetry={alunoOficinasSub.retry}
+          what="os participantes das oficinas"
+        />
       )}
 
       {studentsSource === 'empty' && (
@@ -473,7 +584,15 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               <label>
                 <span>Turma</span>
                 <select onChange={(e) => setSelectedTurmaId(e.target.value)} value={turmaId}>
-                  {turmasAtivas.length === 0 && <option value="">Nenhuma turma cadastrada</option>}
+                  {turmasAtivas.length === 0 && (
+                    <option value="">
+                      {turmasSub.status === 'loading'
+                        ? 'Carregando turmas…'
+                        : turmasSub.status === 'error'
+                          ? 'Turmas indisponíveis'
+                          : 'Nenhuma turma cadastrada'}
+                    </option>
+                  )}
                   {turmasAtivas.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.nome}
@@ -509,6 +628,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                     {oficinasDaTurma.map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.nome}
+                        {o.previstaHoje ? ' (prevista neste dia)' : ''}
                       </option>
                     ))}
                   </select>
@@ -549,6 +669,21 @@ export function Frequencia({ onViewStudentProfile }: Props) {
             <span className="formatted-date-label">
               <Clock size={15} />
               {formattedDisplayDate}
+            </span>
+
+            <span className="session-status-label" role="status">
+              {sessionStatus === 'loading'
+                ? 'Carregando chamada salva…'
+                : sessionStatus === 'error'
+                  ? 'Chamada salva indisponível'
+                  : savedSession
+                    ? `${chamadaPorOficina ? 'Chamada da oficina' : 'Chamada geral'} salva por ${savedSession.registeredBy}` +
+                      (savedSession.registeredAt
+                        ? ` em ${new Date(savedSession.registeredAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+                        : '')
+                    : sessionId
+                      ? `Nova ${chamadaPorOficina ? 'chamada da oficina' : 'chamada geral'} — ainda não salva`
+                      : ''}
             </span>
 
             {/* Search Input */}
@@ -593,7 +728,15 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                 {turmaStudents.length === 0 ? (
                   <tr>
                     <td className="empty-table" colSpan={4}>
-                      Nenhum aluno encontrado para os filtros selecionados.
+                      {studentsSub.status === 'loading' || participantesStatus === 'loading'
+                        ? 'Carregando alunos…'
+                        : studentsSub.status === 'error' || participantesStatus === 'error'
+                          ? 'Alunos indisponíveis — veja o aviso no topo da página.'
+                          : studentSearch && listaChamada.length > 0
+                            ? 'Nenhum aluno encontrado para a busca.'
+                            : chamadaPorOficina
+                              ? 'Nenhum aluno participa desta oficina na data. Inclua os participantes em Oficinas.'
+                              : 'Nenhum aluno ativo nesta turma.'}
                     </td>
                   </tr>
                 ) : (
@@ -626,6 +769,14 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                                   </button>
                                 ) : (
                                   <strong>{student.name}</strong>
+                                )}
+                                {!elegivelIds.has(student.id) && (
+                                  <span
+                                    className="absence-warning-badge"
+                                    title="Registrado nesta chamada, mas hoje não está elegível neste contexto (mudou de turma, foi inativado ou saiu da oficina). O registro salvo é mantido."
+                                  >
+                                    Fora do contexto atual
+                                  </span>
                                 )}
                                 {isHighAbsence && (
                                   <span
@@ -774,13 +925,46 @@ export function Frequencia({ onViewStudentProfile }: Props) {
             </div>
 
             <div className="save-action-group">
+              {saveError && (
+                <div className="modal-error-banner save-error-banner" role="alert">
+                  <AlertTriangle size={16} />
+                  <span>{saveError.message}</span>
+                  {saveError.conflito ? (
+                    <button className="text-button" onClick={reloadSession} type="button">
+                      Recarregar chamada salva (descarta o que não foi salvo)
+                    </button>
+                  ) : (
+                    <button className="text-button" disabled={savingChamada} onClick={handleSaveAttendance} type="button">
+                      Tentar novamente
+                    </button>
+                  )}
+                </div>
+              )}
               {saveSuccessMessage && (
                 <span className="save-toast-msg">
                   <CheckCircle2 size={16} /> {saveSuccessMessage}
                 </span>
               )}
-              <button className="button primary" disabled={savingChamada} onClick={handleSaveAttendance} type="button">
-                <Save size={18} /> {savingChamada ? 'Gravando no Banco...' : 'Salvar Chamada'}
+              <button
+                className="button primary"
+                disabled={
+                  savingChamada ||
+                  sessionStatus !== 'ready' ||
+                  studentsSub.status !== 'ready' ||
+                  participantesStatus !== 'ready' ||
+                  dateStr > hojeLocalISO()
+                }
+                onClick={handleSaveAttendance}
+                type="button"
+              >
+                <Save size={18} />{' '}
+                {savingChamada
+                  ? 'Gravando no Banco...'
+                  : sessionStatus === 'loading'
+                    ? 'Carregando chamada...'
+                    : savedSession
+                      ? 'Salvar alterações'
+                      : 'Salvar Chamada'}
               </button>
             </div>
           </div>
@@ -804,7 +988,13 @@ export function Frequencia({ onViewStudentProfile }: Props) {
             </p>
 
             <div className="recurrent-students-list">
-              {recurrentAbsenceStudents.length === 0 ? (
+              {studentsSub.status !== 'ready' ? (
+                <p className="student-empty">
+                  {studentsSub.status === 'loading'
+                    ? 'Carregando alunos…'
+                    : 'Alertas indisponíveis: os alunos não foram carregados.'}
+                </p>
+              ) : recurrentAbsenceStudents.length === 0 ? (
                 <div className="empty-alert-box">
                   <CheckCircle2 size={24} style={{ color: 'var(--color-success, #10b981)' }} />
                   <p>Nenhum aluno atingiu o limite de faltas consecutivas no momento.</p>
@@ -996,7 +1186,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                       <option value="">Selecione um responsável ativo</option>
                       {contactGuardians.map((guardian) => <option key={guardian.id} value={guardian.id}>{guardian.nome} · {guardian.parentesco}{guardian.principal ? ' · Principal' : ''}</option>)}
                     </select>
-                    {contactGuardians.length === 0 && <small>Este aluno não tem responsáveis ativos cadastrados.</small>}
+                    {guardiansError ? (
+                      <LoadError
+                        error={guardiansError}
+                        onRetry={() => {
+                          setGuardiansError(null)
+                          setGuardiansAttempt((n) => n + 1)
+                        }}
+                        what="os responsáveis do aluno"
+                      />
+                    ) : (
+                      contactGuardians.length === 0 && <small>Este aluno não tem responsáveis ativos cadastrados.</small>
+                    )}
                   </label>
                   <div className="family-info-row">
                     <span>

@@ -5,12 +5,13 @@ import {
   doc,
   onSnapshot,
   serverTimestamp,
-  setDoc,
+  runTransaction,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { confirmWrite, describePersistenceError } from '../lib/persistence'
 import type {
   AlunoOficina,
   AlunoOficinaStatus,
@@ -18,6 +19,7 @@ import type {
   Oficina,
   TurmaOficina,
 } from '../types/oficinas'
+import { validarHorarios, validarResponsaveisVinculo, vinculoDoPar } from '../types/oficinas'
 
 const OFICINAS_COLLECTION = 'oficinas'
 const TURMA_OFICINAS_COLLECTION = 'turma_oficinas'
@@ -65,7 +67,7 @@ export function docToOficina(id: string, data: DocumentData): Oficina {
 
 export function subscribeToOficinas(
   onSuccess: (oficinas: Oficina[]) => void,
-  onError?: (error: Error) => void
+  onError: (error: Error) => void
 ) {
   return onSnapshot(
     collection(db, OFICINAS_COLLECTION),
@@ -79,15 +81,9 @@ export function subscribeToOficinas(
     },
     (err) => {
       console.warn('Erro ao escutar Firestore oficinas:', err)
-      if (onError) onError(err)
-      else onSuccess([])
+      onError(err)
     }
   )
-}
-
-export type VinculoTurmaInput = {
-  turmaId: string
-  horarios: HorarioOficina[]
 }
 
 export type OficinaInput = {
@@ -96,64 +92,13 @@ export type OficinaInput = {
   descricao: string
   idsUsuariosResponsaveis: string[]
   ativo: boolean
-  vinculos: VinculoTurmaInput[]
-}
-
-function horariosToFirestore(horarios: HorarioOficina[]) {
-  return horarios.map((h) => ({
-    dia_semana: h.diaSemana,
-    hora_inicio: h.horaInicio,
-    hora_fim: h.horaFim,
-  }))
-}
-
-// Grava os vínculos turma-oficina. Vínculos removidos são desativados (ativo: false)
-// para preservar o histórico, conforme modelagem.md.
-async function syncVinculos(
-  oficinaId: string,
-  input: OficinaInput,
-  existentes: TurmaOficina[],
-  userId: string
-) {
-  const batch = writeBatch(db)
-  const turmasSelecionadas = new Set(input.vinculos.map((v) => v.turmaId))
-
-  input.vinculos.forEach((vinculo) => {
-    const id = turmaOficinaId(vinculo.turmaId, oficinaId)
-    const jaExiste = existentes.some((e) => e.id === id)
-    batch.set(
-      doc(db, TURMA_OFICINAS_COLLECTION, id),
-      {
-        turma_id: vinculo.turmaId,
-        oficina_id: oficinaId,
-        ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
-        ativo: true,
-        horarios: horariosToFirestore(vinculo.horarios),
-        ...(jaExiste ? {} : { criado_por: userId, criado_em: serverTimestamp() }),
-        atualizado_por: userId,
-        atualizado_em: serverTimestamp(),
-      },
-      { merge: true }
-    )
-  })
-
-  existentes
-    .filter((e) => e.oficinaId === oficinaId && e.ativo && !turmasSelecionadas.has(e.turmaId))
-    .forEach((e) => {
-      batch.update(doc(db, TURMA_OFICINAS_COLLECTION, e.id), {
-        ativo: false,
-        atualizado_por: userId,
-        atualizado_em: serverTimestamp(),
-      })
-    })
-
-  await batch.commit()
 }
 
 export async function createOficina(input: OficinaInput, userId: string): Promise<string> {
   const id = `oficina-${slugify(input.nome)}-${Date.now().toString().slice(-4)}`
 
-  await setDoc(doc(db, OFICINAS_COLLECTION, id), {
+  const batch = writeBatch(db)
+  batch.set(doc(db, OFICINAS_COLLECTION, id), {
     nome: input.nome.trim(),
     categoria: input.categoria,
     descricao: input.descricao.trim(),
@@ -164,45 +109,66 @@ export async function createOficina(input: OficinaInput, userId: string): Promis
     atualizado_por: userId,
     atualizado_em: serverTimestamp(),
   })
-
-  await syncVinculos(id, input, [], userId)
+  await confirmWrite('cadastrar a oficina', batch.commit())
   return id
 }
 
-export async function updateOficina(
-  id: string,
-  input: OficinaInput,
-  vinculosExistentes: TurmaOficina[],
-  userId: string
-): Promise<void> {
-  await updateDoc(doc(db, OFICINAS_COLLECTION, id), {
-    nome: input.nome.trim(),
-    categoria: input.categoria,
-    descricao: input.descricao.trim(),
-    ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
-    ativo: input.ativo,
-    atualizado_por: userId,
-    atualizado_em: serverTimestamp(),
-  })
-
-  await syncVinculos(id, input, vinculosExistentes, userId)
+export async function updateOficina(id: string, input: OficinaInput, userId: string): Promise<void> {
+  await confirmWrite(
+    'atualizar a oficina',
+    updateDoc(doc(db, OFICINAS_COLLECTION, id), {
+      nome: input.nome.trim(),
+      categoria: input.categoria,
+      descricao: input.descricao.trim(),
+      ids_usuarios_responsaveis: input.idsUsuariosResponsaveis,
+      ativo: input.ativo,
+      atualizado_por: userId,
+      atualizado_em: serverTimestamp(),
+    })
+  )
 }
 
-// Inativar oficina (em vez de excluir, para preservar histórico)
-export async function inactivateOficina(id: string, userId: string): Promise<void> {
-  await updateDoc(doc(db, OFICINAS_COLLECTION, id), {
+// Inativar oficina (em vez de excluir, para preservar histórico). Os vínculos
+// ativos da oficina são inativados no mesmo batch: ou tudo é confirmado, ou nada.
+export async function inactivateOficina(
+  id: string,
+  vinculosAtivos: TurmaOficina[],
+  userId: string
+): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, OFICINAS_COLLECTION, id), {
     ativo: false,
     atualizado_por: userId,
     atualizado_em: serverTimestamp(),
   })
+  vinculosAtivos
+    .filter((v) => v.oficinaId === id && v.ativo)
+    .forEach((v) => {
+      batch.update(doc(db, TURMA_OFICINAS_COLLECTION, v.id), {
+        ativo: false,
+        inativado_em: todayISO(),
+        inativado_por: userId,
+        atualizado_por: userId,
+        atualizado_em: serverTimestamp(),
+      })
+    })
+  await confirmWrite('inativar a oficina', batch.commit())
 }
 
 // Manter função deleteOficina para compatibilidade, mas agora inativa
-export async function deleteOficina(id: string, userId: string): Promise<void> {
-  return inactivateOficina(id, userId)
+export async function deleteOficina(
+  id: string,
+  vinculosAtivos: TurmaOficina[],
+  userId: string
+): Promise<void> {
+  return inactivateOficina(id, vinculosAtivos, userId)
 }
 
 // ==== Vínculos turma-oficina ====
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' && value ? value : undefined
+}
 
 export function docToTurmaOficina(id: string, data: DocumentData): TurmaOficina {
   return {
@@ -218,14 +184,17 @@ export function docToTurmaOficina(id: string, data: DocumentData): TurmaOficina 
           diaSemana: Number(h.dia_semana) || 1,
           horaInicio: h.hora_inicio || '',
           horaFim: h.hora_fim || '',
+          validoDe: optionalString(h.valido_de),
+          validoAte: optionalString(h.valido_ate),
         }))
       : [],
+    inativadoEm: optionalString(data.inativado_em),
   }
 }
 
 export function subscribeToTurmaOficinas(
   onSuccess: (vinculos: TurmaOficina[]) => void,
-  onError?: (error: Error) => void
+  onError: (error: Error) => void
 ) {
   return onSnapshot(
     collection(db, TURMA_OFICINAS_COLLECTION),
@@ -238,9 +207,103 @@ export function subscribeToTurmaOficinas(
     },
     (err) => {
       console.warn('Erro ao escutar Firestore turma_oficinas:', err)
-      if (onError) onError(err)
-      else onSuccess([])
+      onError(err)
     }
+  )
+}
+
+export type VinculoInput = {
+  turmaId: string
+  oficinaId: string
+  idsUsuariosResponsaveis: string[]
+  horarios: HorarioOficina[]
+}
+
+export class VinculoInvalidoError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VinculoInvalidoError'
+  }
+}
+
+function horariosToFirestore(horarios: HorarioOficina[]) {
+  return [...horarios]
+    .sort((a, b) => a.diaSemana - b.diaSemana || a.horaInicio.localeCompare(b.horaInicio))
+    .map((h) => ({
+      dia_semana: h.diaSemana,
+      hora_inicio: h.horaInicio,
+      hora_fim: h.horaFim,
+      ...(h.validoDe ? { valido_de: h.validoDe } : {}),
+      ...(h.validoAte ? { valido_ate: h.validoAte } : {}),
+    }))
+}
+
+export type ResultadoVinculo = { id: string; acao: 'criado' | 'atualizado' | 'reativado' }
+
+// Cria, edita ou reativa o vínculo turma-oficina. Existe no máximo um documento
+// por par turma/oficina: religar uma oficina inativada reativa o documento
+// antigo, e chamadas/atividades que já apontavam para ele continuam válidas.
+// Novos vínculos usam o ID determinístico turma__oficina, exigido pelas regras
+// do Firestore, o que impede duplicar o par mesmo com gravações simultâneas.
+export async function salvarVinculo(
+  input: VinculoInput,
+  existentes: TurmaOficina[],
+  userId: string
+): Promise<ResultadoVinculo> {
+  if (!input.turmaId || !input.oficinaId) {
+    throw new VinculoInvalidoError('Selecione a turma e a oficina do vínculo.')
+  }
+  const erro = validarResponsaveisVinculo(input.idsUsuariosResponsaveis) || validarHorarios(input.horarios)
+  if (erro) throw new VinculoInvalidoError(erro)
+
+  // Reaproveita o documento já existente do par (mesmo com ID fora do padrão);
+  // só cria um novo, com ID determinístico, quando o par nunca foi vinculado.
+  const anterior = vinculoDoPar(existentes, input.turmaId, input.oficinaId)
+  const id = anterior?.id || turmaOficinaId(input.turmaId, input.oficinaId)
+  const operacao = !anterior ? 'criar o vínculo' : anterior.ativo ? 'atualizar o vínculo' : 'reativar o vínculo'
+
+  const dados = {
+    turma_id: input.turmaId,
+    oficina_id: input.oficinaId,
+    ids_usuarios_responsaveis: [...new Set(input.idsUsuariosResponsaveis)],
+    ativo: true,
+    horarios: horariosToFirestore(input.horarios),
+    inativado_em: null,
+    inativado_por: null,
+    atualizado_por: userId,
+    atualizado_em: serverTimestamp(),
+  }
+
+  // A transação lê o documento antes de gravar: se outra pessoa criou o mesmo
+  // vínculo nesse meio-tempo, ele é atualizado (não sobrescrito do zero).
+  const ref = doc(db, TURMA_OFICINAS_COLLECTION, id)
+  const acao = await confirmWrite(
+    operacao,
+    runTransaction(db, async (tx): Promise<ResultadoVinculo['acao']> => {
+      const atual = await tx.get(ref)
+      if (!atual.exists()) {
+        tx.set(ref, { ...dados, criado_por: userId, criado_em: serverTimestamp() })
+        return 'criado'
+      }
+      tx.update(ref, dados)
+      return atual.data().ativo === false ? 'reativado' : 'atualizado'
+    })
+  )
+  return { id, acao }
+}
+
+// Inativa o vínculo sem apagá-lo: chamadas, atividades e participantes que o
+// referenciam continuam resolvendo turma, oficina e horários no histórico.
+export async function inativarVinculo(id: string, userId: string): Promise<void> {
+  await confirmWrite(
+    'inativar o vínculo',
+    updateDoc(doc(db, TURMA_OFICINAS_COLLECTION, id), {
+      ativo: false,
+      inativado_em: todayISO(),
+      inativado_por: userId,
+      atualizado_por: userId,
+      atualizado_em: serverTimestamp(),
+    })
   )
 }
 
@@ -252,6 +315,7 @@ export function docToAlunoOficina(id: string, data: DocumentData): AlunoOficina 
     alunoId: data.aluno_id || '',
     turmaOficinaId: data.turma_oficina_id || '',
     dataInicio: data.data_inicio || '',
+    dataFim: typeof data.data_fim === 'string' && data.data_fim ? data.data_fim : undefined,
     status: (data.status as AlunoOficinaStatus) || 'ativo',
     nivelSuporte: data.nivel_suporte || '',
     consideracoesPedagogicas: data.consideracoes_pedagogicas || '',
@@ -260,7 +324,7 @@ export function docToAlunoOficina(id: string, data: DocumentData): AlunoOficina 
 
 export function subscribeToAlunoOficinas(
   onSuccess: (vinculos: AlunoOficina[]) => void,
-  onError?: (error: Error) => void
+  onError: (error: Error) => void
 ) {
   return onSnapshot(
     collection(db, ALUNO_OFICINAS_COLLECTION),
@@ -273,8 +337,7 @@ export function subscribeToAlunoOficinas(
     },
     (err) => {
       console.warn('Erro ao escutar Firestore aluno_oficinas:', err)
-      if (onError) onError(err)
-      else onSuccess([])
+      onError(err)
     }
   )
 }
@@ -287,13 +350,16 @@ export type AlunoOficinaSelecao = {
 
 // Define os alunos participantes de uma oficina dentro da turma.
 // Alunos desmarcados têm o vínculo cancelado (histórico preservado).
+// Lança PersistenceError se os vínculos não forem confirmados. Depois disso,
+// devolve os alunos cujo resumo de oficinas (campo denormalizado no cadastro
+// do aluno) não pôde ser atualizado, com o motivo.
 export async function saveAlunosDaOficina(
   turmaOficinaIdValue: string,
   oficinaNome: string,
   selecionados: AlunoOficinaSelecao[],
   existentes: AlunoOficina[],
   userId: string
-): Promise<void> {
+): Promise<{ resumosNaoAtualizados: { alunoId: string; motivo: string }[] }> {
   const batch = writeBatch(db)
   const hoje = todayISO()
   const idsSelecionados = new Set(selecionados.map((s) => s.alunoId))
@@ -331,20 +397,24 @@ export async function saveAlunosDaOficina(
     })
   })
 
-  await batch.commit()
+  await confirmWrite('salvar os participantes da oficina', batch.commit())
 
   // Mantém o resumo de oficinas exibido no perfil do aluno sincronizado
   const novos = selecionados.filter((s) => !ativosAntes.some((e) => e.alunoId === s.alunoId))
-  await Promise.all([
-    ...novos.map((s) =>
-      updateDoc(doc(db, ALUNOS_COLLECTION, s.alunoId), { oficinas: arrayUnion(oficinaNome) }).catch(
-        (err) => console.warn('Resumo de oficinas do aluno não atualizado:', err)
-      )
-    ),
-    ...removidos.map((e) =>
-      updateDoc(doc(db, ALUNOS_COLLECTION, e.alunoId), { oficinas: arrayRemove(oficinaNome) }).catch(
-        (err) => console.warn('Resumo de oficinas do aluno não atualizado:', err)
-      )
-    ),
-  ])
+  const atualizacoes = [
+    ...novos.map((s) => ({ alunoId: s.alunoId, data: { oficinas: arrayUnion(oficinaNome) } })),
+    ...removidos.map((e) => ({ alunoId: e.alunoId, data: { oficinas: arrayRemove(oficinaNome) } })),
+  ]
+  const resultados = await Promise.all(
+    atualizacoes.map(async ({ alunoId, data }) => {
+      try {
+        await confirmWrite('atualizar o resumo de oficinas do aluno', updateDoc(doc(db, ALUNOS_COLLECTION, alunoId), data))
+        return null
+      } catch (err) {
+        console.warn('Resumo de oficinas do aluno não atualizado:', err)
+        return { alunoId, motivo: describePersistenceError(err) }
+      }
+    })
+  )
+  return { resumosNaoAtualizados: resultados.filter((r): r is { alunoId: string; motivo: string } => r !== null) }
 }

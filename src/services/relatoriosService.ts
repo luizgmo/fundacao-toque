@@ -11,6 +11,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
+import { confirmWrite } from '../lib/persistence'
 import { db } from '../lib/firebase'
 import { getAnexoFirestoreUrl } from './activitiesService'
 import type {
@@ -82,9 +83,17 @@ export async function salvarRelatorio(input: RelatorioPedagogicoInput): Promise<
     atualizado_em: serverTimestamp(),
     ...(!existing.exists() ? { criado_em: serverTimestamp() } : {}),
   }
-  if (existing.exists()) await updateDoc(reportRef, payload)
-  else await setDoc(reportRef, payload)
+  const operacao = input.status === 'concluido' ? 'concluir o relatório' : 'salvar o rascunho do relatório'
+  if (existing.exists()) await confirmWrite(operacao, updateDoc(reportRef, payload))
+  else await confirmWrite(operacao, setDoc(reportRef, payload))
   return id
+}
+
+// Reserva um ID para um relatório novo. A tela reutiliza esse ID nas novas
+// tentativas para não duplicar o relatório caso uma gravação sem confirmação
+// acabe chegando ao banco.
+export function novoIdRelatorio(): string {
+  return doc(collection(db, COLLECTION)).id
 }
 
 export async function listarRelatoriosDoAluno(alunoId: string): Promise<RelatorioPedagogico[]> {
@@ -121,8 +130,10 @@ export async function listarAnexosRelatorio(id: string): Promise<AnexoRelatorioP
 
 export async function excluirAnexoRelatorio(reportId: string, attachmentId: string): Promise<void> {
   const chunks = await getDocs(collection(db, COLLECTION, reportId, 'anexos', attachmentId, 'chunks'))
-  await Promise.all(chunks.docs.map((chunk) => deleteDoc(chunk.ref)))
-  await deleteDoc(doc(db, COLLECTION, reportId, 'anexos', attachmentId))
+  await confirmWrite('excluir o anexo do relatório', (async () => {
+    await Promise.all(chunks.docs.map((chunk) => deleteDoc(chunk.ref)))
+    await deleteDoc(doc(db, COLLECTION, reportId, 'anexos', attachmentId))
+  })())
 }
 
 export async function inativarRascunhoRelatorio(id: string): Promise<void> {
@@ -130,5 +141,5 @@ export async function inativarRascunhoRelatorio(id: string): Promise<void> {
   if (!report || report.status !== 'rascunho') throw new Error('Somente rascunhos podem ser excluídos.')
   const attachments = await listarAnexosRelatorio(id)
   for (const attachment of attachments) await excluirAnexoRelatorio(id, attachment.id)
-  await deleteDoc(doc(db, COLLECTION, id))
+  await confirmWrite('excluir o rascunho do relatório', deleteDoc(doc(db, COLLECTION, id)))
 }
