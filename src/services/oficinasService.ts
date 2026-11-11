@@ -315,6 +315,7 @@ export function docToAlunoOficina(id: string, data: DocumentData): AlunoOficina 
     alunoId: data.aluno_id || '',
     turmaOficinaId: data.turma_oficina_id || '',
     dataInicio: data.data_inicio || '',
+    dataFim: typeof data.data_fim === 'string' && data.data_fim ? data.data_fim : undefined,
     status: (data.status as AlunoOficinaStatus) || 'ativo',
     nivelSuporte: data.nivel_suporte || '',
     consideracoesPedagogicas: data.consideracoes_pedagogicas || '',

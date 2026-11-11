@@ -36,6 +36,7 @@ export interface AlunoOficina {
   alunoId: string
   turmaOficinaId: string
   dataInicio: string
+  dataFim?: string // YYYY-MM-DD, quando a participação foi encerrada/cancelada
   status: AlunoOficinaStatus
   nivelSuporte: string
   consideracoesPedagogicas: string

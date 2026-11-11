@@ -176,8 +176,9 @@ const STUDENT_2 = 'seed-student-2'
 const STUDENT_3 = 'seed-student-3'
 const GUARDIAN_1 = 'seed-guardian-1'
 const GUARDIAN_2 = 'seed-guardian-2'
-const SESSION_1 = 'seed-session-manha-1'
-const SESSION_2 = 'seed-session-horta-1'
+// Sessões de chamada usam o ID determinístico data_turma_(geral | turma_oficina_id)
+const SESSION_1 = `2026-09-14_${CLASS_A}_geral`
+const SESSION_2 = `2026-09-14_${CLASS_A}_${CW_GARDEN_A}`
 const TEMPLATE_1 = 'seed-template-avaliacao-v1'
 
 function now() {
@@ -316,7 +317,7 @@ const attendanceSessions = {
       [STUDENT_3]: 'ausente',
     },
     observacoes: {},
-    registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now(),
+    registrado_por: ADMIN_UID, versao: 1, criado_em: now(), atualizado_em: now(),
   },
   [SESSION_2]: {
     data_chamada: '2026-09-14', turma_id: CLASS_A, escopo: 'oficina',
@@ -325,7 +326,7 @@ const attendanceSessions = {
       [STUDENT_1]: 'presente',
     },
     observacoes: {},
-    registrado_por: ADMIN_UID, criado_em: now(), atualizado_em: now(),
+    registrado_por: ADMIN_UID, versao: 1, criado_em: now(), atualizado_em: now(),
   },
 }
 

@@ -293,9 +293,50 @@ service cloud.firestore {
 
     // Presenças ficam embutidas no map `presencas` da própria sessão —
     // um documento por chamada, sem coleção auxiliar.
+    // Sessão de chamada: uma por data + turma + escopo (geral ou vínculo da
+    // oficina). O ID determinístico impede duas sessões para o mesmo contexto;
+    // a versão incrementada impede sobrescrever uma chamada salva por outra pessoa.
+    function sessaoChamadaValida(d) {
+      return d.data_chamada is string &&
+        d.data_chamada.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$') &&
+        d.turma_id is string && d.turma_id.size() > 0 &&
+        d.escopo in ['turma', 'oficina'] &&
+        (d.escopo == 'turma'
+          ? d.get('turma_oficina_id', null) == null
+          : d.get('turma_oficina_id', null) is string) &&
+        d.presencas is map &&
+        d.presencas.values().hasOnly(['presente', 'ausente', 'justificado']) &&
+        (d.get('observacoes', null) == null || d.observacoes is map) &&
+        d.registrado_por is string &&
+        d.versao is int;
+    }
+
+    function sessaoChamadaId(d) {
+      return d.data_chamada + '_' + d.turma_id + '_' +
+        (d.escopo == 'turma' ? 'geral' : d.turma_oficina_id);
+    }
+
     match /sessoes_chamada/{sessionId} {
       allow read: if canUseSystem();
-      allow create, update, delete: if isDirection() || isPedagogue() || isAdministrative();
+      allow create: if canUseSystem() &&
+        sessaoChamadaValida(request.resource.data) &&
+        request.resource.data.versao == 1 &&
+        sessionId == sessaoChamadaId(request.resource.data) &&
+        exists(/databases/$(database)/documents/turmas/$(request.resource.data.turma_id)) &&
+        (request.resource.data.escopo == 'turma' || (
+          exists(/databases/$(database)/documents/turma_oficinas/$(request.resource.data.turma_oficina_id)) &&
+          get(/databases/$(database)/documents/turma_oficinas/$(request.resource.data.turma_oficina_id)).data.turma_id == request.resource.data.turma_id &&
+          get(/databases/$(database)/documents/turma_oficinas/$(request.resource.data.turma_oficina_id)).data.ativo == true
+        ));
+      // O contexto (data, turma, escopo, vínculo) não muda depois de criado.
+      allow update: if canUseSystem() &&
+        sessaoChamadaValida(request.resource.data) &&
+        request.resource.data.versao == resource.data.get('versao', 0) + 1 &&
+        request.resource.data.data_chamada == resource.data.data_chamada &&
+        request.resource.data.turma_id == resource.data.turma_id &&
+        request.resource.data.escopo == resource.data.escopo &&
+        request.resource.data.get('turma_oficina_id', null) == resource.data.get('turma_oficina_id', null);
+      allow delete: if isDirection();
     }
 
     match /contatos_familia/{contactId} {
