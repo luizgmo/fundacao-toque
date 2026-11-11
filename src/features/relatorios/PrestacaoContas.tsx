@@ -30,14 +30,18 @@ import {
   todayISO,
   validatePrestacaoContasFiltros,
 } from '../../lib/reportBuilder'
-import { generatePrestacaoContasPdf } from '../../lib/prestacaoContasPdf'
 import type { PdfProgress } from '../../lib/prestacaoContasPdf'
-import { printPrestacaoContas } from '../../lib/prestacaoContasPrint'
+import {
+  gerarEBaixarPdfPrestacaoContas,
+  imprimirPrestacaoContasComRegistro,
+} from '../../lib/prestacaoContasExport'
 import {
   loadPrestacaoContasData,
   loadTurmasParaFiltro,
 } from '../../services/prestacaoContasService'
 import type { RelatorioTurmaRaw } from '../../types/relatorios'
+import { useAuth } from '../auth/AuthContext'
+import { HistoricoRelatoriosGerados } from './HistoricoRelatoriosGerados'
 import { PrestacaoContasPreview } from './PrestacaoContasPreview'
 import './PrestacaoContas.css'
 
@@ -74,19 +78,16 @@ function periodoDoPreset(preset: PeriodoPreset): { inicio: string; fim: string }
   return { inicio: `${ano}-01-01`, fim: hoje }
 }
 
-function baixarBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  link.rel = 'noopener'
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 2000)
-}
-
 export function PrestacaoContas() {
+  const { currentUser, userProfile } = useAuth()
+  const exportador = {
+    id: userProfile?.uid || currentUser?.uid || '',
+    nome:
+      userProfile?.nome_completo ||
+      currentUser?.displayName ||
+      currentUser?.email ||
+      'Usuário não identificado',
+  }
   const [filtros, setFiltros] = useState<PrestacaoContasFiltros>(criarFiltrosIniciais)
   const [turmas, setTurmas] = useState<RelatorioTurmaRaw[]>([])
   const [turmasCarregando, setTurmasCarregando] = useState(true)
@@ -96,6 +97,7 @@ export function PrestacaoContas() {
   const [processando, setProcessando] = useState(false)
   const [progresso, setProgresso] = useState<PdfProgress | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [historicoVersao, setHistoricoVersao] = useState(0)
 
   useEffect(() => {
     let ativo = true
@@ -153,12 +155,13 @@ export function PrestacaoContas() {
     atualizarFiltros({ turmaIds: selecionadas })
   }
 
-  const gerarPrevia = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const erroValidacao = validatePrestacaoContasFiltros(filtros)
+  const carregarPrevia = async (
+    filtrosParaCarregar: PrestacaoContasFiltros
+  ): Promise<boolean> => {
+    const erroValidacao = validatePrestacaoContasFiltros(filtrosParaCarregar)
     if (erroValidacao) {
       setFeedback({ tone: 'error', message: erroValidacao })
-      return
+      return false
     }
 
     setCarregandoDados(true)
@@ -166,7 +169,8 @@ export function PrestacaoContas() {
     setData(null)
 
     try {
-      const relatorio = await loadPrestacaoContasData(filtros)
+      const relatorio = await loadPrestacaoContasData(filtrosParaCarregar)
+      setFiltros(filtrosParaCarregar)
       setData(relatorio)
       if (
         secaoFotosAtiva(relatorio.filtros) &&
@@ -187,6 +191,7 @@ export function PrestacaoContas() {
           message: 'Prévia carregada. Revise os dados e baixe o PDF ou abra a impressão.',
         })
       }
+      return true
     } catch (error) {
       setFeedback({
         tone: 'error',
@@ -195,9 +200,23 @@ export function PrestacaoContas() {
             ? error.message
             : 'Não foi possível carregar os dados do relatório.',
       })
+      return false
     } finally {
       setCarregandoDados(false)
     }
+  }
+
+  const gerarPrevia = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    void carregarPrevia(filtros)
+  }
+
+  const regerarPreviaDoHistorico = async (
+    filtrosSalvos: PrestacaoContasFiltros
+  ): Promise<boolean> => {
+    const ok = await carregarPrevia(filtrosSalvos)
+    if (ok) window.scrollTo({ top: 0, behavior: 'smooth' })
+    return ok
   }
 
   const baixarPdf = async () => {
@@ -209,12 +228,12 @@ export function PrestacaoContas() {
     setFeedback(null)
 
     try {
-      const pdf = await generatePrestacaoContasPdf(dados, {
+      const pdf = await gerarEBaixarPdfPrestacaoContas(dados, exportador, {
         onProgress: setProgresso,
       })
 
-      baixarBlob(pdf.blob, pdf.fileName)
-      let mensagem = 'PDF gerado e baixado. Nenhum arquivo foi enviado ao servidor.'
+      let mensagem =
+        'PDF gerado e baixado. O arquivo não é armazenado; a exportação foi registrada no histórico.'
       let tone: Feedback['tone'] = 'success'
 
       if (pdf.fotosComErro > 0) {
@@ -223,12 +242,14 @@ export function PrestacaoContas() {
       }
 
       setFeedback({ tone, message: mensagem })
+      setHistoricoVersao((atual) => atual + 1)
     } catch (error) {
       setFeedback({
         tone: 'error',
         message:
           error instanceof Error ? error.message : 'Não foi possível gerar o PDF do relatório.',
       })
+      setHistoricoVersao((atual) => atual + 1)
     } finally {
       setProcessando(false)
       setProgresso(null)
@@ -239,21 +260,30 @@ export function PrestacaoContas() {
     if (!data) return
     const dados = data
 
-    try {
-      printPrestacaoContas(dados)
-      setFeedback({
-        tone: 'success',
-        message: 'Janela de impressão aberta. Nenhum arquivo foi enviado ao servidor.',
+    const registro = imprimirPrestacaoContasComRegistro(dados, exportador)
+    setFeedback({
+      tone: 'success',
+      message: 'Abrindo janela de impressão...',
+    })
+    void registro
+      .then(() => {
+        setFeedback({
+          tone: 'success',
+          message:
+            'Janela de impressão aberta. O arquivo não é armazenado; a exportação ficou registrada no histórico.',
+        })
+        setHistoricoVersao((atual) => atual + 1)
       })
-    } catch (error) {
-      setFeedback({
-        tone: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Não foi possível abrir a janela de impressão.',
+      .catch((error: unknown) => {
+        setFeedback({
+          tone: 'error',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Não foi possível abrir a janela de impressão.',
+        })
+        setHistoricoVersao((atual) => atual + 1)
       })
-    }
   }
 
   const fotoAtiva =
@@ -607,6 +637,12 @@ export function PrestacaoContas() {
           )}
         </aside>
       </div>
+
+      <HistoricoRelatoriosGerados
+        exportador={exportador}
+        onRegerarPrevia={regerarPreviaDoHistorico}
+        refreshKey={historicoVersao}
+      />
     </div>
   )
 }

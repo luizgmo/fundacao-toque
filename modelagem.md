@@ -392,10 +392,14 @@ periodo_fim: string                        obrigatório
 filtros: map                              opcional
 status: string                            obrigatório
   valores: processando | concluido | falhou
-caminho_storage: string                      opcional
+caminho_storage: string                      opcional (não utilizado)
 gerado_por: string                      obrigatório
 gerado_em: Timestamp                   obrigatório
 ```
+
+O PDF não é armazenado: `caminho_storage` fica ausente e o histórico guarda apenas metadados. A
+regeneração usa `filtros` e o período para consultar os dados atuais, cria um novo registro e baixa
+o arquivo localmente.
 
 ### `configuracoes_sistema/geral`
 

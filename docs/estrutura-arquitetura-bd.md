@@ -296,9 +296,14 @@ observacoes, usuario_responsavel_id
 ```
 tipo_relatorio (acompanhamento_aluno | prestacao_contas)
 periodo_inicio, periodo_fim, filtros: map (opcional)
-status (processando | concluido | falhou), caminho_storage (PDF)
+status (processando | concluido | falhou)
 gerado_por, gerado_em
 ```
+
+O PDF é gerado no navegador e não é persistido. O documento registra apenas metadados; a
+regeneração reutiliza `filtros` e o período e cria um novo registro. A Direção pode ler, criar e
+excluir; a atualização é restrita à transição `processando -> concluido|falhou`, sem alterar
+filtros, período ou autor.
 
 **configuracoes_sistema/geral**
 
@@ -361,7 +366,8 @@ Arquivo `firestore.rules` — nega tudo por padrão. **A matriz abaixo é a prop
 | relatorios_pedagogicos e anexos | Direção/Pedagogia | Direção/Pedagogia; exclusão do relatório reservada à Direção |
 | sessoes_chamada (frequência) | papéis ativos | Direção, Pedagogia ou Administrativo |
 | contatos_familia | papéis ativos | três papéis criam; atualização negada para preservar histórico; exclusão Direção |
-| relatorios_gerados, configuracoes_sistema | Direção | Direção |
+| relatorios_gerados | Direção | Direção cria/exclui; atualização só de `status`/`gerado_em` na transição `processando -> concluido\|falhou` |
+| configuracoes_sistema | Direção | Direção |
 
 Essa matriz descreve a configuração local em implementação, e não cobre ainda escopo por turma, autorização de campos individuais ou segregação de dados médicos duplicados no documento `alunos`. O Firestore não mascara campos individuais de um documento autorizado para leitura. Remover dados sensíveis duplicados requer migração e validação próprias. O provisionamento da primeira conta de Direção deve ocorrer por canal confiável, fora da tela pública. Usuários já existentes precisam de um backfill confiável para `usuarios_publicos` antes de seus nomes aparecerem nos seletores; a tela atual de provisionamento grava essa projeção para novas contas.
 
