@@ -764,6 +764,8 @@ function App() {
           )}
           {screen === 'evolucao' && (
             <Evolucao
+              userProfile={userProfile}
+              onNavigate={(screen: string) => navigate(screen as Screen)}
               onViewStudent={viewStudent}
               onNovoRelatorio={(studentId) =>
                 navigate('reports', { aba: 'pedagogico', alunoRelatorio: studentId || '' })
