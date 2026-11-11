@@ -13,7 +13,8 @@ import {
 } from 'firebase/firestore'
 import { confirmWrite } from '../lib/persistence'
 import { db } from '../lib/firebase'
-import { getAnexoFirestoreUrl } from './activitiesService'
+import { excluirAnexos, listarAnexos, listarAnexosComConteudo } from './anexosService'
+import type { ResultadoExclusaoAnexos } from './anexosService'
 import type {
   AnexoRelatorioPedagogico,
   RelatorioPedagogico,
@@ -109,37 +110,32 @@ export async function obterRelatorio(id: string): Promise<RelatorioPedagogico | 
   return snap.exists() ? asReport(snap.id, snap.data()) : null
 }
 
+// Anexos com o estado de cada arquivo (disponível, envio incompleto, conteúdo
+// incompleto ou erro de leitura). Falha ao listar é propagada.
 export async function listarAnexosRelatorio(id: string): Promise<AnexoRelatorioPedagogico[]> {
-  const snap = await getDocs(collection(db, COLLECTION, id, 'anexos'))
-  return Promise.all(snap.docs.map(async (item) => {
-    const data = item.data()
-    let url: string | null = null
-    if (data.armazenamento === 'firestore') {
-      try { url = await getAnexoFirestoreUrl(`relatorios_pedagogicos/${id}`, item.id) } catch { url = null }
-    }
-    return {
-      id: item.id,
-      tipo_anexo: data.tipo_anexo === 'imagem' ? 'imagem' : 'documento',
-      nome_arquivo_original: String(data.nome_arquivo_original || 'Arquivo'),
-      tipo_conteudo: String(data.tipo_conteudo || ''),
-      url,
-      caminho_firestore: data.armazenamento === 'firestore' ? `relatorios_pedagogicos/${id}/anexos/${item.id}` : '',
-    }
-  }))
+  return listarAnexosComConteudo(`${COLLECTION}/${id}`)
 }
 
-export async function excluirAnexoRelatorio(reportId: string, attachmentId: string): Promise<void> {
-  const chunks = await getDocs(collection(db, COLLECTION, reportId, 'anexos', attachmentId, 'chunks'))
-  await confirmWrite('excluir o anexo do relatório', (async () => {
-    await Promise.all(chunks.docs.map((chunk) => deleteDoc(chunk.ref)))
-    await deleteDoc(doc(db, COLLECTION, reportId, 'anexos', attachmentId))
-  })())
+// Exclui anexos do relatório; devolve quais arquivos saíram e quais continuam.
+export async function excluirAnexosRelatorio(
+  anexos: AnexoRelatorioPedagogico[],
+  userId: string
+): Promise<ResultadoExclusaoAnexos> {
+  return excluirAnexos(anexos, userId)
 }
 
-export async function inativarRascunhoRelatorio(id: string): Promise<void> {
+// Exclui o rascunho e seus anexos. Se algum anexo não sair, o rascunho é
+// mantido (com os anexos restantes visíveis) para nova tentativa, em vez de
+// apagar o pai e deixar arquivos órfãos.
+export async function inativarRascunhoRelatorio(
+  id: string,
+  userId: string
+): Promise<{ status: 'excluido' | 'parcial' } & ResultadoExclusaoAnexos> {
   const report = await obterRelatorio(id)
   if (!report || report.status !== 'rascunho') throw new Error('Somente rascunhos podem ser excluídos.')
-  const attachments = await listarAnexosRelatorio(id)
-  for (const attachment of attachments) await excluirAnexoRelatorio(id, attachment.id)
+  const anexos = await listarAnexos(`${COLLECTION}/${id}`)
+  const resultado = await excluirAnexos(anexos, userId)
+  if (resultado.falhas.length > 0) return { status: 'parcial', ...resultado }
   await confirmWrite('excluir o rascunho do relatório', deleteDoc(doc(db, COLLECTION, id)))
+  return { status: 'excluido', ...resultado }
 }
