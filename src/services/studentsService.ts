@@ -3,6 +3,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -12,6 +14,7 @@ import {
 } from 'firebase/firestore'
 import { db, isFirebaseConfigured } from '../lib/firebase'
 import type { Student, StudentStatus, DocumentoTipo, DocumentEntry, Guardian } from '../features/alunos/students-data'
+import type { UserRole } from '../../types/auth'
 import { demoStudents } from '../features/alunos/students-data'
 import { DEMO_STUDENTS_STORAGE_KEY, isDemoModeEnabled } from '../lib/demoMode'
 import { confirmWrite } from '../lib/persistence'
@@ -666,15 +669,36 @@ export async function uploadDocumento(
 // Lista os documentos de um aluno, retornando o dataUrl (base64) de cada um.
 // Fora do modo demonstração, falhas de leitura são propagadas: uma cópia local
 // não pode ser exibida como se fosse o que está gravado no sistema.
+//
+// A regra de segurança do Firestore restringe a leitura de `ficha_medica` à
+// Direção e Pedagogia. Como as regras não funcionam como filtro, uma consulta
+// aberta que pudesse retornar um documento sem permissão é rejeitada por inteiro.
+// Para não barrar o carregamento de todos os documentos do administrativo,
+// excluímos os documentos médicos da consulta quando o papel for administrativo.
+// (direcao e pedagogia mantêm a consulta sem filtro e veem tudo.)
 export async function getDocumentosComUrl(
-  alunoId: string
+  alunoId: string,
+  papel?: UserRole
 ): Promise<(DocumentEntry & { url: string | null })[]> {
   if (isDemoModeEnabled()) {
     return getStoredDocumentos(alunoId).map((entry) => ({ ...entry, url: entry.dataUrl || null }))
   }
-  const snap = await getDocs(collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`))
+
+  let ref = collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`)
+  if (papel === 'administrativo') {
+    ref = query(ref, where('tipo_documento', '!=', 'ficha_medica'))
+  }
+
+  const snap = await getDocs(ref)
   return snap.docs.map((d) => {
       const data = d.data()
+      let enviadoEmISO: string
+      try {
+        const ts = timestampToISO(data.enviado_em)
+        enviadoEmISO = ts ?? new Date().toISOString()
+      } catch {
+        enviadoEmISO = new Date().toISOString()
+      }
       const entry: DocumentEntry = {
         id: d.id,
         tipo: (data.tipo_documento || 'ficha_medica') as DocumentoTipo,
@@ -683,7 +707,7 @@ export async function getDocumentosComUrl(
         tipoConteudo: data.tipo_conteudo || 'application/octet-stream',
         tamanhoBytes: data.tamanho_bytes ?? 0,
         enviadoPor: data.enviado_por || '',
-        enviadoEm: data.enviado_em ? new Date(data.enviado_em).toISOString() : new Date().toISOString(),
+        enviadoEm: enviadoEmISO,
       }
       return { ...entry, url: entry.dataUrl || null }
   })

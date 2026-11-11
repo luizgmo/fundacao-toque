@@ -104,6 +104,13 @@
         { "fieldPath": "tipo_modelo", "order": "ASCENDING" },
         { "fieldPath": "versao", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "documentos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipo_documento", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

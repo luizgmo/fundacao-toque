@@ -25,6 +25,7 @@ import { useQuery, useSubscription } from '../../lib/useSubscription'
 import { LoadError } from '../../components/LoadError'
 import { getStudentById, getDocumentosComUrl, getStudentGuardians } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
+import { useAuth } from '../../features/auth/AuthContext'
 import './DetalheAluno.css'
 
 const tabs = [
@@ -59,6 +60,7 @@ export function DetalheAluno({
   const [activeTab, setActiveTab] = useState<TabId>('visao')
   // Estados separados de carregando / erro / dados. `null` com status "ready"
   // significa aluno inexistente; falha de leitura aparece como erro.
+  const { currentUser, userProfile } = useAuth()
   const studentQuery = useQuery<Student | null>(() => getStudentById(studentId), null, studentId)
   const student = studentQuery.data
   const contactsSub = useSubscription<ContactEntry[]>(
@@ -72,6 +74,7 @@ export function DetalheAluno({
   const [documentosLoading, setDocumentosLoading] = useState(false)
   const guardiansQuery = useQuery<Guardian[]>(() => getStudentGuardians(studentId), [], studentId)
   const guardians = guardiansQuery.data
+  const papel = userProfile?.papel
 
   useEffect(() => {
     let isMounted = true
@@ -81,7 +84,7 @@ export function DetalheAluno({
       setDocumentosLoading(true)
       setDocumentosError(null)
       try {
-        const docs = await getDocumentosComUrl(studentId)
+        const docs = await getDocumentosComUrl(studentId, papel)
         if (isMounted && !cancel) {
           setDocumentos(docs)
         }
@@ -103,7 +106,7 @@ export function DetalheAluno({
       isMounted = false
       cancel = true
     }
-  }, [studentId])
+  }, [studentId, papel])
 
   if (studentQuery.status === 'loading') {
     return (
@@ -369,7 +372,7 @@ export function DetalheAluno({
                   onClick={() => {
                     setDocumentosLoading(true)
                     setDocumentosError(null)
-                    void getDocumentosComUrl(studentId).then((docs) => {
+                    void getDocumentosComUrl(studentId, papel).then((docs) => {
                       setDocumentos(docs)
                       setDocumentosLoading(false)
                     }).catch((err) => {
