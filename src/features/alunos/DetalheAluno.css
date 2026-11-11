@@ -279,3 +279,45 @@
   padding: 4px 10px;
   font-size: 11px;
 }
+
+.oficinas-rotulo {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
+.oficinas-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.oficinas-lista li {
+  margin-bottom: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--navy-700);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oficina-atual {
+  background: #f0f9f4;
+  border-color: #bfe5cd;
+  color: #1f6b45;
+}
+
+.oficinas-nome {
+  font-weight: 700;
+}
+
+.oficinas-vazio {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}

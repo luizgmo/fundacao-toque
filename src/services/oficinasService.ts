@@ -3,6 +3,7 @@ import {
   arrayUnion,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   runTransaction,
@@ -363,6 +364,29 @@ export async function saveAlunosDaOficina(
   const batch = writeBatch(db)
   const hoje = todayISO()
   const idsSelecionados = new Set(selecionados.map((s) => s.alunoId))
+
+  // O vínculo turma-oficina deve existir e a oficina só pode receber alunos da
+  // turma à qual o vínculo pertence. Isso evita associar um aluno a uma oficina
+  // de outra turma, preservando o histórico sem reescrevê-lo.
+  const vinculoSnap = await getDoc(doc(db, TURMA_OFICINAS_COLLECTION, turmaOficinaIdValue))
+  if (!vinculoSnap.exists()) {
+    throw new Error('O vínculo turma-oficina informado não existe.')
+  }
+  const turmaDoVinculo = vinculoSnap.data().turma_id
+
+  const alunosForaDaTurma: string[] = []
+  for (const sel of selecionados) {
+    const alunoSnap = await getDoc(doc(db, ALUNOS_COLLECTION, sel.alunoId))
+    if (!alunoSnap.exists() || alunoSnap.data().turma_id !== turmaDoVinculo) {
+      alunosForaDaTurma.push(sel.alunoId)
+    }
+  }
+  if (alunosForaDaTurma.length > 0) {
+    throw new Error(
+      'Não é possível associar aluno(s) a uma oficina de outra turma: ' + alunosForaDaTurma.join(', ')
+    )
+  }
+
   const ativosAntes = existentes.filter(
     (e) => e.turmaOficinaId === turmaOficinaIdValue && e.status === 'ativo'
   )

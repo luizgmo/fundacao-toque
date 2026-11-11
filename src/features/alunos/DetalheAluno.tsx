@@ -20,11 +20,21 @@ import {
 } from 'lucide-react'
 import { calculateAge } from './students-data'
 import type { Student, ContactEntry, DocumentEntry, Guardian } from './students-data'
+import type { AlunoOficina, Oficina, TurmaOficina } from '../../types/oficinas'
 import { describePersistenceError } from '../../lib/persistence'
-import { useQuery, useSubscription } from '../../lib/useSubscription'
+import { combineStatus, useQuery, useSubscription } from '../../lib/useSubscription'
 import { LoadError } from '../../components/LoadError'
-import { getStudentById, getDocumentosComUrl, getStudentGuardians } from '../../services/studentsService'
+import {
+  getStudentById,
+  getDocumentosComUrl,
+  getStudentGuardians,
+} from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
+import {
+  subscribeToAlunoOficinas,
+  subscribeToOficinas,
+  subscribeToTurmaOficinas,
+} from '../../services/oficinasService'
 import { useAuth } from '../../features/auth/AuthContext'
 import './DetalheAluno.css'
 
@@ -44,6 +54,18 @@ function formatConsentimentoISO(value?: string): string | null {
   const data = new Date(value)
   if (Number.isNaN(data.getTime())) return null
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(data)
+}
+
+function formatDataBR(data?: string) {
+  if (!data) return ''
+  const [y, m, d] = data.split('-')
+  return `${d}/${m}/${y}`
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  ativo: 'Ativo',
+  concluido: 'Concluído',
+  cancelado: 'Cancelado',
 }
 
 export function DetalheAluno({
@@ -75,6 +97,22 @@ export function DetalheAluno({
   const guardiansQuery = useQuery<Guardian[]>(() => getStudentGuardians(studentId), [], studentId)
   const guardians = guardiansQuery.data
   const papel = userProfile?.papel
+
+  // Oficinas do aluno (fonte da verdade: coleção aluno_oficinas), com o
+  // vínculo turma-oficina e a oficina para exibir nome, período e status.
+  const alunoOficinasSub = useSubscription<AlunoOficina[]>(
+    (onData, onError) => subscribeToAlunoOficinas(onData, onError),
+    [],
+    studentId
+  )
+  const turmaOficinasSub = useSubscription<TurmaOficina[]>(
+    (onData, onError) => subscribeToTurmaOficinas(onData, onError),
+    []
+  )
+  const oficinasSub = useSubscription<Oficina[]>(
+    (onData, onError) => subscribeToOficinas(onData, onError),
+    []
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -143,6 +181,34 @@ export function DetalheAluno({
       </div>
     )
   }
+
+  // Oficinas do aluno a partir da coleção aluno_oficinas (fonte da verdade),
+  // resolvendo o vínculo turma-oficina e o nome da oficina.
+  const alunoOficinas = alunoOficinasSub.data || []
+  const turmaOficinas = turmaOficinasSub.data || []
+  const oficinas = oficinasSub.data || []
+
+  const turmaOficinaPorId = new Map(turmaOficinas.map((v) => [v.id, v]))
+  const oficinaPorId = new Map(oficinas.map((o) => [o.id, o]))
+
+  const vinculacoes = alunoOficinas
+    .filter((a) => a.alunoId === studentId)
+    .map((a) => {
+      const vinculo = turmaOficinaPorId.get(a.turmaOficinaId)
+      return {
+        alunoOficina: a,
+        oficina: vinculo ? oficinaPorId.get(vinculo.oficinaId) : null,
+        turmaId: vinculo?.turmaId ?? null,
+      }
+    })
+
+  const vinculacoesAtuais = vinculacoes.filter((v) => v.alunoOficina.status === 'ativo')
+  const vinculacoesHistorico = vinculacoes.filter((v) => v.alunoOficina.status !== 'ativo')
+  const oficinasStatus = combineStatus(
+    alunoOficinasSub.status,
+    turmaOficinasSub.status,
+    oficinasSub.status
+  )
 
   // Contatos da coleção contatos_familia; registros legados no próprio aluno
   // são usados apenas quando a coleção respondeu e não tem nenhum contato.
@@ -343,17 +409,52 @@ export function DetalheAluno({
                 <h4>
                   <Palette size={16} /> Oficinas
                 </h4>
-                <div className="student-chip-row">
-                  {student.oficinas && student.oficinas.length > 0 ? (
-                    student.oficinas.map((oficina) => (
-                      <span className="status-pill success" key={oficina}>
-                        {oficina}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>Nenhuma oficina atribuída</span>
-                  )}
-                </div>
+                {oficinasStatus === 'loading' ? (
+                  <p className="oficinas-vazio">Carregando oficinas…</p>
+                ) : oficinasStatus === 'error' ? (
+                  <p className="oficinas-vazio" style={{ color: '#991b1b' }}>
+                    Não foi possível carregar o histórico de oficinas.
+                  </p>
+                ) : vinculacoes.length === 0 ? (
+                  <p className="oficinas-vazio">Nenhuma oficina registrada</p>
+                ) : (
+                  <>
+                    {vinculacoesAtuais.length > 0 && (
+                      <>
+                        <p className="oficinas-rotulo">Atuais</p>
+                        <ul className="oficinas-lista">
+                          {vinculacoesAtuais.map((v) => (
+                            <li key={v.alunoOficina.id} className="oficina-atual">
+                              <span className="oficinas-nome">
+                                {v.oficina?.nome || 'Oficina removida'}
+                              </span>{' · '}
+                              desde {formatDataBR(v.alunoOficina.dataInicio)}
+                              {v.alunoOficina.nivelSuporte ? ` · Suporte ${v.alunoOficina.nivelSuporte}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {vinculacoesHistorico.length > 0 && (
+                      <>
+                        <p className="oficinas-rotulo">Histórico</p>
+                        <ul className="oficinas-lista">
+                          {vinculacoesHistorico.map((v) => (
+                            <li key={v.alunoOficina.id}>
+                              <span className="oficinas-nome">
+                                {v.oficina?.nome || 'Oficina removida'}
+                              </span>{' · '}
+                              {formatDataBR(v.alunoOficina.dataInicio)} a{' '}
+                              {v.alunoOficina.dataFim || 'presente'} ·
+                              {STATUS_LABEL[v.alunoOficina.status] || v.alunoOficina.status}
+                              {v.alunoOficina.nivelSuporte ? ` · Suporte ${v.alunoOficina.nivelSuporte}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
