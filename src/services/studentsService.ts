@@ -14,6 +14,7 @@ import { db, isFirebaseConfigured } from '../lib/firebase'
 import type { Student, StudentStatus, DocumentoTipo, DocumentEntry, Guardian } from '../features/alunos/students-data'
 import { demoStudents } from '../features/alunos/students-data'
 import { DEMO_STUDENTS_STORAGE_KEY, isDemoModeEnabled } from '../lib/demoMode'
+import { confirmWrite } from '../lib/persistence'
 
 const ALUNOS_COLLECTION = 'alunos'
 
@@ -146,7 +147,8 @@ function saveDemoStudents(list: Student[]) {
   }
 }
 
-// Persistência local de documentos (fallback quando Firestore/Storage não está acessível)
+// Documentos do modo demonstração (ficam apenas neste navegador; nunca usados
+// como substituto do Firestore fora desse modo).
 function getStoredDocumentos(alunoId: string): DocumentEntry[] {
   try {
     const raw = localStorage.getItem(`${LOCAL_DOCUMENTOS_KEY}_${alunoId}`)
@@ -175,9 +177,10 @@ function appendStoredDocumento(alunoId: string, doc: DocumentEntry) {
 
 // Inscrição em tempo real na coleção real de alunos.
 // O modo demonstração é explícito e nunca se mistura com o Firestore.
+// Falhas chegam apenas por onError: nunca são convertidas em lista vazia.
 export function subscribeToStudents(
   onSuccess: (students: Student[]) => void,
-  onError?: (error: Error) => void,
+  onError: (error: Error) => void,
   onSource?: (source: StudentsSource) => void
 ) {
   if (isDemoModeEnabled()) {
@@ -188,9 +191,8 @@ export function subscribeToStudents(
 
   if (!isFirebaseConfigured) {
     const error = new Error('Firebase não configurado: preencha o arquivo .env.local.')
-    onError?.(error)
     onSource?.('error')
-    onSuccess([])
+    onError(error)
     return () => {}
   }
 
@@ -204,29 +206,22 @@ export function subscribeToStudents(
     },
     (err) => {
       console.warn('Erro ao carregar alunos do Firestore:', err.message)
-      onError?.(err)
       onSource?.('error')
-      onSuccess([])
+      onError(err)
     }
   )
 }
 
-// Busca aluno por ID (sem fallback fictício)
+// Busca aluno por ID (sem fallback fictício). Devolve null somente quando o
+// aluno não existe; falhas de leitura são propagadas. Os responsáveis são
+// carregados à parte (getStudentGuardians) por quem precisa deles, para que uma
+// falha nessa subcoleção não seja confundida com "aluno sem responsáveis".
 export async function getStudentById(id: string): Promise<Student | null> {
   if (isDemoModeEnabled()) {
     return getDemoStudents().find((s) => s.id === id) || null
   }
-  try {
-    const snap = await getDoc(doc(db, ALUNOS_COLLECTION, id))
-    if (snap.exists()) {
-      const student = docToStudent(snap.id, snap.data())
-      student.responsaveis = await getStudentGuardians(id).catch(() => [])
-      return student
-    }
-  } catch (err) {
-    console.warn('Erro ao buscar aluno por ID no Firestore:', err)
-  }
-  return null
+  const snap = await getDoc(doc(db, ALUNOS_COLLECTION, id))
+  return snap.exists() ? docToStudent(snap.id, snap.data()) : null
 }
 
 export async function getStudentGuardians(studentId: string): Promise<Guardian[]> {
@@ -276,7 +271,20 @@ export type StudentInput = {
   status?: StudentStatus
 }
 
-// Criar aluno (tenta Firestore e garante persistência local imediata)
+// Gera o ID do documento do aluno a partir do nome. A tela reserva o ID antes da
+// primeira tentativa para que novas tentativas regravem o mesmo documento.
+export function gerarIdAluno(nome: string): string {
+  return (
+    nome
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') + `-${Date.now().toString().slice(-4)}`
+  )
+}
+
+// Criar aluno. Só devolve o ID depois que o Firestore confirma a gravação.
 export async function createStudent(input: StudentInput): Promise<string> {
   const guardians = input.responsaveis?.length ? input.responsaveis : [{
     nome: input.responsavelNome,
@@ -295,14 +303,7 @@ export async function createStudent(input: StudentInput): Promise<string> {
     throw new Error('Informe nome e telefone de cada responsável ativo.')
   }
   const principal = ativos.find((item) => item.principal)!
-  const id =
-    input.id ||
-    input.nome
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') + `-${Date.now().toString().slice(-4)}`
+  const id = input.id || gerarIdAluno(input.nome)
 
   let formattedBirth = input.nascimento
   if (formattedBirth && formattedBirth.includes('-')) {
@@ -414,7 +415,7 @@ export async function createStudent(input: StudentInput): Promise<string> {
     grau_dependencia: input.grauDependencia || null,
     atualizado_em: serverTimestamp(),
   })
-  await batch.commit()
+  await confirmWrite('cadastrar o aluno', batch.commit())
 
   return id
 }
@@ -556,7 +557,7 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
     if (input.grauDependencia !== undefined) healthData.grau_dependencia = input.grauDependencia || null
     batch.set(healthRef, healthData, { merge: true })
   }
-  await batch.commit()
+  await confirmWrite('atualizar os dados do aluno', batch.commit())
 }
 
 // Inativar aluno (em vez de excluir, para preservar histórico)
@@ -569,10 +570,13 @@ export async function inactivateStudent(id: string): Promise<void> {
     return
   }
 
-  await updateDoc(doc(db, ALUNOS_COLLECTION, id), {
-    status: 'inativo',
-    atualizado_em: serverTimestamp(),
-  })
+  await confirmWrite(
+    'inativar o aluno',
+    updateDoc(doc(db, ALUNOS_COLLECTION, id), {
+      status: 'inativo',
+      atualizado_em: serverTimestamp(),
+    })
+  )
 }
 
 // Manter função deleteStudent para compatibilidade, mas agora inativa
@@ -607,7 +611,8 @@ function fileToDataUrl(file: File): Promise<string> {
 
 // Lê um arquivo como DataURL (base64) e grava os metadados + conteúdo em
 // alunos/{alunoId}/documentos/{documentoId} dentro do Firestore.
-// Sempre persiste localmente (localStorage) como fallback para funcionar sem Firebase.
+// Só devolve o documento depois da confirmação do servidor; em falha lança
+// PersistenceError e nada é guardado localmente como se estivesse salvo.
 export async function uploadDocumento(
   alunoId: string,
   file: File,
@@ -642,12 +647,9 @@ export async function uploadDocumento(
     return entry
   }
 
-  // 1) Sempre grava no localStorage primeiro (funciona sem Firebase)
-  appendStoredDocumento(alunoId, entry)
-
-  // 2) Tenta gravar no Firestore quando disponível
-  try {
-    await setDoc(docRef, {
+  await confirmWrite(
+    `enviar o documento ${file.name}`,
+    setDoc(docRef, {
       tipo_documento: tipo,
       data_url: dataUrl,
       nome_arquivo_original: file.name,
@@ -656,29 +658,22 @@ export async function uploadDocumento(
       enviado_por: userId,
       enviado_em: serverTimestamp(),
     })
-  } catch (err) {
-    console.warn('[uploadDocumento] Firestore não disponível, mantido apenas localmente:', err)
-    appendStoredDocumento(alunoId, entry)
-    throw new Error(
-      `Arquivo salvo apenas localmente (Firestore indisponível): ${(err as Error).message}`,
-      { cause: err }
-    )
-  }
+  )
 
   return entry
 }
 
 // Lista os documentos de um aluno, retornando o dataUrl (base64) de cada um.
-// Quando o Firestore não está acessível, lê do localStorage (persistência local).
+// Fora do modo demonstração, falhas de leitura são propagadas: uma cópia local
+// não pode ser exibida como se fosse o que está gravado no sistema.
 export async function getDocumentosComUrl(
   alunoId: string
 ): Promise<(DocumentEntry & { url: string | null })[]> {
   if (isDemoModeEnabled()) {
     return getStoredDocumentos(alunoId).map((entry) => ({ ...entry, url: entry.dataUrl || null }))
   }
-  try {
-    const snap = await getDocs(collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`))
-    return snap.docs.map((d) => {
+  const snap = await getDocs(collection(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}`))
+  return snap.docs.map((d) => {
       const data = d.data()
       const entry: DocumentEntry = {
         id: d.id,
@@ -691,12 +686,7 @@ export async function getDocumentosComUrl(
         enviadoEm: data.enviado_em ? new Date(data.enviado_em).toISOString() : new Date().toISOString(),
       }
       return { ...entry, url: entry.dataUrl || null }
-    })
-  } catch (err) {
-    console.warn('[getDocumentosComUrl] Firestore não disponível, lendo do localStorage:', err)
-    const locais = getStoredDocumentos(alunoId)
-    return locais.map((entry) => ({ ...entry, url: entry.dataUrl || null }))
-  }
+  })
 }
 
 // Substitui um documento existente: grava o novo arquivo primeiro, depois atualiza os
@@ -728,11 +718,9 @@ export async function substituirDocumento(
     return entry
   }
 
-  // Persiste localmente
-  appendStoredDocumento(alunoId, entry)
-
-  try {
-    await setDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`), {
+  await confirmWrite(
+    `substituir o documento ${file.name}`,
+    setDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`), {
       tipo_documento: tipo,
       data_url: dataUrl,
       nome_arquivo_original: file.name,
@@ -743,18 +731,12 @@ export async function substituirDocumento(
       atualizado_por: userId,
       atualizado_em: serverTimestamp(),
     })
-  } catch (err) {
-    console.warn('[substituirDocumento] Firestore não disponível:', err)
-    throw new Error(
-      `Falha ao gravar no Firestore: ${(err as Error).message}`,
-      { cause: err }
-    )
-  }
+  )
 
   return entry
 }
 
-// Exclui um documento: remove do Firestore e do localStorage.
+// Exclui um documento do Firestore (ou do armazenamento local no modo demonstração).
 export async function deleteDocumento(alunoId: string, documentoId: string): Promise<void> {
   if (isDemoModeEnabled()) {
     const locais = getStoredDocumentos(alunoId).filter((d) => d.id !== documentoId)
@@ -764,10 +746,9 @@ export async function deleteDocumento(alunoId: string, documentoId: string): Pro
 
   const snap = await getDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`))
   if (snap.exists()) {
-    await deleteDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`))
+    await confirmWrite(
+      'excluir o documento',
+      deleteDoc(doc(db, `${ALUNOS_COLLECTION}/${alunoId}/${DOCUMENTOS_SUBCOLLECTION}/${documentoId}`))
+    )
   }
-  // Remove do localStorage também
-  const current = getStoredDocumentos(alunoId)
-  const updated = current.filter((d) => d.id !== documentoId)
-  saveStoredDocumentos(alunoId, updated)
 }

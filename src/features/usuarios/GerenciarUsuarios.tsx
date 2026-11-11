@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   Users,
@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { subscribeToUsuarios } from '../../services/usuariosService'
+import { useSubscription } from '../../lib/useSubscription'
+import { LoadError } from '../../components/LoadError'
 import type { UserProfile, UserRole } from '../../types/auth'
 import { ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../types/auth'
 import './GerenciarUsuarios.css'
@@ -23,9 +25,15 @@ import './GerenciarUsuarios.css'
 export function GerenciarUsuarios() {
   const { userProfile, createAuthorUser, isGuest } = useAuth()
 
-  const [usuarios, setUsuarios] = useState<UserProfile[]>([])
-  const [loading, setLoading] = useState(!isGuest)
-  const [listError, setListError] = useState<string | null>(null)
+  // O modo demonstração não autentica no Firebase, então as regras negam a leitura:
+  // nesse caso a lista nem é consultada (o aviso de modo demonstração explica).
+  const usuariosSub = useSubscription<UserProfile[]>(
+    (onData, onError) => (isGuest ? () => {} : subscribeToUsuarios(onData, onError)),
+    [],
+    isGuest ? 'guest' : 'auth'
+  )
+  const usuarios = usuariosSub.data
+  const loading = !isGuest && usuariosSub.status === 'loading'
   const [showModal, setShowModal] = useState(false)
 
   // Form states
@@ -38,25 +46,6 @@ export function GerenciarUsuarios() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Carrega lista de usuários do Firestore em tempo real
-  useEffect(() => {
-    // O modo demonstração não autentica no Firebase, então as regras negam a leitura
-    if (isGuest) return
-
-    const unsubscribe = subscribeToUsuarios(
-      (list) => {
-        setUsuarios(list)
-        setListError(null)
-        setLoading(false)
-      },
-      (err) => {
-        setListError('Não foi possível carregar a equipe: ' + err.message)
-        setLoading(false)
-      }
-    )
-
-    return () => unsubscribe()
-  }, [isGuest])
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault()
@@ -141,10 +130,8 @@ export function GerenciarUsuarios() {
         </div>
       )}
 
-      {listError && (
-        <div className="modal-error-banner">
-          <AlertCircle size={18} /> {listError}
-        </div>
+      {usuariosSub.status === 'error' && (
+        <LoadError error={usuariosSub.error} onRetry={usuariosSub.retry} what="a equipe" />
       )}
 
       {/* Role explanation cards */}
@@ -193,7 +180,7 @@ export function GerenciarUsuarios() {
               ) : usuarios.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
-                    {isGuest || listError
+                    {isGuest || usuariosSub.status === 'error'
                       ? 'Lista indisponível.'
                       : 'Nenhum profissional cadastrado no Firestore.'}
                   </td>

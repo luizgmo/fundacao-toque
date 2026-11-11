@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  runTransaction,
   query,
   where,
   serverTimestamp,
@@ -16,6 +17,8 @@ import {
   DEMO_SESSIONS_STORAGE_KEY,
   isDemoModeEnabled,
 } from '../lib/demoMode'
+import { confirmWrite } from '../lib/persistence'
+import { sessaoChamadaId, STATUS_PRESENCA } from '../features/frequencia/chamada'
 
 const SESSOES_COLLECTION = 'sessoes_chamada'
 const CONTATOS_COLLECTION = 'contatos_familia'
@@ -69,10 +72,42 @@ export interface SaveSessionInput {
   oficinaName?: string
   registeredBy: string
   records: Record<string, { status: AttendanceStatus; observation: string }>
+  // Versão da sessão quando a tela a carregou; null = a sessão ainda não existia.
+  versaoEsperada: number | null
 }
 
-// Salva sessão de chamada no Firestore (ou localmente no modo demonstração)
-export async function saveAttendanceToFirestore(session: SaveSessionInput): Promise<void> {
+// A sessão foi criada ou alterada por outra pessoa depois que a tela a carregou.
+// Nada foi gravado: é preciso recarregar a chamada salva antes de salvar de novo.
+export class ChamadaConflitoError extends Error {
+  readonly code = 'conflito'
+  constructor(message: string) {
+    super(message)
+    this.name = 'ChamadaConflitoError'
+  }
+}
+
+function validarSessao(session: SaveSessionInput) {
+  const esperado = sessaoChamadaId({
+    data: session.date,
+    turmaId: session.turmaId,
+    escopo: session.scope,
+    turmaOficinaId: session.turmaOficinaId,
+  })
+  if (session.id !== esperado) {
+    throw new Error(`ID da chamada (${session.id}) não corresponde ao contexto (${esperado}).`)
+  }
+  Object.values(session.records).forEach((rec) => {
+    if (!STATUS_PRESENCA.includes(rec.status)) throw new Error(`Status de presença inválido: ${rec.status}`)
+  })
+}
+
+// Salva a sessão de chamada no Firestore (ou localmente no modo demonstração).
+// O ID é determinístico por contexto (data + turma + escopo/vínculo), então
+// cliques repetidos gravam sempre o mesmo documento. A transação confere a
+// versão: se outra pessoa salvou depois que a tela carregou, nada é gravado e
+// ChamadaConflitoError é lançado. Devolve a nova versão.
+export async function saveAttendanceToFirestore(session: SaveSessionInput): Promise<number> {
+  validarSessao(session)
   const presencasMap: Record<string, AttendanceStatus> = {}
   const observacoesMap: Record<string, string> = {}
 
@@ -85,80 +120,110 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
 
   if (isDemoModeEnabled()) {
     const sessions = readDemoSessions()
+    const versao = (sessions[session.id]?.versao ?? 0) + 1
     sessions[session.id] = {
       id: session.id,
       date: session.date,
       turmaId: session.turmaId,
       scope: session.scope,
+      turmaOficinaId: session.turmaOficinaId,
       oficinaName: session.oficinaName,
       registeredBy: session.registeredBy,
       registeredAt: new Date().toISOString(),
       records: session.records,
+      versao,
     }
     writeDemoSessions(sessions)
-    return
+    return versao
   }
 
-  const docData = {
+  const ref = doc(db, SESSOES_COLLECTION, session.id)
+  const dados = {
     data_chamada: session.date,
     turma_id: session.turmaId,
     escopo: session.scope,
-    turma_oficina_id: session.turmaOficinaId || null,
+    turma_oficina_id: session.scope === 'oficina' ? session.turmaOficinaId : null,
     oficina_nome: session.oficinaName || null,
     presencas: presencasMap,
     observacoes: observacoesMap,
     registrado_por: session.registeredBy,
-    criado_em: serverTimestamp(),
     atualizado_em: serverTimestamp(),
   }
 
-  // Grava com o ID determinístico: YYYY-MM-DD_TurmaId_(TurmaOficinaId | geral)
-  const sessionDocId = session.id.replace(/\//g, '-')
-  await setDoc(doc(db, SESSOES_COLLECTION, sessionDocId), docData)
+  try {
+    return await confirmWrite(
+      'salvar a chamada',
+      runTransaction(db, async (tx) => {
+        const atual = await tx.get(ref)
+        if (!atual.exists()) {
+          if (session.versaoEsperada !== null) {
+            throw new ChamadaConflitoError('A chamada carregada não existe mais no banco de dados.')
+          }
+          tx.set(ref, { ...dados, versao: 1, criado_em: serverTimestamp() })
+          return 1
+        }
+        const versaoAtual = Number(atual.data().versao ?? 0)
+        if (session.versaoEsperada === null || versaoAtual !== session.versaoEsperada) {
+          const quem = atual.data().registrado_por
+          throw new ChamadaConflitoError(
+            `Esta chamada foi salva${quem ? ` por ${quem}` : ''} depois que você a abriu. ` +
+              'Recarregue a chamada salva, confira e salve novamente.'
+          )
+        }
+        tx.update(ref, { ...dados, versao: versaoAtual + 1 })
+        return versaoAtual + 1
+      })
+    )
+  } catch (err) {
+    // confirmWrite embrulha a falha; o conflito precisa chegar intacto à tela,
+    // que oferece "recarregar" em vez de "tentar novamente".
+    const cause = (err as { cause?: unknown })?.cause
+    if (cause instanceof ChamadaConflitoError) throw cause
+    throw err
+  }
 }
 
-// Carrega sessão do Firestore (ou do armazenamento local no modo demonstração).
-// Retorna null quando a sessão não existe ou o banco está inacessível — nunca
-// devolve uma chamada fictícia em nome do Firestore.
+function timestampToISO(value: unknown): string {
+  const ts = value as { toDate?: () => Date } | null
+  return ts && typeof ts.toDate === 'function' ? ts.toDate().toISOString() : ''
+}
+
+// Carrega a sessão do Firestore (ou do armazenamento local no modo demonstração).
+// Retorna null somente quando a sessão não existe. Falhas de consulta são
+// propagadas: "não consegui ler" não pode virar "chamada ainda não feita".
+// Não há fallback para sessões fixas: fora do modo demonstração só vale o banco.
 export async function getAttendanceFromFirestore(sessionId: string): Promise<AttendanceSession | null> {
   if (isDemoModeEnabled()) {
-    const sessions = readDemoSessions()
-    return sessions[sessionId] || sessions[sessionId.replace(/\//g, '-')] || null
+    return readDemoSessions()[sessionId] || null
   }
 
-  const cleanId = sessionId.replace(/\//g, '-')
-  try {
-    const snap = await getDoc(doc(db, SESSOES_COLLECTION, cleanId))
-    if (snap.exists()) {
-      const data = snap.data()
-      const records: Record<string, { status: AttendanceStatus; observation: string }> = {}
+  const snap = await getDoc(doc(db, SESSOES_COLLECTION, sessionId))
+  if (!snap.exists()) return null
 
-      const presencas = data.presencas || {}
-      const observacoes = data.observacoes || {}
+  const data = snap.data()
+  const records: Record<string, { status: AttendanceStatus; observation: string }> = {}
+  const presencas = data.presencas || {}
+  const observacoes = data.observacoes || {}
 
-      Object.keys(presencas).forEach((studentId) => {
-        records[studentId] = {
-          status: presencas[studentId] as AttendanceStatus,
-          observation: observacoes[studentId] || '',
-        }
-      })
-
-      return {
-        id: sessionId,
-        date: data.data_chamada,
-        turmaId: data.turma_id,
-        scope: data.escopo || 'turma',
-        oficinaName: data.oficina_nome || undefined,
-        registeredBy: data.registrado_por || 'Sistema',
-        registeredAt: data.atualizado_em ? new Date().toISOString() : '',
-        records,
-      }
+  Object.keys(presencas).forEach((studentId) => {
+    records[studentId] = {
+      status: presencas[studentId] as AttendanceStatus,
+      observation: observacoes[studentId] || '',
     }
-  } catch (err) {
-    console.warn('Erro ao carregar sessão do Firestore:', err)
-  }
+  })
 
-  return null
+  return {
+    id: snap.id,
+    date: data.data_chamada,
+    turmaId: data.turma_id,
+    scope: data.escopo === 'oficina' ? 'oficina' : 'turma',
+    turmaOficinaId: data.turma_oficina_id || undefined,
+    oficinaName: data.oficina_nome || undefined,
+    registeredBy: data.registrado_por || 'Sistema',
+    registeredAt: timestampToISO(data.atualizado_em),
+    records,
+    versao: Number(data.versao ?? 0),
+  }
 }
 
 export interface SaveOccurrenceInput {
@@ -174,9 +239,13 @@ export interface SaveOccurrenceInput {
   guardianSnapshot: { nome: string; parentesco: string; canal: string; contato: string }
 }
 
-// Salva contato com a família / ocorrência no Firestore (ou localmente no modo demonstração)
-export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Promise<string> {
-  const contactId = `contato-${input.studentId}-${Date.now()}`
+// Salva contato com a família / ocorrência no Firestore (ou localmente no modo demonstração).
+// O ID só é devolvido depois da confirmação do servidor. `contactId` permite que a
+// tela reutilize o mesmo ID numa nova tentativa, evitando registros duplicados.
+export async function saveOccurrenceToFirestore(
+  input: SaveOccurrenceInput,
+  contactId = `contato-${input.studentId}-${Date.now()}`
+): Promise<string> {
   const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
 
   if (isDemoModeEnabled()) {
@@ -216,14 +285,18 @@ export async function saveOccurrenceToFirestore(input: SaveOccurrenceInput): Pro
     criado_em: serverTimestamp(),
   }
 
-  await setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
+  await confirmWrite(
+    'registrar a ocorrência / contato com a família',
+    setDoc(doc(db, CONTATOS_COLLECTION, contactId), docData)
+  )
   return contactId
 }
 
 // Escuta ocorrências de um aluno em tempo real (ou localmente no modo demonstração)
 export function subscribeStudentOccurrences(
   studentId: string,
-  onUpdate: (contacts: ContactEntry[]) => void
+  onUpdate: (contacts: ContactEntry[]) => void,
+  onError: (error: Error) => void
 ) {
   if (isDemoModeEnabled()) {
     const contacts = readDemoContacts()
@@ -280,6 +353,7 @@ export function subscribeStudentOccurrences(
     },
     (err) => {
       console.warn('Erro ao escutar contatos no Firestore:', err)
+      onError(err)
     }
   )
 }

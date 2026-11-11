@@ -9,8 +9,8 @@ import {
   X,
 } from 'lucide-react'
 import type { Student, EvolutionEntry } from '../alunos/students-data'
-import { subscribeToStudents } from '../../services/studentsService'
-import type { StudentsSource } from '../../services/studentsService'
+import { useStudents } from '../alunos/useStudents'
+import { LoadError } from '../../components/LoadError'
 import { DataNotice } from '../../components/DataNotice'
 import { useAuth } from '../auth/AuthContext'
 import './Evolucao.css'
@@ -62,27 +62,15 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
   const podeVisualizar = papel ? EVOLUCAO_PAPEIS.includes(papel) : false
   const podeCriar = podeVisualizar
 
-  const [allStudents, setAllStudents] = useState<Student[]>([])
-  const [source, setSource] = useState<StudentsSource | 'loading'>('loading')
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const studentsSub = useStudents()
+  const allStudents = studentsSub.data
+  const source = studentsSub.source
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
 
   const [filterStudent, setFilterStudent] = useState('')
   const [filterArea, setFilterArea] = useState('')
   const [periodoInicio, setPeriodoInicio] = useState('')
   const [periodoFim, setPeriodoFim] = useState('')
-
-  useEffect(() => {
-    const unsub = subscribeToStudents(
-      (data) => {
-        setAllStudents(data)
-        setLoadError(null)
-      },
-      (err) => setLoadError(err.message),
-      (nextSource) => setSource(nextSource)
-    )
-    return () => unsub()
-  }, [])
 
   const areas = useMemo(() => {
     const set = new Set<string>()
@@ -164,7 +152,7 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
     )
   }
 
-  if (source === 'error' || loadError) {
+  if (source === 'error' || studentsSub.status === 'error') {
     return (
       <div className="page-container evolucao-page">
         <div className="report-page-heading">
@@ -173,10 +161,7 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
             <h2>Evolução dos alunos</h2>
           </div>
         </div>
-        <DataNotice kind="error">
-          <strong>Não foi possível carregar os alunos do banco de dados.</strong>{' '}
-          {loadError ? `Detalhes: ${loadError}` : 'Verifique a conexão e as permissões de acesso.'}
-        </DataNotice>
+        <LoadError error={studentsSub.error} onRetry={studentsSub.retry} what="os alunos" />
       </div>
     )
   }

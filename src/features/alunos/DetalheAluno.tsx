@@ -20,6 +20,9 @@ import {
 } from 'lucide-react'
 import { calculateAge } from './students-data'
 import type { Student, ContactEntry, DocumentEntry, Guardian } from './students-data'
+import { describePersistenceError } from '../../lib/persistence'
+import { useQuery, useSubscription } from '../../lib/useSubscription'
+import { LoadError } from '../../components/LoadError'
 import { getStudentById, getDocumentosComUrl, getStudentGuardians } from '../../services/studentsService'
 import { subscribeStudentOccurrences } from '../../services/attendanceService'
 import './DetalheAluno.css'
@@ -54,45 +57,21 @@ export function DetalheAluno({
   onEdit?: (student: Student) => void
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('visao')
-  const [student, setStudent] = useState<Student | null>(null)
-  const [loadedStudentId, setLoadedStudentId] = useState<string | null>(null)
-  const [dbContacts, setDbContacts] = useState<ContactEntry[]>([])
+  // Estados separados de carregando / erro / dados. `null` com status "ready"
+  // significa aluno inexistente; falha de leitura aparece como erro.
+  const studentQuery = useQuery<Student | null>(() => getStudentById(studentId), null, studentId)
+  const student = studentQuery.data
+  const contactsSub = useSubscription<ContactEntry[]>(
+    (onData, onError) => subscribeStudentOccurrences(studentId, onData, onError),
+    [],
+    studentId
+  )
+  const dbContacts = contactsSub.data
   const [documentos, setDocumentos] = useState<(DocumentEntry & { url: string | null })[]>([])
   const [documentosError, setDocumentosError] = useState<string | null>(null)
   const [documentosLoading, setDocumentosLoading] = useState(false)
-  const [guardians, setGuardians] = useState<Guardian[]>([])
-
-  useEffect(() => {
-    let isMounted = true
-    getStudentById(studentId).then((st) => {
-      if (isMounted) {
-        setStudent(st)
-        setLoadedStudentId(studentId)
-      }
-    })
-
-    const unsubOccurrences = subscribeStudentOccurrences(studentId, (contacts) => {
-      if (isMounted && contacts.length > 0) {
-        setDbContacts(contacts)
-      }
-    })
-
-    return () => {
-      isMounted = false
-      unsubOccurrences()
-    }
-  }, [studentId])
-
-  useEffect(() => {
-    let active = true
-    getStudentGuardians(studentId).then((items) => {
-      if (active) setGuardians(items)
-    }).catch((error) => {
-      console.warn('Não foi possível carregar responsáveis:', error)
-      if (active) setGuardians([])
-    })
-    return () => { active = false }
-  }, [studentId])
+  const guardiansQuery = useQuery<Guardian[]>(() => getStudentGuardians(studentId), [], studentId)
+  const guardians = guardiansQuery.data
 
   useEffect(() => {
     let isMounted = true
@@ -108,7 +87,7 @@ export function DetalheAluno({
         }
       } catch (err) {
         if (isMounted && !cancel) {
-          setDocumentosError(err instanceof Error ? err.message : 'Falha ao carregar documentos')
+          setDocumentosError(`Não foi possível carregar os documentos do sistema: ${describePersistenceError(err)}`)
           setDocumentos([])
         }
       } finally {
@@ -126,13 +105,24 @@ export function DetalheAluno({
     }
   }, [studentId])
 
-  const loadingStudent = loadedStudentId !== studentId
-
-  if (loadingStudent) {
+  if (studentQuery.status === 'loading') {
     return (
       <div className="page-container">
         <div className="form-card">
           <p>Carregando dados do aluno no banco de dados…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (studentQuery.status === 'error') {
+    return (
+      <div className="page-container">
+        <div className="form-card">
+          <LoadError error={studentQuery.error} onRetry={studentQuery.retry} what="os dados do aluno" />
+          <button className="button secondary" onClick={onBack} type="button">
+            <ChevronLeft size={18} /> Voltar para Alunos
+          </button>
         </div>
       </div>
     )
@@ -151,7 +141,8 @@ export function DetalheAluno({
     )
   }
 
-  // Combina contatos do Firestore com contatos locais sem duplicação
+  // Contatos da coleção contatos_familia; registros legados no próprio aluno
+  // são usados apenas quando a coleção respondeu e não tem nenhum contato.
   const allContacts = dbContacts.length > 0 ? dbContacts : student.contacts
 
   const autorizacaoDoc = [...documentos, ...student.documentos].some(
@@ -268,7 +259,11 @@ export function DetalheAluno({
               </div>
               <div>
                 <h3>Responsável</h3>
-                {guardians.length ? guardians.map((guardian) => (
+                {guardiansQuery.status === 'error' ? (
+                  <LoadError error={guardiansQuery.error} onRetry={guardiansQuery.retry} what="os responsáveis" />
+                ) : guardiansQuery.status === 'loading' ? (
+                  <p>Carregando responsáveis…</p>
+                ) : guardians.length ? guardians.map((guardian) => (
                   <article className="guardian-profile-card" key={guardian.id || guardian.nome}>
                     <p><strong>{guardian.nome}</strong> {guardian.principal && <span className="guardian-primary-badge">Principal</span>} {!guardian.ativo && <span className="guardian-inactive-badge">Inativo</span>}</p>
                     <p><strong>Parentesco:</strong> {guardian.parentesco}</p>
@@ -378,7 +373,7 @@ export function DetalheAluno({
                       setDocumentos(docs)
                       setDocumentosLoading(false)
                     }).catch((err) => {
-                      setDocumentosError(err.message || 'Falha ao carregar documentos')
+                      setDocumentosError(`Não foi possível carregar os documentos do sistema: ${describePersistenceError(err)}`)
                       setDocumentosLoading(false)
                     })
                   }}
@@ -538,6 +533,14 @@ export function DetalheAluno({
           <div className="student-tab-panel">
             <h3>Contato por faltas & Ocorrências</h3>
             <div className="timeline">
+              {contactsSub.status === 'error' && (
+                <LoadError
+                  error={contactsSub.error}
+                  impact="A lista abaixo pode não incluir os contatos mais recentes."
+                  onRetry={contactsSub.retry}
+                  what="os contatos registrados"
+                />
+              )}
               {allContacts.map((contact, index) => (
                 <article key={contact.contactDate + index}>
                   <span className="timeline-dot">
@@ -582,8 +585,11 @@ export function DetalheAluno({
                   </div>
                 </article>
               ))}
-              {allContacts.length === 0 && (
+              {allContacts.length === 0 && contactsSub.status === 'ready' && (
                 <p className="student-empty">Nenhum contato registrado.</p>
+              )}
+              {allContacts.length === 0 && contactsSub.status === 'loading' && (
+                <p className="student-empty">Carregando contatos…</p>
               )}
             </div>
           </div>

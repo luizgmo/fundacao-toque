@@ -39,6 +39,15 @@ beforeEach(async () => {
       setDoc(doc(db, 'alunos/aluno-1/documentos/ficha-medica'), { tipo_documento: 'ficha_medica', data_url: 'data:application/pdf;base64,AA==', tamanho_bytes: 1 }),
       setDoc(doc(db, 'alunos/aluno-1/documentos/matricula'), { tipo_documento: 'ficha_matricula', data_url: 'data:application/pdf;base64,AA==', tamanho_bytes: 1 }),
       setDoc(doc(db, 'registros_atividade/atividade-1'), { turma_id: 'turma-1' }),
+      setDoc(doc(db, 'turmas/turma-1'), { nome: 'Turma 1', ativo: true }),
+      setDoc(doc(db, 'oficinas/oficina-1'), { nome: 'Oficina 1', ativo: true }),
+      setDoc(doc(db, 'turma_oficinas/turma-1__oficina-1'), {
+        turma_id: 'turma-1', oficina_id: 'oficina-1', ids_usuarios_responsaveis: ['pedagogia-1'], ativo: true,
+        horarios: [{ dia_semana: 2, hora_inicio: '08:00', hora_fim: '09:00' }],
+      }),
+      setDoc(doc(db, 'turma_oficinas/legado-sem-horario'), {
+        turma_id: 'turma-1', oficina_id: 'oficina-legada', ids_usuarios_responsaveis: [], ativo: true, horarios: [],
+      }),
       setDoc(doc(db, 'relatorios_pedagogicos/rascunho-1'), { status: 'rascunho', aluno_id: 'aluno-1' }),
       setDoc(doc(db, 'relatorios_pedagogicos/concluido-1'), { status: 'concluido', aluno_id: 'aluno-1' }),
       setDoc(doc(db, 'contatos_familia/contato-1'), {
@@ -154,6 +163,124 @@ describe('Firestore security rules', () => {
     }))
     await assertFails(updateDoc(doc(db, 'contatos_familia/contato-1'), { responsavel_snapshot: { nome: 'Nome alterado' } }))
     await assertSucceeds(getDoc(doc(db, 'contatos_familia/contato-1')))
+  })
+
+
+  describe('turma_oficinas', () => {
+    const vinculo = (extra: Record<string, unknown> = {}) => ({
+      turma_id: 'turma-1', oficina_id: 'oficina-1', ids_usuarios_responsaveis: ['pedagogia-1'], ativo: true,
+      horarios: [{ dia_semana: 7, hora_inicio: '08:00', hora_fim: '09:30', valido_de: '2026-02-01', valido_ate: '2026-12-31' }],
+      ...extra,
+    })
+
+    beforeEach(async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await deleteDoc(doc(context.firestore(), 'turma_oficinas/turma-1__oficina-1'))
+      })
+    })
+
+    it('cria vínculo válido apenas com o ID determinístico turma__oficina', async () => {
+      const db = firestore('admin-1')
+      await assertSucceeds(setDoc(doc(db, 'turma_oficinas/turma-1__oficina-1'), vinculo()))
+      await assertFails(setDoc(doc(db, 'turma_oficinas/outro-id'), vinculo()))
+    })
+
+    it('exige turma e oficina existentes', async () => {
+      const db = firestore('admin-1')
+      await assertFails(setDoc(doc(db, 'turma_oficinas/turma-x__oficina-1'), vinculo({ turma_id: 'turma-x' })))
+    })
+
+    it('rejeita horários fora do formato da modelagem', async () => {
+      const db = firestore('admin-1')
+      const ref = doc(db, 'turma_oficinas/turma-1__oficina-1')
+      const h = { dia_semana: 1, hora_inicio: '08:00', hora_fim: '09:00' }
+      await assertFails(setDoc(ref, vinculo({ horarios: [] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [{ ...h, dia_semana: 0 }] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [{ ...h, dia_semana: 8 }] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [{ ...h, hora_inicio: '8:00' }] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [{ ...h, hora_fim: '24:00' }] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [{ ...h, hora_inicio: '09:00', hora_fim: '09:00' }] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [{ ...h, valido_de: '2026-05-01', valido_ate: '2026-04-30' }] })))
+      await assertFails(setDoc(ref, vinculo({ horarios: [h, { ...h, dia_semana: 3, hora_fim: '07:00' }] })))
+      await assertFails(setDoc(ref, vinculo({ ids_usuarios_responsaveis: [] })))
+      await assertSucceeds(setDoc(ref, vinculo({ horarios: [h, { ...h, dia_semana: 3 }] })))
+    })
+
+    it('permite inativar (inclusive vínculo antigo sem horário), mas não apagar nem trocar o par', async () => {
+      const db = firestore('pedagogia-1')
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'turma_oficinas/turma-1__oficina-1'), vinculo())
+      })
+      const ref = doc(db, 'turma_oficinas/turma-1__oficina-1')
+      await assertFails(updateDoc(ref, { oficina_id: 'outra' }))
+      await assertFails(deleteDoc(ref))
+      await assertSucceeds(updateDoc(ref, { ativo: false, inativado_em: '2026-11-10' }))
+      await assertSucceeds(updateDoc(doc(db, 'turma_oficinas/legado-sem-horario'), { ativo: false }))
+    })
+  })
+
+
+  describe('sessoes_chamada', () => {
+    const geral = (extra: Record<string, unknown> = {}) => ({
+      data_chamada: '2026-11-10', turma_id: 'turma-1', escopo: 'turma', turma_oficina_id: null,
+      presencas: { 'aluno-1': 'presente', 'aluno-2': 'justificado' }, observacoes: { 'aluno-2': 'Atestado' },
+      registrado_por: 'Pedagogia', versao: 1,
+      ...extra,
+    })
+    const oficina = (extra: Record<string, unknown> = {}) =>
+      geral({ escopo: 'oficina', turma_oficina_id: 'turma-1__oficina-1', ...extra })
+
+    it('cria a sessão geral e a de oficina como documentos distintos com ID determinístico', async () => {
+      const db = firestore('admin-1')
+      await assertSucceeds(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_geral'), geral()))
+      await assertSucceeds(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_turma-1__oficina-1'), oficina()))
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/chamada-aleatoria'), geral()))
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_geral-2'), geral()))
+    })
+
+    it('rejeita contexto inconsistente e status desconhecido', async () => {
+      const db = firestore('admin-1')
+      const id = 'sessoes_chamada/2026-11-10_turma-1_geral'
+      await assertFails(setDoc(doc(db, id), geral({ turma_oficina_id: 'turma-1__oficina-1' })))
+      await assertFails(setDoc(doc(db, id), geral({ presencas: { 'aluno-1': 'atrasado' } })))
+      await assertFails(setDoc(doc(db, id), geral({ versao: 2 })))
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-x_geral'), geral({ turma_id: 'turma-x' })))
+      // vínculo de outra turma não serve para a chamada desta turma
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_legado-sem-horario'),
+        oficina({ turma_oficina_id: 'legado-sem-horario', turma_id: 'turma-2' })))
+    })
+
+    it('exige vínculo ativo da mesma turma para criar chamada de oficina', async () => {
+      const db = firestore('admin-1')
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await updateDoc(doc(context.firestore(), 'turma_oficinas/turma-1__oficina-1'), { ativo: false })
+      })
+      await assertFails(setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_turma-1__oficina-1'), oficina()))
+    })
+
+    it('atualiza só com a versão seguinte e sem mudar o contexto; apagar só a Direção', async () => {
+      const ref = 'sessoes_chamada/2026-11-10_turma-1_geral'
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), ref), geral())
+      })
+      const db = firestore('pedagogia-1')
+      await assertFails(setDoc(doc(db, ref), geral({ versao: 1 })))
+      await assertFails(setDoc(doc(db, ref), geral({ versao: 3 })))
+      await assertFails(setDoc(doc(db, ref), geral({ versao: 2, data_chamada: '2026-11-11' })))
+      await assertFails(setDoc(doc(db, ref), oficina({ versao: 2 })))
+      await assertSucceeds(setDoc(doc(db, ref), geral({ versao: 2, presencas: { 'aluno-1': 'ausente' } })))
+      await assertFails(deleteDoc(doc(db, ref)))
+      await assertSucceeds(deleteDoc(doc(firestore('direcao-1'), ref)))
+    })
+
+    it('aceita atualizar sessão antiga sem campo versao', async () => {
+      const ref = 'sessoes_chamada/legada'
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const { versao: _versao, ...semVersao } = geral()
+        await setDoc(doc(context.firestore(), ref), semVersao)
+      })
+      await assertSucceeds(setDoc(doc(firestore('admin-1'), ref), geral({ versao: 1 })))
+    })
   })
 
 })

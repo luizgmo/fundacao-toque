@@ -7,7 +7,7 @@ const USUARIOS_COLLECTION = 'usuarios_publicos'
 // Escuta a equipe cadastrada (usada nos selects de profissional responsável)
 export function subscribeToUsuarios(
   onSuccess: (usuarios: UserProfile[]) => void,
-  onError?: (error: Error) => void
+  onError: (error: Error) => void
 ) {
   return onSnapshot(
     query(collection(db, USUARIOS_COLLECTION), where('ativo', '==', true)),
@@ -30,8 +30,7 @@ export function subscribeToUsuarios(
     },
     (err) => {
       console.warn('Erro ao escutar usuários no Firestore:', err)
-      if (onError) onError(err)
-      else onSuccess([])
+      onError(err)
     }
   )
 }
