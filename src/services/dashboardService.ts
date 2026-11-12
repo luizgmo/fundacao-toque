@@ -8,13 +8,32 @@ import {
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { docToRegistro } from './activitiesService'
+import { LIMITE_FALTAS_PADRAO } from './configuracaoService'
 import type { RegistroAtividade } from '../types/atividades'
 
-export type AlunoFaltaRecorrente = {
+export type AlunoFaltaAlerta = {
   alunoId: string
   alunoNome: string
   turmaNome: string
+  escopo: 'turma' | 'oficina'
+  turmaOficinaId?: string
+  oficinaNome?: string
+  // Quantidade de faltas consecutivas no contexto (escopo) selecionado.
   faltasConsecutivas: number
+  // Sessões que compõem a sequência corrente, da mais antiga para a mais recente.
+  sessoes: {
+    id: string
+    data: string
+    turmaId: string
+    escopo: 'turma' | 'oficina'
+    turmaOficinaId?: string
+  }[]
+}
+
+export type ResultadoFaltasRecorrentes = {
+  alertas: AlunoFaltaAlerta[]
+  // Limite aplicado (configurado na Fundação ou o padrão).
+  limite: number
 }
 
 export type TimelineItem = {
@@ -107,59 +126,202 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   return { alunosAtivos, turmasAtivas, oficinasAtivas, frequenciaMedia }
 }
 
-// Alunos com 3+ faltas consecutivas (lê sessoes_chamada recentes + nomes em alunos)
-// Falhas de consulta são propagadas (não viram "nenhum aluno com faltas").
-export async function getAlunosFaltasRecorrentes(limite = 5): Promise<AlunoFaltaRecorrente[]> {
-  const q = query(collection(db, 'sessoes_chamada'), orderBy('data_chamada', 'desc'), limit(200))
-  const snap = await getDocs(q)
+export type SessaoChamadaResumo = {
+  id: string
+  data_chamada: string
+  turma_id: string
+  escopo: 'turma' | 'oficina'
+  turma_oficina_id?: string
+  presencas: Record<string, string>
+}
 
-  // Ordena sessões da mais antiga para a mais recente para calcular sequência
-  const sessoes = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
-  const getStr = (s: Record<string, unknown>, key: string): string =>
-    typeof s[key] === 'string' ? (s[key] as string) : ''
-  const getMap = (s: Record<string, unknown>, key: string): Record<string, string> =>
-    typeof s[key] === 'object' && s[key] !== null ? (s[key] as Record<string, string>) : {}
-  sessoes.sort((a, b) => getStr(a, 'data_chamada').localeCompare(getStr(b, 'data_chamada')))
+function getStr(s: Record<string, unknown>, key: string): string {
+  return typeof s[key] === 'string' ? (s[key] as string) : ''
+}
 
-  const consecutivas = new Map<string, number>()
+function getMap(s: Record<string, unknown>, key: string): Record<string, string> {
+  const valor = s[key]
+  return typeof valor === 'object' && valor !== null ? (valor as Record<string, string>) : {}
+}
+
+// Agrupa sessões por contexto compatível (turma + escopo + vínculo da oficina)
+// para nunca misturar sequências de contextos distintos.
+export function agruparSessoes(
+  sessoes: SessaoChamadaResumo[],
+): Map<string, SessaoChamadaResumo[]> {
+  const grupos = new Map<string, SessaoChamadaResumo[]>()
   sessoes.forEach((s) => {
+    const chave = `${s.turma_id}|${s.escopo}|${s.turma_oficina_id ?? 'geral'}`
+    const grupo = grupos.get(chave) ?? []
+    grupo.push(s)
+    grupos.set(chave, grupo)
+  })
+  return grupos
+}
+
+// Sequência corrente do aluno dentro de um contexto: apenas 'ausente'
+// incrementa; 'presente' e 'justificado' interrompem a sequência. Sessões em
+// que o aluno não foi registrado não alteram a sequência.
+export function sequenciaDoContexto(
+  grupo: SessaoChamadaResumo[],
+): Map<string, { count: number; sessoes: string[]; ultimaData: string }> {
+  const sequencias = new Map<string, { count: number; sessoes: string[]; ultimaData: string }>()
+
+  const ordenadas = [...grupo].sort((a, b) =>
+    getStr(a, 'data_chamada').localeCompare(getStr(b, 'data_chamada')),
+  )
+
+  ordenadas.forEach((s) => {
     const presencas = getMap(s, 'presencas')
-    const alunosNaSessao = new Set(Object.keys(presencas))
-    // Zera quem estava presente/justificado; incrementa quem faltou
-    alunosNaSessao.forEach((alunoId) => {
-      const status = presencas[alunoId]
-      if (status === 'ausente') {
-        consecutivas.set(alunoId, (consecutivas.get(alunoId) || 0) + 1)
+    Object.keys(presencas).forEach((alunoId) => {
+      const estado = presencas[alunoId]
+      const atual = sequencias.get(alunoId) ?? { count: 0, sessoes: [], ultimaData: '' }
+      if (estado === 'ausente') {
+        sequencias.set(alunoId, {
+          count: atual.count + 1,
+          sessoes: [...atual.sessoes, s.id],
+          ultimaData: getStr(s, 'data_chamada'),
+        })
       } else {
-        consecutivas.set(alunoId, 0)
+        sequencias.set(alunoId, { count: 0, sessoes: [], ultimaData: atual.ultimaData })
       }
     })
   })
 
-  const comFalta = [...consecutivas.entries()]
-    .filter(([, n]) => n >= 3)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limite)
+  return sequencias
+}
 
-  if (comFalta.length === 0) return []
+// Alunos com faltas consecutivas >= limite, calculadas por contexto
+// (turma geral ou vínculo de oficina) e nunca misturando sessões
+// incompatíveis. Falhas de consulta são propagadas: nunca viram "sem alertas".
+export async function getAlunosFaltasRecorrentes(
+  maxItens = 5,
+  limiteFaltas = LIMITE_FALTAS_PADRAO,
+): Promise<ResultadoFaltasRecorrentes> {
+  const q = query(collection(db, 'sessoes_chamada'), orderBy('data_chamada', 'desc'), limit(200))
+  const snap = await getDocs(q)
 
-  // Busca nomes/turmas dos alunos
-  const alunosSnap = await getDocs(collection(db, 'alunos'))
-  const nomes = new Map<string, { nome: string; turma: string }>()
+  const sessoes = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Record<string, unknown>),
+  })) as SessaoChamadaResumo[]
+
+  // Melhor sequência corrente de cada aluno entre todos os seus contextos.
+  const melhorPorAluno = new Map<
+    string,
+    { count: number; sessoes: string[]; ultimaData: string; chave: string }
+  >()
+
+  for (const grupo of agruparSessoes(sessoes).values()) {
+    const sequencias = sequenciaDoContexto(grupo)
+    const chave = `${grupo[0].turma_id}|${grupo[0].escopo}|${grupo[0].turma_oficina_id ?? 'geral'}`
+    sequencias.forEach((seq, alunoId) => {
+      if (seq.count === 0) return
+      const atual = melhorPorAluno.get(alunoId)
+      if (
+        !atual ||
+        seq.count > atual.count ||
+        (seq.count === atual.count && seq.ultimaData > atual.ultimaData)
+      ) {
+        melhorPorAluno.set(alunoId, {
+          count: seq.count,
+          sessoes: seq.sessoes,
+          ultimaData: seq.ultimaData,
+          chave,
+        })
+      }
+    })
+  }
+
+  const alertas = [...melhorPorAluno.entries()]
+    .filter(([, seq]) => seq.count >= limiteFaltas)
+    .sort((a, b) => {
+      if (b[1].count !== a[1].count) return b[1].count - a[1].count
+      return b[1].ultimaData.localeCompare(a[1].ultimaData)
+    })
+    .slice(0, maxItens)
+
+  if (alertas.length === 0) {
+    return { alertas: [], limite: limiteFaltas }
+  }
+
+  // Nomes dos alunos e de turmas/oficinas para exibir no alerta.
+  const [alunosSnap, turmasSnap, oficinasSnap, vinculosSnap] = await Promise.all([
+    getDocs(collection(db, 'alunos')),
+    getDocs(collection(db, 'turmas')),
+    getDocs(collection(db, 'oficinas')),
+    getDocs(collection(db, 'turma_oficinas')),
+  ])
+
+  const nomesAlunos = new Map<string, { nome: string; turma: string }>()
   alunosSnap.forEach((d) => {
     const data = d.data()
-    nomes.set(d.id, {
+    nomesAlunos.set(d.id, {
       nome: data.nome_completo || 'Sem nome',
       turma: data.turma || data.turma_id || '—',
     })
   })
 
-  return comFalta.map(([alunoId, faltas]) => ({
-    alunoId,
-    alunoNome: nomes.get(alunoId)?.nome || alunoId,
-    turmaNome: nomes.get(alunoId)?.turma || '—',
-    faltasConsecutivas: faltas,
-  }))
+  const nomesTurmas = new Map<string, string>()
+  turmasSnap.forEach((d) => {
+    nomesTurmas.set(d.id, String(d.data().nome || d.id))
+  })
+
+  const nomesOficinas = new Map<string, string>()
+  oficinasSnap.forEach((d) => {
+    nomesOficinas.set(d.id, String(d.data().nome || d.id))
+  })
+
+  const vinculos = new Map<string, { oficinaId: string }>()
+  vinculosSnap.forEach((d) => {
+    const data = d.data()
+    vinculos.set(d.id, { oficinaId: data.oficina_id || '' })
+  })
+
+  const resumoSessao = (s: SessaoChamadaResumo) => ({
+    id: s.id,
+    data: s.data_chamada,
+    turmaId: s.turma_id,
+    escopo: s.escopo,
+    turmaOficinaId: s.turma_oficina_id,
+  })
+
+  return {
+    alertas: alertas.map(([alunoId, seq]) => {
+      const partes = seq.chave.split('|')
+      const turmaId = partes[0]
+      const escopo = partes[1] as 'turma' | 'oficina'
+      const turmaOficinaId = partes[2]
+      const infoAluno = nomesAlunos.get(alunoId) ?? { nome: alunoId, turma: '—' }
+      const oficinaId =
+        escopo === 'oficina' ? vinculos.get(turmaOficinaId)?.oficinaId : undefined
+
+      const sessoesDoAlerta = seq.sessoes.map((id) => {
+        const sessao = sessoes.find((s) => s.id === id)
+        if (sessao) return resumoSessao(sessao)
+        return {
+          id,
+          data: '',
+          turmaId,
+          escopo,
+          turmaOficinaId: escopo === 'oficina' ? turmaOficinaId : undefined,
+        }
+      })
+
+      return {
+        alunoId,
+        alunoNome: infoAluno.nome,
+        turmaNome: infoAluno.turma || nomesTurmas.get(turmaId) || '—',
+        escopo,
+        turmaOficinaId: escopo === 'oficina' ? turmaOficinaId : undefined,
+        oficinaNome:
+          escopo === 'oficina' && oficinaId ? nomesOficinas.get(oficinaId) || '—' : undefined,
+        faltasConsecutivas: seq.count,
+        sessoes: sessoesDoAlerta,
+      }
+    }),
+    limite: limiteFaltas,
+  }
 }
 
 export type UltimasAtualizacoes = {

@@ -22,6 +22,8 @@ import { useStudents } from './useStudents'
 import { studentBelongsToTurma, subscribeToTurmas } from '../../services/turmasService'
 import type { Turma } from '../../types/turmas'
 import { DataNotice } from '../../components/DataNotice'
+import { useQuery } from '../../lib/useSubscription'
+import { obterLimiteFaltas, LIMITE_FALTAS_PADRAO } from '../../services/configuracaoService'
 import './ListarAlunos.css'
 
 const TODAS_TURMAS = 'todas'
@@ -44,6 +46,12 @@ export function ListarAlunos({
   const turmasSub = useSubscription<Turma[]>(subscribeToTurmas, [])
   const turmas = turmasSub.data
   const [status, setStatus] = useState(statusOptions[0])
+
+  const limiteQuery = useQuery<{ valor: number; fonte: 'configurado' | 'padrao' }>(
+    () => obterLimiteFaltas(),
+    { valor: LIMITE_FALTAS_PADRAO, fonte: 'padrao' },
+  )
+  const limiteFaltas = limiteQuery.status === 'ready' ? limiteQuery.data.valor : LIMITE_FALTAS_PADRAO
 
   // Delete modal states
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null)
@@ -223,6 +231,7 @@ export function ListarAlunos({
                 <th>Turma</th>
                 <th>Deficiência / CID</th>
                 <th>Status</th>
+                <th style={{ width: '110px', textAlign: 'center' }}>Faltas cons.</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -258,6 +267,19 @@ export function ListarAlunos({
                       {student.status}
                     </span>
                   </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {student.faltasConsecutivas >= limiteFaltas && limiteQuery.status !== 'loading' ? (
+                      <span
+                        className="status-pill warning"
+                        title={`${student.faltasConsecutivas} faltas consecutivas (limite ${limiteFaltas})`}
+                      >
+                        <AlertTriangle size={12} />
+                        {student.faltasConsecutivas}
+                      </span>
+                    ) : (
+                      <span>{student.faltasConsecutivas}</span>
+                    )}
+                  </td>
                   <td>
                     <div className="students-table-actions">
                       <button
@@ -291,7 +313,7 @@ export function ListarAlunos({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td className="students-table-empty" colSpan={7}>
+                  <td className="students-table-empty" colSpan={8}>
                     {source === 'loading'
                       ? 'Carregando alunos do banco de dados…'
                       : source === 'error'

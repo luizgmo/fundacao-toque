@@ -539,12 +539,12 @@
 }
 
 .absence-alert strong {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .absence-alert span {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .student-alert-list {
@@ -584,12 +584,12 @@
 
 .student-alert-row strong {
   color: var(--navy-800);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .student-alert-row span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .student-alert-row button,
@@ -1803,4 +1803,16 @@
 
 .report-attachments small {
   color: var(--text-muted);
+}
+
+.alerta-sessoes {
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7280);
+  margin-top: 2px;
+  display: block;
+}
+
+.alerta-acoes {
+  display: flex;
+  gap: 0.4rem;
 }

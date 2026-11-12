@@ -61,7 +61,16 @@ service cloud.firestore {
     match /usuarios/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isDirection());
       allow list: if isDirection();
-      allow create, update: if isDirection();
+      allow create: if isDirection();
+      // O próprio usuário ativo só pode liberar a senha provisória (trocar_senha)
+      // e atualizar o carimbo de atualização; não pode trocar papel nem status.
+      allow update: if isDirection() ||
+        (request.auth.uid == userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'trocar_senha',
+            'atualizado_em',
+          ]) &&
+          request.resource.data.atualizado_em == request.time);
       allow delete: if false;
     }
 
@@ -413,7 +422,14 @@ service cloud.firestore {
 
     match /configuracoes_sistema/{settingId} {
       allow read: if isDirection();
-      allow write: if isDirection();
+      // Somente a Direção altera o limite, com valores inteiros não negativos
+      // e registro de quem atualizou e quando.
+      allow write: if isDirection() &&
+        request.resource.data.limite_faltas_consecutivas is int &&
+        request.resource.data.limite_faltas_consecutivas >= 0 &&
+        request.resource.data.limite_faltas_consecutivas <= 365 &&
+        request.resource.data.atualizado_por == request.auth.uid &&
+        request.resource.data.atualizado_em == request.time;
     }
   }
 }

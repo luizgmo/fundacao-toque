@@ -21,6 +21,7 @@ import {
   Menu,
   MessageCircle,
   Palette,
+  Settings,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -38,6 +39,7 @@ import { Oficinas } from './features/oficinas/Oficinas'
 import { Atividades } from './features/atividades/Atividades'
 import { RelatoriosScreen } from './features/relatorios/RelatoriosScreen'
 import { PedagogicalReport } from './features/relatorios/PedagogicalReport'
+import { ConfiguracaoSistema } from './features/configuracao/ConfiguracaoSistema'
 import { LoginScreen } from './features/auth/LoginScreen'
 import { TrocarSenha } from './features/auth/TrocarSenha'
 import { Evolucao } from './features/evolucao/Evolucao'
@@ -48,9 +50,16 @@ import {
   getTarefasDeHoje,
   getUltimasAtualizacoes,
 } from './services/dashboardService'
-import type { AlunoFaltaRecorrente, DashboardMetrics, Metrica, TarefaDoDia, UltimasAtualizacoes } from './services/dashboardService'
+import type {
+  DashboardMetrics,
+  Metrica,
+  ResultadoFaltasRecorrentes,
+  TarefaDoDia,
+  UltimasAtualizacoes,
+} from './services/dashboardService'
 import type { UserProfile, UserRole } from './types/auth'
 import { ROLE_LABELS } from './types/auth'
+import { obterLimiteFaltas, LIMITE_FALTAS_PADRAO } from './services/configuracaoService'
 import type { Student } from './features/alunos/students-data'
 import { DataNotice } from './components/DataNotice'
 import { LoadError } from './components/LoadError'
@@ -71,6 +80,7 @@ type Screen =
   | 'oficinas'
   | 'atividades'
   | 'evolucao'
+  | 'configuracao'
 
 const validScreens: Screen[] = [
   'reports',
@@ -83,6 +93,7 @@ const validScreens: Screen[] = [
   'oficinas',
   'atividades',
   'evolucao',
+  'configuracao',
 ]
 
 type NavItem = {
@@ -107,6 +118,7 @@ const pedagogicalNavigation: NavItem[] = [
 
 const adminNavigation: NavItem[] = [
   { label: 'Equipe / Autores', icon: ShieldCheck, screen: 'usuarios' },
+  { label: 'Configurações', icon: Settings, screen: 'configuracao' },
 ]
 
 function Brand() {
@@ -244,6 +256,7 @@ function Topbar({
     oficinas: 'Oficinas e Atividades',
     atividades: 'Registro de Atividades',
     evolucao: 'Evolução',
+    configuracao: 'Configurações do Sistema',
   }
 
   const initials = userProfile
@@ -337,9 +350,11 @@ function SectionCard({
 
 function Dashboard({
   onNavigate,
+  onViewStudent,
   userName,
 }: {
   onNavigate: (screen: Screen, params?: Record<string, string>) => void
+  onViewStudent: (studentId: string) => void
   userName?: string
 }) {
   const formattedDate = useMemo(() => {
@@ -352,15 +367,27 @@ function Dashboard({
     return text.charAt(0).toUpperCase() + text.slice(1)
   }, [])
 
-  // Cada seção tem seus próprios estados (carregando, erro, vazio, dados) e
-  // nova tentativa independente. Falhas de consulta nunca aparecem como zero.
+  // O limite de faltas é lido da configuração da Fundação (apenas após o
+  // perfil ser validado) com fallback para o padrão. Alterá-lo muda os
+  // alertas sem exigir alteração de código.
+  const configuracaoQuery = useQuery<{ valor: number; fonte: 'configurado' | 'padrao' }>(
+    () => obterLimiteFaltas(),
+    { valor: LIMITE_FALTAS_PADRAO, fonte: 'padrao' },
+  )
+  const limiteFaltas =
+    configuracaoQuery.status === 'ready' ? configuracaoQuery.data.valor : LIMITE_FALTAS_PADRAO
+  const faltasQuery = useQuery<ResultadoFaltasRecorrentes>(
+    () => getAlunosFaltasRecorrentes(5, limiteFaltas),
+    { alertas: [], limite: limiteFaltas },
+    `limite-${limiteFaltas}`,
+  )
+
   const metricsQuery = useQuery<DashboardMetrics | null>(getDashboardMetrics, null)
-  const faltasQuery = useQuery<AlunoFaltaRecorrente[]>(() => getAlunosFaltasRecorrentes(5), [])
   const timelineQuery = useQuery<UltimasAtualizacoes>(() => getUltimasAtualizacoes(6), { items: [], fontesComFalha: [] })
   const tarefasQuery = useQuery<TarefaDoDia[]>(getTarefasDeHoje, [])
 
   const metrics = metricsQuery.data
-  const faltas = faltasQuery.data
+  const faltas = faltasQuery.data?.alertas ?? []
   const timeline = timelineQuery.data.items
   const tarefas = tarefasQuery.data
   const metricasComFalha = metrics
@@ -523,25 +550,35 @@ function Dashboard({
 
       <div className="dashboard-secondary-grid">
         <SectionCard
-          action={<span className="status-pill warning">3+ faltas</span>}
+          action={<span className="status-pill warning">{limiteFaltas}+ faltas</span>}
           title="Alunos com faltas recorrentes"
         >
-          {faltasQuery.status === 'error' ? (
-            <LoadError error={faltasQuery.error} onRetry={faltasQuery.retry} what="os alunos com faltas recorrentes" />
+          {configuracaoQuery.status === 'error' ? (
+            <LoadError
+              error={configuracaoQuery.error}
+              onRetry={configuracaoQuery.retry}
+              what="o limite de faltas configurado pela Fundação"
+            />
+          ) : faltasQuery.status === 'error' ? (
+            <LoadError
+              error={faltasQuery.error}
+              onRetry={faltasQuery.retry}
+              what="os alunos com faltas recorrentes"
+            />
           ) : (
-          <div className="absence-alert">
-            <AlertTriangle size={21} />
-            <div>
-              <strong>
-                {faltasQuery.status === 'loading'
-                  ? 'Verificando faltas recentes…'
-                  : faltas.length === 0
-                  ? 'Nenhum aluno com 3+ faltas consecutivas'
-                  : `${faltas.length} aluno${faltas.length === 1 ? '' : 's'} precisa${faltas.length === 1 ? '' : 'm'} de contato com a família`}
-              </strong>
-              <span>Verifique os registros de contato e as ausências recentes.</span>
+            <div className="absence-alert">
+              <AlertTriangle size={21} />
+              <div>
+                <strong>
+                  {faltasQuery.status === 'loading'
+                    ? 'Verificando faltas recentes…'
+                    : faltas.length === 0
+                    ? `Nenhum aluno com ${limiteFaltas}+ faltas consecutivas`
+                    : `${faltas.length} aluno${faltas.length === 1 ? '' : 's'} com ${limiteFaltas}+ faltas consecutivas`}
+                </strong>
+                <span>Verifique os registros de contato e as ausências recentes.</span>
+              </div>
             </div>
-          </div>
           )}
           <div className="student-alert-list">
             {faltas.map((aluno) => (
@@ -549,9 +586,28 @@ function Dashboard({
                 <span className="mini-avatar">{aluno.alunoNome.charAt(0)}</span>
                 <div>
                   <strong>{aluno.alunoNome}</strong>
-                  <span>{aluno.turmaNome} · {aluno.faltasConsecutivas} faltas consecutivas</span>
+                  <span>
+                    {aluno.turmaNome}
+                    {aluno.oficinaNome ? ` · Oficina ${aluno.oficinaNome}` : ''}
+                    · {aluno.faltasConsecutivas} faltas consecutivas
+                  </span>
+                  <span className="alerta-sessoes">
+                    Sessões: {aluno.sessoes.map((s) => s.data).filter(Boolean).join(', ')} · {aluno.turmaNome}{aluno.oficinaNome ? ` · oficina ${aluno.oficinaNome}` : ''}
+                  </span>
                 </div>
-                <button onClick={() => onNavigate('frequencia')} type="button">Ver chamadas</button>
+                <div className="alerta-acoes">
+                  <button
+                    className="button secondary sm-button"
+                    onClick={() => onViewStudent(aluno.alunoId)}
+                    title="Ver ficha completa do aluno e registrar contato com a família"
+                    type="button"
+                  >
+                    Ver perfil
+                  </button>
+                  <button onClick={() => onNavigate('frequencia')} type="button">
+                    Ver chamadas
+                  </button>
+                </div>
               </div>
             ))}
             {faltas.length === 0 && faltasQuery.status === 'ready' && (
@@ -724,6 +780,7 @@ function App() {
           {screen === 'home' && (
             <Dashboard
               onNavigate={navigate}
+              onViewStudent={viewStudent}
               userName={userProfile?.nome_completo.split(' ')[0]}
             />
           )}
@@ -772,6 +829,7 @@ function App() {
               }
             />
           )}
+          {screen === 'configuracao' && <ConfiguracaoSistema />}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
           {screen === 'turmas' && <Turmas onViewStudent={viewStudent} />}
           {screen === 'oficinas' && <Oficinas />}

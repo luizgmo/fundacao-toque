@@ -2,12 +2,16 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   setDoc,
   runTransaction,
-  query,
-  where,
   serverTimestamp,
   onSnapshot,
+  orderBy,
+  limit,
+  where,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { AttendanceSession, AttendanceStatus, ContactEntry } from '../features/alunos/students-data'
@@ -19,6 +23,11 @@ import {
 } from '../lib/demoMode'
 import { confirmWrite } from '../lib/persistence'
 import { sessaoChamadaId, STATUS_PRESENCA } from '../features/frequencia/chamada'
+import {
+  agruparSessoes,
+  sequenciaDoContexto,
+  type SessaoChamadaResumo,
+} from './dashboardService'
 
 const SESSOES_COLLECTION = 'sessoes_chamada'
 const CONTATOS_COLLECTION = 'contatos_familia'
@@ -151,7 +160,7 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
   }
 
   try {
-    return await confirmWrite(
+    const versao = await confirmWrite(
       'salvar a chamada',
       runTransaction(db, async (tx) => {
         const atual = await tx.get(ref)
@@ -174,6 +183,21 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
         return versaoAtual + 1
       })
     )
+
+    // Persiste a sequência de faltas dos alunos deste contexto a partir das
+    // sessões (fonte da verdade), para que a lista de alunos reflita o alerta.
+    // Falha aqui não invalida a chamada já gravada.
+    if (!isDemoModeEnabled()) {
+      await recalcularFaltasConsecutivasContexto({
+        turmaId: session.turmaId,
+        escopo: session.scope,
+        turmaOficinaId: session.turmaOficinaId,
+      }).catch((err) => {
+        console.warn('Não foi possível recalcular faltas consecutivas:', err)
+      })
+    }
+
+    return versao
   } catch (err) {
     // confirmWrite embrulha a falha; o conflito precisa chegar intacto à tela,
     // que oferece "recarregar" em vez de "tentar novamente".
@@ -181,6 +205,93 @@ export async function saveAttendanceToFirestore(session: SaveSessionInput): Prom
     if (cause instanceof ChamadaConflitoError) throw cause
     throw err
   }
+}
+
+// Recalcula e persiste a sequência de faltas consecutivas de cada aluno que
+// aparece nas sessões de um contexto, a partir das sessões (fonte da verdade).
+// Apenas 'ausente' incrementa; 'presente' e 'justificado' interrompem.
+// Alunos que interromperam a sequência são zerados; alunos sem sessões no
+// contexto não são tocados.
+export async function recalcularFaltasConsecutivasContexto(params: {
+  turmaId: string
+  escopo: 'turma' | 'oficina'
+  turmaOficinaId?: string
+}): Promise<void> {
+  if (isDemoModeEnabled()) return
+
+  const { turmaId, escopo, turmaOficinaId } = params
+  const q =
+    escopo === 'turma'
+      ? query(
+          collection(db, SESSOES_COLLECTION),
+          where('turma_id', '==', turmaId),
+          orderBy('data_chamada', 'desc'),
+          limit(500),
+        )
+      : query(
+          collection(db, SESSOES_COLLECTION),
+          where('turma_oficina_id', '==', turmaOficinaId),
+          orderBy('data_chamada', 'desc'),
+          limit(500),
+        )
+
+  const snap = await getDocs(q)
+  const sessoes = snap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) } as SessaoChamadaResumo),
+  )
+
+  const porAluno = new Map<
+    string,
+    { faltasConsecutivas: number; frequenciaMedia: number }
+  >()
+  for (const grupo of agruparSessoes(sessoes).values()) {
+    const seq = sequenciaDoContexto(grupo)
+    seq.forEach((s, alunoId) => {
+      const atual = porAluno.get(alunoId) ?? {
+        faltasConsecutivas: s.count,
+        frequenciaMedia: 0,
+      }
+      porAluno.set(alunoId, atual)
+    })
+  }
+
+  // Calcula frequência média por aluno a partir de todas as sessões do contexto.
+  const frequenciaPorAluno = new Map<string, { presentes: number; total: number }>()
+  sessoes.forEach((s) => {
+    const presencas = getMap(s, 'presencas')
+    Object.entries(presencas).forEach(([alunoId, status]) => {
+      const atual = frequenciaPorAluno.get(alunoId) ?? { presentes: 0, total: 0 }
+      atual.total += 1
+      if (status === 'presente' || status === 'justificado') atual.presentes += 1
+      frequenciaPorAluno.set(alunoId, atual)
+    })
+  })
+  frequenciaPorAluno.forEach((f, alunoId) => {
+    const entrada = porAluno.get(alunoId)
+    if (entrada) {
+      entrada.frequenciaMedia =
+        f.total > 0 ? Math.round((f.presentes / f.total) * 100) : 0
+    }
+  })
+
+  if (porAluno.size === 0) return
+
+  const batch = writeBatch(db)
+  porAluno.forEach((v, alunoId) => {
+    batch.update(doc(db, 'alunos', alunoId), {
+      faltas_consecutivas: v.faltasConsecutivas,
+      frequencia_media: v.frequenciaMedia,
+    })
+  })
+  await confirmWrite(
+    'atualizar faltas consecutivas e frequência média dos alunos',
+    batch.commit(),
+  )
+}
+
+function getMap(s: Record<string, unknown>, key: string): Record<string, string> {
+  const valor = s[key]
+  return typeof valor === 'object' && valor !== null ? (valor as Record<string, string>) : {}
 }
 
 function timestampToISO(value: unknown): string {

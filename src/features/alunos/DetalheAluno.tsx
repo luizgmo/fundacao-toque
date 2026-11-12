@@ -17,12 +17,14 @@ import {
   ShieldAlert,
   AlertCircle,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react'
 import { calculateAge } from './students-data'
 import type { Student, ContactEntry, DocumentEntry, Guardian } from './students-data'
 import type { AlunoOficina, Oficina, TurmaOficina } from '../../types/oficinas'
 import { describePersistenceError } from '../../lib/persistence'
 import { combineStatus, useQuery, useSubscription } from '../../lib/useSubscription'
+import { obterLimiteFaltas, LIMITE_FALTAS_PADRAO } from '../../services/configuracaoService'
 import { LoadError } from '../../components/LoadError'
 import {
   getStudentById,
@@ -97,6 +99,12 @@ export function DetalheAluno({
   const guardiansQuery = useQuery<Guardian[]>(() => getStudentGuardians(studentId), [], studentId)
   const guardians = guardiansQuery.data
   const papel = userProfile?.papel
+
+  const configuracaoQuery = useQuery<{ valor: number; fonte: 'configurado' | 'padrao' }>(
+    () => obterLimiteFaltas(),
+    { valor: LIMITE_FALTAS_PADRAO, fonte: 'padrao' },
+  )
+  const limiteFaltas = configuracaoQuery.status === 'ready' ? configuracaoQuery.data.valor : LIMITE_FALTAS_PADRAO
 
   // Oficinas do aluno (fonte da verdade: coleção aluno_oficinas), com o
   // vínculo turma-oficina e a oficina para exibir nome, período e status.
@@ -616,6 +624,27 @@ export function DetalheAluno({
                 </div>
               </div>
             </div>
+            {configuracaoQuery.status === 'ready' && (
+              <div className="student-frequency-alert">
+                {student.faltasConsecutivas >= limiteFaltas ? (
+                  <>
+                    <AlertTriangle size={16} />
+                    <span>
+                      Alerta: {student.faltasConsecutivas} faltas consecutivas atingiram o
+                      limite de {limiteFaltas}. Registre o contato com a família na aba
+                      Contato por faltas.
+                    </span>
+                  </>
+                ) : (
+                  <span>
+                    Limite de alerta: {limiteFaltas} faltas consecutivas (
+                    {configuracaoQuery.data.fonte === 'configurado'
+                      ? 'configurado pela Fundação'
+                      : 'padrão'}).
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 

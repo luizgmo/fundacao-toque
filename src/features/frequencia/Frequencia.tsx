@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import type { AttendanceSession, AttendanceStatus, ContactEntry, Guardian, Student } from '../alunos/students-data'
 import { addContactToStudent, saveAttendanceSession } from '../alunos/students-data'
-import { getStudentGuardians } from '../../services/studentsService'
+import { getStudentById, getStudentGuardians } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
 import {
   subscribeToAlunoOficinas,
@@ -34,13 +34,16 @@ import { vinculoPrevistoEm, vinculosAtivosDaTurma } from '../../types/oficinas'
 import {
   ChamadaConflitoError,
   getAttendanceFromFirestore,
+  recalcularFaltasConsecutivasContexto,
   saveAttendanceToFirestore,
   saveOccurrenceToFirestore,
 } from '../../services/attendanceService'
+import { obterLimiteFaltas, LIMITE_FALTAS_PADRAO } from '../../services/configuracaoService'
 import { isDemoModeEnabled } from '../../lib/demoMode'
 import { failureMessage } from '../../lib/persistence'
 import { useSubscription } from '../../lib/useSubscription'
 import type { LoadStatus } from '../../lib/useSubscription'
+import { useQuery } from '../../lib/useSubscription'
 import { LoadError, LoadErrors } from '../../components/LoadError'
 import { useStudents } from '../alunos/useStudents'
 import { DataNotice } from '../../components/DataNotice'
@@ -67,12 +70,29 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   const oficinas = oficinasSub.data
   const vinculos = vinculosSub.data
 
+  // O limite de faltas vem da configuração da Fundação (valor padrão quando
+  // ainda não configurado). Alterá-lo muda os alertas sem alterar código.
+  const configuracaoQuery = useQuery<{ valor: number; fonte: 'configurado' | 'padrao' }>(
+    () => obterLimiteFaltas(),
+    { valor: LIMITE_FALTAS_PADRAO, fonte: 'padrao' },
+  )
+  const absenceThreshold =
+    configuracaoQuery.status === 'ready' ? configuracaoQuery.data.valor : LIMITE_FALTAS_PADRAO
+
+  // Alerta de faltas recorrentes usa o campo `faltas_consecutivas` do aluno,
+  // populado ao recalcular a partir das sessões (fonte da verdade). Assim alunos
+  // excluídos ou inativados saem automaticamente da lista (não constam mais em
+  // allStudents) e sessões órfãs não geram alertas fantasmas.
+  const recurrentAbsenceStudents = useMemo(
+    () => allStudents.filter((s) => s.faltasConsecutivas >= absenceThreshold),
+    [allStudents, absenceThreshold],
+  )
+
   // Chamada states (IDs do Firestore)
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>('')
   const [selectedTurmaOficinaId, setSelectedTurmaOficinaId] = useState<string>('')
   // Data local: em UTC, à noite a tela abriria a chamada do dia seguinte.
   const [dateStr, setDateStr] = useState<string>(() => hojeLocalISO())
-  const [scope, setScope] = useState<'turma' | 'oficina'>('turma')
 
   // Attendance values per student for current selected parameters
   const [attendanceRecords, setAttendanceRecords] = useState<
@@ -100,12 +120,12 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   )
   const oficinaAtual =
     oficinasDaTurma.find((o) => o.id === selectedTurmaOficinaId) || oficinasDaTurma[0]
-  const chamadaPorOficina = scope === 'oficina'
-  // ID determinístico do contexto: data + turma + (vínculo da oficina | geral).
-  // A chamada de oficina é outro documento e não altera a chamada geral da turma.
+  // Frequência é registrada apenas por oficina (vínculo turma_oficina).
+  const chamadaPorOficina = true
+  // ID determinístico do contexto: data + turma + vínculo da oficina.
   const sessionId =
-    turmaId && dateStr && (!chamadaPorOficina || oficinaAtual)
-      ? sessaoChamadaId({ data: dateStr, turmaId, escopo: scope, turmaOficinaId: oficinaAtual?.id })
+    turmaId && dateStr && oficinaAtual
+      ? sessaoChamadaId({ data: dateStr, turmaId, escopo: 'oficina', turmaOficinaId: oficinaAtual.id })
       : ''
 
   // Sincroniza com a sessão do Firestore quando os filtros mudam. Uma falha de
@@ -148,8 +168,19 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setSessionAttempt((n) => n + 1)
   }
 
-  // Threshold X for alerts
-  const [absenceThreshold, setAbsenceThreshold] = useState<number>(3)
+  // Popula o campo faltas_consecutivas dos alunos deste contexto a partir das
+  // sessões (fonte da verdade), para que o perfil do aluno e a lista reflitam o
+  // valor correto mesmo quando as sessões foram criadas fora desta tela.
+  useEffect(() => {
+    if (!turmaId || !oficinaAtual || studentsSub.status !== 'ready') return
+    recalcularFaltasConsecutivasContexto({
+      turmaId,
+      escopo: 'oficina',
+      turmaOficinaId: oficinaAtual.id,
+    }).catch((err) => {
+      console.warn('Não foi possível recalcular faltas consecutivas:', err)
+    })
+  }, [turmaId, oficinaAtual, studentsSub.status])
 
   // Feedback states
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
@@ -206,19 +237,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // Search filter for attendance list
   const [studentSearch, setStudentSearch] = useState<string>('')
 
-  // Alunos elegíveis no contexto: turma (chamada geral) ou participantes do
-  // vínculo na data (chamada de oficina)
+  // Alunos elegíveis no contexto: participantes do vínculo na data (chamada de oficina)
   const elegiveis = useMemo(
     () =>
       alunosElegiveis({
         students: allStudents,
         turma: turmaAtual,
-        escopo: scope,
+        escopo: 'oficina',
         turmaOficinaId: oficinaAtual?.id,
         alunoOficinas: alunoOficinasSub.data,
         data: dateStr,
       }),
-    [allStudents, turmaAtual, scope, oficinaAtual?.id, alunoOficinasSub.data, dateStr]
+    [allStudents, turmaAtual, oficinaAtual?.id, alunoOficinasSub.data, dateStr]
   )
   // Elegíveis + quem já consta na sessão salva (reabrir mostra exatamente o salvo)
   const listaChamada = useMemo(
@@ -291,11 +321,6 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     return { total, presentes, ausentes, justificados, pctPresente }
   }, [listaChamada, attendanceRecords])
 
-  // Students with consecutive absences >= threshold
-  const recurrentAbsenceStudents = useMemo(() => {
-    return allStudents.filter((s) => s.faltasConsecutivas >= absenceThreshold)
-  }, [allStudents, absenceThreshold])
-
   // Date navigation handlers
   const changeDateByDays = (days: number) => {
     const current = new Date(dateStr + 'T12:00:00')
@@ -350,15 +375,15 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setSavingChamada(true)
     const recordsMap = montarPresencas(elegiveis, attendanceRecords, savedSession?.records ?? null)
     const professional = userProfile?.nome_completo || 'Equipe'
-    const turmaOficinaId = chamadaPorOficina ? oficinaAtual?.id : undefined
-    const oficinaName = chamadaPorOficina ? oficinaAtual?.nome : undefined
+    const turmaOficinaId = oficinaAtual?.id
+    const oficinaName = oficinaAtual?.nome
 
     try {
       await saveAttendanceToFirestore({
         id: sessionId,
         date: dateStr,
         turmaId,
-        scope,
+        scope: 'oficina',
         turmaOficinaId,
         oficinaName,
         registeredBy: professional,
@@ -372,7 +397,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
           id: sessionId,
           date: dateStr,
           turmaId,
-          scope,
+          scope: 'oficina',
           turmaOficinaId,
           oficinaName,
           registeredBy: professional,
@@ -553,24 +578,24 @@ export function Frequencia({ onViewStudentProfile }: Props) {
           <span className="eyebrow">Gestão de Presença & Ocorrências</span>
           <h2>Chamada Diária e Acompanhamento de Faltas</h2>
           <p>
-            Realize o registro de presença da turma ou oficina e gerencie contatos com responsáveis
+            Realize o registro de presença da oficina e gerencie contatos com responsáveis
             em casos de ausências recorrentes.
           </p>
         </div>
         <div className="threshold-setting">
-          <label htmlFor="absence-threshold-select">
-            <AlertTriangle className="alert-icon-warning" size={17} />
-            <span>Alerta de faltas recorrentes (X):</span>
-          </label>
-          <select
-            id="absence-threshold-select"
-            onChange={(e) => setAbsenceThreshold(Number(e.target.value))}
-            value={absenceThreshold}
-          >
-            <option value={2}>2+ faltas consecutivas</option>
-            <option value={3}>3+ faltas consecutivas (Recomendado)</option>
-            <option value={5}>5+ faltas consecutivas</option>
-          </select>
+          <AlertTriangle className="alert-icon-warning" size={17} />
+          <span>
+            Alerta de faltas recorrentes: {absenceThreshold}+ (
+            {configuracaoQuery.status === 'ready' && configuracaoQuery.data.fonte === 'configurado'
+              ? 'limite configurado pela Fundação'
+              : 'limite padrão'}
+            )
+          </span>
+          {configuracaoQuery.status === 'error' && (
+            <span style={{ fontSize: '0.78rem', color: '#6b7280', marginLeft: '0.4rem' }}>
+              Configuração indisponível — usando o padrão {LIMITE_FALTAS_PADRAO}
+            </span>
+          )}
         </div>
       </header>
 
@@ -602,38 +627,22 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               </label>
 
               <label>
-                <span>Escopo da Chamada</span>
+                <span>Oficina</span>
                 <select
-                  onChange={(e) => {
-                    const sc = e.target.value as 'turma' | 'oficina'
-                    setScope(sc)
-                  }}
-                  value={scope}
+                  onChange={(e) => setSelectedTurmaOficinaId(e.target.value)}
+                  value={oficinaAtual?.id || ''}
                 >
-                  <option value="turma">Diária por Turma</option>
-                  <option value="oficina">Por Oficina</option>
+                  {oficinasDaTurma.length === 0 && (
+                    <option value="">Nenhuma oficina nesta turma</option>
+                  )}
+                  {oficinasDaTurma.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.nome}
+                      {o.previstaHoje ? ' (prevista neste dia)' : ''}
+                    </option>
+                  ))}
                 </select>
               </label>
-
-              {scope === 'oficina' && (
-                <label>
-                  <span>Oficina</span>
-                  <select
-                    onChange={(e) => setSelectedTurmaOficinaId(e.target.value)}
-                    value={oficinaAtual?.id || ''}
-                  >
-                    {oficinasDaTurma.length === 0 && (
-                      <option value="">Nenhuma oficina nesta turma</option>
-                    )}
-                    {oficinasDaTurma.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.nome}
-                        {o.previstaHoje ? ' (prevista neste dia)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
             </div>
 
             {/* Date Selection */}
@@ -677,12 +686,12 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                 : sessionStatus === 'error'
                   ? 'Chamada salva indisponível'
                   : savedSession
-                    ? `${chamadaPorOficina ? 'Chamada da oficina' : 'Chamada geral'} salva por ${savedSession.registeredBy}` +
+                    ? `Chamada da oficina salva por ${savedSession.registeredBy}` +
                       (savedSession.registeredAt
                         ? ` em ${new Date(savedSession.registeredAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
                         : '')
                     : sessionId
-                      ? `Nova ${chamadaPorOficina ? 'chamada da oficina' : 'chamada geral'} — ainda não salva`
+                      ? `Nova chamada da oficina — ainda não salva`
                       : ''}
             </span>
 
@@ -988,13 +997,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
             </p>
 
             <div className="recurrent-students-list">
-              {studentsSub.status !== 'ready' ? (
-                <p className="student-empty">
-                  {studentsSub.status === 'loading'
-                    ? 'Carregando alunos…'
-                    : 'Alertas indisponíveis: os alunos não foram carregados.'}
-                </p>
-              ) : recurrentAbsenceStudents.length === 0 ? (
+              {recurrentAbsenceStudents.length === 0 ? (
                 <div className="empty-alert-box">
                   <CheckCircle2 size={24} style={{ color: 'var(--color-success, #10b981)' }} />
                   <p>Nenhum aluno atingiu o limite de faltas consecutivas no momento.</p>
@@ -1024,24 +1027,20 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                           <strong>{st.name}</strong>
                         )}
                         <span>
-                          {st.turma} · {st.faltasConsecutivas} faltas consecutivas
+                          {st.turma}
+                          · {st.faltasConsecutivas} faltas consecutivas
                         </span>
                       </div>
                     </div>
 
-                    {st.contacts.length > 0 && (
-                      <div className="last-contact-mini">
-                        <History size={12} />
-                        <span>
-                          Último contato em {st.contacts[0].contactDate}: {st.contacts[0].type}
-                        </span>
-                      </div>
-                    )}
-
                     <div className="recurrent-actions">
                       <button
                         className="button secondary sm-button full-width-btn"
-                        onClick={() => handleOpenContactModal(st)}
+                        onClick={() => {
+                          getStudentById(st.id).then((aluno) => {
+                            if (aluno) handleOpenContactModal(aluno)
+                          })
+                        }}
                         type="button"
                       >
                         <Phone size={14} /> Registrar Contato Família
@@ -1064,8 +1063,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                 oficina.
               </li>
               <li>
-                <strong>Faltas Consecutivas:</strong> Ao atingir o limite configurado (ex: 3
-                faltas), o sistema gera um alerta à equipe.
+                <strong>Faltas Consecutivas:</strong> Ao atingir o limite
+                configurado ({absenceThreshold} faltas), o sistema gera um
+                alerta à equipe.
               </li>
               <li>
                 <strong>Contato com Família:</strong> Registre todas as tentativas e retornos de

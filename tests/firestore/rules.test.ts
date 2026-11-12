@@ -105,6 +105,22 @@ describe('Firestore security rules', () => {
     await assertFails(setDoc(doc(firestore('novo-uid'), 'usuarios/novo-uid'), { papel: 'direcao', ativo: true }))
     await assertFails(deleteDoc(own))
     await assertSucceeds(setDoc(doc(firestore('direcao-1'), 'usuarios/novo-uid'), { papel: 'administrativo', ativo: true }))
+
+    it('permitir que o próprio usuário libere a senha provisória', async () => {
+      const own = doc(firestore('pedagogia-1'), 'usuarios/pedagogia-1')
+      await assertSucceeds(updateDoc(own, { trocar_senha: false, atualizado_em: serverTimestamp() }))
+    })
+
+    it('negaria que o próprio usuário troque papel ou status via changePassword', async () => {
+      const own = doc(firestore('pedagogia-1'), 'usuarios/pedagogia-1')
+      await assertFails(updateDoc(own, { papel: 'direcao', trocar_senha: false, atualizado_em: serverTimestamp() }))
+      await assertFails(updateDoc(own, { ativo: false, trocar_senha: false, atualizado_em: serverTimestamp() }))
+    })
+
+    it('negaria que um usuário altere o perfil de outro', async () => {
+      const outro = doc(firestore('pedagogia-1'), 'usuarios/admin-1')
+      await assertFails(updateDoc(outro, { trocar_senha: false, atualizado_em: serverTimestamp() }))
+    })
   })
 
   it('limita responsáveis a Direção/Administrativo e protege o documento pai', async () => {
@@ -410,6 +426,54 @@ describe('Firestore security rules', () => {
         await setDoc(doc(context.firestore(), ref), semVersao)
       })
       await assertSucceeds(setDoc(doc(firestore('admin-1'), ref), geral({ versao: 1 })))
+    })
+  })
+
+  describe('configuracoes_sistema', () => {
+    const configuracaoValida = {
+      limite_faltas_consecutivas: 5,
+      atualizado_por: 'direcao-1',
+      atualizado_em: serverTimestamp(),
+    }
+
+    it('somente a Direção lê e escreve a configuração', async () => {
+      await assertFails(getDoc(doc(firestore(), 'configuracoes_sistema/geral')))
+      await assertSucceeds(getDoc(doc(firestore('direcao-1'), 'configuracoes_sistema/geral')))
+      await assertFails(getDoc(doc(firestore('pedagogia-1'), 'configuracoes_sistema/geral')))
+      await assertFails(getDoc(doc(firestore('admin-1'), 'configuracoes_sistema/geral')))
+
+      await assertFails(setDoc(doc(firestore('pedagogia-1'), 'configuracoes_sistema/geral'), configuracaoValida))
+      await assertFails(setDoc(doc(firestore('admin-1'), 'configuracoes_sistema/geral'), configuracaoValida))
+      const db = firestore('direcao-1')
+      await assertSucceeds(setDoc(doc(db, 'configuracoes_sistema/geral'), configuracaoValida))
+    })
+
+    it('rejeita limite fora do domínio permitido e campos de auditoria ausentes', async () => {
+      const db = firestore('direcao-1')
+      await assertFails(setDoc(doc(db, 'configuracoes_sistema/geral'), {
+        ...configuracaoValida,
+        limite_faltas_consecutivas: -1,
+      }))
+      await assertFails(setDoc(doc(db, 'configuracoes_sistema/geral'), {
+        ...configuracaoValida,
+        limite_faltas_consecutivas: '5',
+      }))
+      await assertFails(setDoc(doc(db, 'configuracoes_sistema/geral'), {
+        ...configuracaoValida,
+        limite_faltas_consecutivas: 366,
+      }))
+      await assertFails(setDoc(doc(db, 'configuracoes_sistema/geral'), {
+        ...configuracaoValida,
+        atualizado_por: 'outro-uid',
+      }))
+      await assertFails(setDoc(doc(db, 'configuracoes_sistema/geral'), {
+        ...configuracaoValida,
+        atualizado_em: '2026-11-12T00:00:00Z',
+      }))
+      await assertSucceeds(setDoc(doc(db, 'configuracoes_sistema/geral'), {
+        ...configuracaoValida,
+        limite_faltas_consecutivas: 0,
+      }))
     })
   })
 
