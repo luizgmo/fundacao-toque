@@ -63,6 +63,16 @@ afterAll(async () => {
   await testEnv.cleanup()
 })
 
+// Metadados válidos de um anexo de 10 bytes (1 parte), como o app grava
+function metadadosAnexo(uid: string, extra: Record<string, unknown> = {}) {
+  return {
+    tipo_anexo: 'imagem', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
+    nome_arquivo_original: 'foto.jpg', tipo_conteudo: 'image/jpeg', legenda: null, enviado_por: uid,
+    enviado_em: serverTimestamp(),
+    ...extra,
+  }
+}
+
 function firestore(uid?: string, papel?: string) {
   return uid ? testEnv.authenticatedContext(uid, { papel }).firestore() : testEnv.unauthenticatedContext().firestore()
 }
@@ -133,23 +143,87 @@ describe('Firestore security rules', () => {
     await assertFails(setDoc(doc(firestore('admin-1'), 'relatorios_pedagogicos/negado'), { status: 'rascunho' }))
     const db = firestore('pedagogia-1')
     const attachment = doc(db, 'relatorios_pedagogicos/rascunho-1/anexos/a1')
-    await assertSucceeds(setDoc(attachment, {
-      enviado_por: 'pedagogia-1', armazenamento: 'firestore', status: 'enviando',
-      total_partes: 1, tamanho_bytes: 10,
-    }))
+    await assertSucceeds(setDoc(attachment, metadadosAnexo('pedagogia-1', { tipo_conteudo: 'application/pdf', tipo_anexo: 'documento' })))
     await assertSucceeds(setDoc(doc(db, 'relatorios_pedagogicos/rascunho-1/anexos/a1/chunks/000000'), {
       indice: 0, conteudo_base64: 'Y29udGV1ZG8=',
     }))
     await assertSucceeds(updateDoc(attachment, { status: 'disponivel' }))
-    await assertFails(setDoc(doc(db, 'relatorios_pedagogicos/inexistente/anexos/a1'), {
-      enviado_por: 'pedagogia-1', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
-    }))
-    await assertFails(setDoc(doc(firestore('admin-1'), 'relatorios_pedagogicos/rascunho-1/anexos/a2'), {
-      enviado_por: 'admin-1', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
-    }))
-    await assertFails(setDoc(doc(firestore('pedagogia-1'), 'relatorios_pedagogicos/concluido-1/anexos/a3'), {
-      enviado_por: 'pedagogia-1', armazenamento: 'firestore', status: 'enviando', total_partes: 1, tamanho_bytes: 10,
-    }))
+    await assertFails(setDoc(doc(db, 'relatorios_pedagogicos/inexistente/anexos/a1'), metadadosAnexo('pedagogia-1')))
+    await assertFails(setDoc(doc(firestore('admin-1'), 'relatorios_pedagogicos/rascunho-1/anexos/a2'), metadadosAnexo('admin-1')))
+    await assertFails(setDoc(doc(firestore('pedagogia-1'), 'relatorios_pedagogicos/concluido-1/anexos/a3'), metadadosAnexo('pedagogia-1')))
+    // No rascunho, quem enviou pode excluir o próprio anexo já disponível
+    await assertSucceeds(deleteDoc(doc(db, 'relatorios_pedagogicos/rascunho-1/anexos/a1/chunks/000000')))
+    await assertSucceeds(deleteDoc(attachment))
+  })
+
+  describe('anexos de registros de atividade', () => {
+    const registro = 'registros_atividade/atividade-1'
+    const anexoPath = `${registro}/anexos/f1`
+
+    it('valida tipo, tamanho, partes e nome no cliente e nas regras', async () => {
+      const db = firestore('pedagogia-1')
+      await assertSucceeds(setDoc(doc(db, anexoPath), metadadosAnexo('pedagogia-1')))
+      for (const invalido of [
+        { tipo_conteudo: 'application/pdf', tipo_anexo: 'documento' }, // PDF não é foto de atividade
+        { tipo_conteudo: 'image/gif' },
+        { tamanho_bytes: 5 * 1024 * 1024 + 1, total_partes: 9 },
+        { tamanho_bytes: 700000, total_partes: 1 }, // total_partes inconsistente
+        { tipo_anexo: 'documento' },
+        { status: 'disponivel' },
+        { nome_arquivo_original: 'x'.repeat(201) },
+        { extra: true },
+      ]) {
+        await assertFails(setDoc(doc(db, `${registro}/anexos/invalido`), metadadosAnexo('pedagogia-1', invalido)))
+      }
+      // parte com ID fora do padrão, índice divergente ou acima do total
+      await assertFails(setDoc(doc(db, `${anexoPath}/chunks/0`), { indice: 0, conteudo_base64: 'AA==' }))
+      await assertFails(setDoc(doc(db, `${anexoPath}/chunks/000001`), { indice: 0, conteudo_base64: 'AA==' }))
+      await assertFails(setDoc(doc(db, `${anexoPath}/chunks/000001`), { indice: 1, conteudo_base64: 'AA==' }))
+      // só quem iniciou o envio grava partes
+      await assertFails(setDoc(doc(firestore('admin-1'), `${anexoPath}/chunks/000000`), { indice: 0, conteudo_base64: 'AA==' }))
+      await assertSucceeds(setDoc(doc(db, `${anexoPath}/chunks/000000`), { indice: 0, conteudo_base64: 'AA==' }))
+    })
+
+    it('concluir o envio exige +1 em total_anexos no mesmo batch, uma única vez', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore()
+        await updateDoc(doc(adminDb, registro), { total_anexos: 2 })
+        await setDoc(doc(adminDb, anexoPath), { ...metadadosAnexo('pedagogia-1'), enviado_em: new Date() })
+      })
+      const db = firestore('pedagogia-1')
+      await assertFails(updateDoc(doc(db, anexoPath), { status: 'disponivel' }))
+      const errado = writeBatch(db)
+      errado.update(doc(db, anexoPath), { status: 'disponivel' })
+      errado.update(doc(db, registro), { total_anexos: 4 })
+      await assertFails(errado.commit())
+      const certo = writeBatch(db)
+      certo.update(doc(db, anexoPath), { status: 'disponivel' })
+      certo.update(doc(db, registro), { total_anexos: 3 })
+      await assertSucceeds(certo.commit())
+      // segunda conclusão (reenvio) não passa
+      const repetido = writeBatch(db)
+      repetido.update(doc(db, anexoPath), { status: 'disponivel' })
+      repetido.update(doc(db, registro), { total_anexos: 4 })
+      await assertFails(repetido.commit())
+    })
+
+    it('excluir anexo disponível exige -1 no contador; registro em exclusão não recebe anexos', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore()
+        await updateDoc(doc(adminDb, registro), { total_anexos: 1 })
+        await setDoc(doc(adminDb, anexoPath), { ...metadadosAnexo('pedagogia-1'), status: 'disponivel', enviado_em: new Date() })
+      })
+      const direcao = firestore('direcao-1')
+      await assertFails(deleteDoc(doc(firestore('pedagogia-1'), anexoPath)))
+      await assertFails(deleteDoc(doc(direcao, anexoPath)))
+      const batch = writeBatch(direcao)
+      batch.delete(doc(direcao, anexoPath))
+      batch.update(doc(direcao, registro), { total_anexos: 0 })
+      await assertSucceeds(batch.commit())
+
+      await updateDoc(doc(firestore('admin-1'), registro), { exclusao: { status: 'incompleta' } })
+      await assertFails(setDoc(doc(firestore('pedagogia-1'), `${registro}/anexos/f2`), metadadosAnexo('pedagogia-1')))
+    })
   })
 
   it('permite criar contatos sem permitir reescrita do snapshot histórico', async () => {

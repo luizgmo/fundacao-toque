@@ -15,31 +15,49 @@ import {
   UserRoundCheck,
   X,
 } from 'lucide-react'
-import type { RegistroAtividade, Anexo } from '../../types/atividades'
+import type { RegistroAtividade } from '../../types/atividades'
 import type { Oficina, TurmaOficina } from '../../types/oficinas'
 import { getCategoria, vinculoPrevistoEm, vinculosAtivosDaTurma } from '../../types/oficinas'
 import type { Turma } from '../../types/turmas'
 import { PERIODO_LABELS } from '../../types/turmas'
 import type { UserProfile } from '../../types/auth'
 import {
-  MAX_FOTO_BYTES,
   anexarFotosRegistro,
   createRegistroAtividade,
   deleteRegistroAtividade,
-  getAnexosComUrl,
+  novoIdRegistroAtividade,
+  recalcularTotalAnexos,
   subscribeToRegistrosAtividade,
 } from '../../services/activitiesService'
+import type { EstadoEnvio, ResultadoEnvioFotos } from '../../services/activitiesService'
+import {
+  LIMITES_ANEXO,
+  MAX_ARQUIVOS_POR_ENVIO,
+  descartarEnvio,
+  liberarUrls,
+  listarAnexosComConteudo,
+  novoIdAnexo,
+  validarArquivo,
+} from '../../services/anexosService'
+import type { AnexoComConteudo } from '../../services/anexosService'
+import { EstadoConteudoBadge, EstadoEnvioBadge } from '../../components/EstadoArquivo'
 import { subscribeToOficinas, subscribeToTurmaOficinas } from '../../services/oficinasService'
 import { subscribeToTurmas } from '../../services/turmasService'
 import { getUsuarioNome, subscribeToUsuarios } from '../../services/usuariosService'
 import { useAuth } from '../auth/AuthContext'
-import { failureMessage } from '../../lib/persistence'
+import { describePersistenceError, failureMessage } from '../../lib/persistence'
 import { useSubscription } from '../../lib/useSubscription'
 import { LoadError, LoadErrors } from '../../components/LoadError'
-import type { ResultadoPersistencia } from '../../lib/persistence'
 import './Atividades.css'
 
-type FotoSelecionada = { file: File; previewUrl: string }
+// Foto selecionada com ID de anexo reservado (reenvio usa o mesmo ID) e estado
+type FotoSelecionada = {
+  id: string
+  file: File
+  previewUrl: string
+  estado: EstadoEnvio
+  motivo?: string
+}
 
 function todayISO() {
   const now = new Date()
@@ -93,11 +111,15 @@ export function Atividades() {
   // Registro já gravado cujas fotos não foram todas enviadas. Enquanto existir,
   // o envio do formulário reenvia apenas as fotos pendentes para este registro.
   const [registroPendente, setRegistroPendente] = useState<{ id: string; label: string } | null>(null)
+  // ID reservado para o próximo registro: reutilizado se a criação precisar ser repetida
+  const [registroIdReservado, setRegistroIdReservado] = useState(() => novoIdRegistroAtividade())
 
   // Histórico
   const [historicoTurma, setHistoricoTurma] = useState('todas')
   const [registroDetalhe, setRegistroDetalhe] = useState<RegistroAtividade | null>(null)
-  const [anexosDetalhe, setAnexosDetalhe] = useState<(Anexo & { url: string | null })[]>([])
+  const [anexosDetalhe, setAnexosDetalhe] = useState<AnexoComConteudo[]>([])
+  const [corrigindoContador, setCorrigindoContador] = useState(false)
+  const [detalheAviso, setDetalheAviso] = useState<string | null>(null)
   const [loadingAnexos, setLoadingAnexos] = useState(false)
   const [anexosError, setAnexosError] = useState<unknown>(null)
   const [registroToDelete, setRegistroToDelete] = useState<RegistroAtividade | null>(null)
@@ -153,26 +175,47 @@ export function Atividades() {
 
   const handleSelectFotos = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
-    const invalidas = files.filter((f) => !f.type.startsWith('image/') || f.size > MAX_FOTO_BYTES)
-    const validas = files.filter((f) => f.type.startsWith('image/') && f.size <= MAX_FOTO_BYTES)
-
-    setFormError(
-      invalidas.length > 0
-        ? `${invalidas.length} arquivo(s) ignorado(s): envie apenas imagens JPG ou PNG de até 5 MB.`
-        : null
-    )
+    event.target.value = ''
+    const erros = files.map((f) => validarArquivo(f, 'atividade')).filter((e): e is string => Boolean(e))
+    const validas = files.filter((f) => !validarArquivo(f, 'atividade'))
+    const espaco = Math.max(0, MAX_ARQUIVOS_POR_ENVIO - fotos.filter((f) => f.estado !== 'enviado').length)
+    const aceitas = validas.slice(0, espaco)
+    if (validas.length > aceitas.length) {
+      erros.push(`Selecione no máximo ${MAX_ARQUIVOS_POR_ENVIO} fotos por envio; ${validas.length - aceitas.length} ficaram de fora.`)
+    }
+    setFormError(erros.length > 0 ? erros.join(' ') : null)
     setFotos((current) => [
       ...current,
-      ...validas.map((file) => ({ file, previewUrl: URL.createObjectURL(file) })),
+      ...aceitas.map((file) => ({
+        id: novoIdAnexo(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        estado: 'aguardando' as const,
+      })),
     ])
-    event.target.value = ''
   }
 
-  const removeFoto = (index: number) => {
-    setFotos((current) => {
-      URL.revokeObjectURL(current[index].previewUrl)
-      return current.filter((_, i) => i !== index)
-    })
+  const atualizarFoto = (id: string, estado: EstadoEnvio, motivo?: string) => {
+    setFotos((current) => current.map((f) => (f.id === id ? { ...f, estado, motivo } : f)))
+  }
+
+  // Remove a foto da fila. Se ela já começou a ser enviada para um registro
+  // salvo, descarta também o que ficou gravado pela metade.
+  const removeFoto = async (foto: FotoSelecionada) => {
+    setFotos((current) => current.filter((f) => f.id !== foto.id))
+    URL.revokeObjectURL(foto.previewUrl)
+    if (registroPendente && foto.estado === 'falhou') {
+      try {
+        await descartarEnvio(`registros_atividade/${registroPendente.id}`, foto.id)
+      } catch (err) {
+        setFeedback({
+          tone: 'warning',
+          message:
+            `${foto.file.name} saiu da fila, mas o envio parcial não pôde ser descartado (${describePersistenceError(err)}). ` +
+            'Ele aparece como “Envio não concluído” nos detalhes do registro e pode ser descartado lá.',
+        })
+      }
+    }
   }
 
   const resetForm = () => {
@@ -181,14 +224,12 @@ export function Atividades() {
     setObservacoes('')
     setIdsTurmaOficinas(oficinasPrevistas(turmaId, dataAtividade))
     setRegistroPendente(null)
+    setRegistroIdReservado(novoIdRegistroAtividade())
   }
 
-  // Mantém no formulário apenas as fotos que falharam e informa o que foi persistido.
-  const aplicarResultadoFotos = (
-    resultado: ResultadoPersistencia,
-    registro: { id: string; label: string },
-    enviadasAntes: FotoSelecionada[]
-  ) => {
+  // Todas as fotos confirmadas: limpa o formulário. Caso contrário mantém a
+  // lista com o estado de cada foto e libera o reenvio só das que falharam.
+  const aplicarResultadoFotos = (resultado: ResultadoEnvioFotos, registro: { id: string; label: string }) => {
     if (resultado.status === 'salvo') {
       resetForm()
       setFeedback({
@@ -201,39 +242,34 @@ export function Atividades() {
       setTimeout(() => setFeedback(null), 3500)
       return
     }
-
-    const indicesComFalha = new Set(
-      resultado.falhas.map((f) => f.indice).filter((i): i is number => i !== undefined)
-    )
-    enviadasAntes.forEach((foto, index) => {
-      if (!indicesComFalha.has(index)) URL.revokeObjectURL(foto.previewUrl)
-    })
-    const pendentes = enviadasAntes.filter((_, index) => indicesComFalha.has(index))
-    if (pendentes.length > 0) {
-      setFotos(pendentes)
-      setRegistroPendente(registro)
-    } else {
-      // Nenhum arquivo a reenviar (ex.: só o contador falhou): o registro está
-      // gravado, então o formulário é limpo para não duplicá-lo num novo envio.
-      setFotos([])
-      setObservacoes('')
-      setIdsTurmaOficinas(oficinasPrevistas(turmaId, dataAtividade))
-      setRegistroPendente(null)
-    }
-
-    const enviadas = resultado.enviados.length
-      ? ` Fotos gravadas: ${resultado.enviados.join(', ')}.`
-      : ' Nenhuma foto foi gravada.'
+    setRegistroPendente(registro)
     const faltando = resultado.falhas.map((f) => `${f.nome} (${f.motivo})`).join('; ')
     setFeedback({
       tone: 'warning',
       message:
-        `${registro.label}: o registro da atividade está salvo, mas o envio ficou incompleto.` +
-        `${enviadas} Não enviadas: ${faltando}.` +
-        (pendentes.length > 0
-          ? ' As fotos pendentes continuam no formulário: use “Reenviar fotos pendentes”.'
-          : ''),
+        `${registro.label}: o registro está salvo, mas ${resultado.falhas.length} foto(s) não foram enviadas: ${faltando}. ` +
+        'Use “Reenviar” em cada foto ou “Reenviar fotos com falha”; as já enviadas não serão duplicadas.',
     })
+  }
+
+  const reenviar = async (pendentes: FotoSelecionada[]) => {
+    if (!registroPendente || pendentes.length === 0) return
+    setSaving(true)
+    try {
+      const resultado = await anexarFotosRegistro(
+        registroPendente.id,
+        pendentes.map(({ id, file }) => ({ id, file })),
+        userProfile?.uid || 'sistema',
+        atualizarFoto
+      )
+      const aindaComFalha = fotos.some((f) => f.estado === 'falhou' && !pendentes.some((p) => p.id === f.id))
+      aplicarResultadoFotos(
+        aindaComFalha && resultado.status === 'salvo' ? { ...resultado, status: 'parcial' } : resultado,
+        registroPendente
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -256,18 +292,7 @@ export function Atividades() {
     }
 
     if (registroPendente) {
-      setSaving(true)
-      const enviadasAntes = fotos
-      try {
-        const resultado = await anexarFotosRegistro(
-          registroPendente.id,
-          enviadasAntes.map((f) => f.file),
-          userProfile?.uid || 'sistema'
-        )
-        aplicarResultadoFotos(resultado, registroPendente, enviadasAntes)
-      } finally {
-        setSaving(false)
-      }
+      await reenviar(fotos.filter((f) => f.estado !== 'enviado'))
       return
     }
 
@@ -284,10 +309,10 @@ export function Atividades() {
     }
 
     setSaving(true)
-    const enviadasAntes = fotos
     const label = `Atividade de ${formatDateLabel(dataAtividade)} (${turmaNome(turmaId)})`
     try {
       const resultado = await createRegistroAtividade(
+        registroIdReservado,
         {
           dataAtividade,
           turmaId,
@@ -295,10 +320,11 @@ export function Atividades() {
           usuarioResponsavelId: responsavel,
           observacoesGerais: observacoes,
         },
-        enviadasAntes.map((f) => f.file),
-        userProfile?.uid || 'sistema'
+        fotos.filter((f) => f.estado !== 'enviado').map(({ id, file }) => ({ id, file })),
+        userProfile?.uid || 'sistema',
+        atualizarFoto
       )
-      aplicarResultadoFotos(resultado, { id: resultado.id, label }, enviadasAntes)
+      aplicarResultadoFotos(resultado, { id: resultado.id, label })
     } catch (err) {
       // O registro principal não foi confirmado: nada foi salvo e o formulário fica intacto.
       console.error('Erro ao registrar atividade:', err)
@@ -308,14 +334,16 @@ export function Atividades() {
     }
   }
 
+  // Carrega sempre a lista real de anexos (o contador pode estar divergente)
   const openDetalhe = async (registro: RegistroAtividade) => {
+    liberarUrls(anexosDetalhe)
     setRegistroDetalhe(registro)
     setAnexosDetalhe([])
     setAnexosError(null)
-    if (registro.totalAnexos === 0) return
+    setDetalheAviso(null)
     setLoadingAnexos(true)
     try {
-      setAnexosDetalhe(await getAnexosComUrl(`registros_atividade/${registro.id}`))
+      setAnexosDetalhe(await listarAnexosComConteudo(`registros_atividade/${registro.id}`))
     } catch (err) {
       console.warn('Erro ao carregar fotos do registro:', err)
       setAnexosError(err)
@@ -324,17 +352,62 @@ export function Atividades() {
     }
   }
 
+  const closeDetalhe = () => {
+    liberarUrls(anexosDetalhe)
+    setAnexosDetalhe([])
+    setRegistroDetalhe(null)
+  }
+
+  const corrigirContador = async () => {
+    if (!registroDetalhe) return
+    setCorrigindoContador(true)
+    try {
+      const { antes, depois } = await recalcularTotalAnexos(registroDetalhe.id, userProfile?.uid || 'sistema')
+      setRegistroDetalhe({ ...registroDetalhe, totalAnexos: depois })
+      setDetalheAviso(`Contador corrigido: de ${antes} para ${depois} foto(s).`)
+    } catch (err) {
+      setDetalheAviso(failureMessage(err, 'corrigir o total de fotos do registro'))
+    } finally {
+      setCorrigindoContador(false)
+    }
+  }
+
+  const descartarDoDetalhe = async (anexo: AnexoComConteudo) => {
+    if (!registroDetalhe) return
+    try {
+      await descartarEnvio(anexo.parentPath, anexo.id)
+      await openDetalhe(registroDetalhe)
+    } catch (err) {
+      setDetalheAviso(failureMessage(err, `descartar o envio de ${anexo.nomeArquivoOriginal}`))
+    }
+  }
+
   const handleConfirmDelete = async () => {
     if (!registroToDelete) return
     setDeleting(true)
     try {
-      await deleteRegistroAtividade(registroToDelete.id)
-      setFeedback({ tone: 'success', message: 'Registro de atividade excluído.' })
-      setTimeout(() => setFeedback(null), 3500)
+      const resultado = await deleteRegistroAtividade(registroToDelete.id, userProfile?.uid || 'sistema')
+      if (resultado.status === 'excluido') {
+        setFeedback({
+          tone: 'success',
+          message: `Registro de atividade excluído${resultado.removidos.length ? ` com ${resultado.removidos.length} foto(s)` : ''}.`,
+        })
+        setTimeout(() => setFeedback(null), 3500)
+      } else {
+        setFeedback({
+          tone: 'warning',
+          message:
+            'Exclusão incompleta.' +
+            (resultado.removidos.length ? ` Removidos: ${resultado.removidos.join(', ')}.` : ' Nenhum arquivo foi removido.') +
+            ` Não removidos (continuam ligados ao registro): ${resultado.falhas.map((f) => `${f.nome} (${f.motivo})`).join('; ')}. ` +
+            'O registro ficou marcado como “Exclusão incompleta”; use “Concluir exclusão” para tentar de novo.',
+        })
+      }
       setRegistroToDelete(null)
     } catch (err) {
       console.error('Erro ao excluir registro:', err)
-      alert(failureMessage(err, 'excluir o registro de atividade'))
+      setFeedback({ tone: 'warning', message: failureMessage(err, 'excluir o registro de atividade') })
+      setRegistroToDelete(null)
     } finally {
       setDeleting(false)
     }
@@ -481,25 +554,48 @@ export function Atividades() {
               Fotos da atividade <em>(opcional)</em>
             </span>
             <label className="upload-area atividades-upload">
-              <input accept="image/*" multiple onChange={handleSelectFotos} type="file" />
+              <input
+                accept={LIMITES_ANEXO.atividade.tipos.join(',')}
+                multiple
+                onChange={handleSelectFotos}
+                type="file"
+              />
               <span className="upload-icon">
                 <Upload size={23} />
               </span>
               <strong>Clique para anexar fotos</strong>
-              <span>JPG ou PNG · até 5 MB cada</span>
+              <span>
+                {LIMITES_ANEXO.atividade.descricao} · até {MAX_ARQUIVOS_POR_ENVIO} por envio
+              </span>
             </label>
             {fotos.length > 0 && (
               <div className="foto-preview-grid">
-                {fotos.map((foto, index) => (
-                  <figure className="foto-preview" key={foto.previewUrl}>
+                {fotos.map((foto) => (
+                  <figure className={`foto-preview ${foto.estado}`} key={foto.id}>
                     <img alt={foto.file.name} src={foto.previewUrl} />
-                    <button
-                      aria-label={'Remover ' + foto.file.name}
-                      onClick={() => removeFoto(index)}
-                      type="button"
-                    >
-                      <X size={14} />
-                    </button>
+                    {foto.estado !== 'enviado' && foto.estado !== 'enviando' && (
+                      <button
+                        aria-label={'Remover ' + foto.file.name}
+                        disabled={saving}
+                        onClick={() => void removeFoto(foto)}
+                        type="button"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    <figcaption>
+                      <EstadoEnvioBadge estado={foto.estado} motivo={foto.motivo} />
+                      {foto.estado === 'falhou' && registroPendente && (
+                        <button
+                          className="text-button foto-reenviar"
+                          disabled={saving}
+                          onClick={() => void reenviar([foto])}
+                          type="button"
+                        >
+                          Reenviar
+                        </button>
+                      )}
+                    </figcaption>
                   </figure>
                 ))}
               </div>
@@ -509,7 +605,7 @@ export function Atividades() {
           {registroPendente && (
             <p className="entity-modal-empty">
               {registroPendente.label} já está salva. Os campos acima ficam bloqueados; apenas as
-              fotos pendentes serão reenviadas para este registro.
+              fotos que falharam serão reenviadas para este registro, sem duplicar as já enviadas.
             </p>
           )}
           <button className="button primary atividades-submit" disabled={saving} type="submit">
@@ -517,7 +613,7 @@ export function Atividades() {
             {registroPendente
               ? saving
                 ? 'Reenviando fotos...'
-                : 'Reenviar fotos pendentes'
+                : 'Reenviar fotos com falha'
               : saving
                 ? 'Salvando registro...'
                 : 'Salvar registro'}
@@ -526,13 +622,25 @@ export function Atividades() {
             <button
               className="button secondary"
               disabled={saving}
-              onClick={() => {
+              onClick={async () => {
+                const pendentes = fotos.filter((f) => f.estado === 'falhou')
+                const id = registroPendente.id
                 resetForm()
                 setFeedback(null)
+                // Descarta o que ficou gravado pela metade para não deixar órfãos
+                const falhas = (
+                  await Promise.allSettled(pendentes.map((f) => descartarEnvio(`registros_atividade/${id}`, f.id)))
+                ).filter((r) => r.status === 'rejected').length
+                if (falhas > 0) {
+                  setFeedback({
+                    tone: 'warning',
+                    message: `${falhas} envio(s) parcial(is) não puderam ser descartados; aparecem como “Envio não concluído” nos detalhes do registro.`,
+                  })
+                }
               }}
               type="button"
             >
-              Concluir sem as fotos pendentes
+              Concluir sem as fotos com falha
             </button>
           )}
         </form>
@@ -613,6 +721,23 @@ export function Atividades() {
                         })
                       )}
                     </div>
+                    {registro.exclusao && (
+                      <div className="atividade-exclusao" role="alert">
+                        <AlertTriangle size={13} />
+                        <span>
+                          Exclusão incompleta
+                          {registro.exclusao.arquivosPendentes.length > 0
+                            ? `: ${registro.exclusao.arquivosPendentes.join(', ')} não foram removidos`
+                            : ''}
+                          .
+                        </span>
+                        {canDelete && (
+                          <button className="text-button" onClick={() => setRegistroToDelete(registro)} type="button">
+                            Concluir exclusão
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <p className="atividade-meta">
                       <UserRoundCheck size={13} />{' '}
                       {getUsuarioNome(usuarios, registro.usuarioResponsavelId)}
@@ -630,7 +755,7 @@ export function Atividades() {
 
       {/* Modal Detalhes do Registro */}
       {registroDetalhe && (
-        <div className="modal-backdrop" onClick={() => setRegistroDetalhe(null)}>
+        <div className="modal-backdrop" onClick={closeDetalhe}>
           <div className="modal-container atividade-modal" onClick={(e) => e.stopPropagation()}>
             <header className="modal-header">
               <div className="modal-title-group">
@@ -643,7 +768,7 @@ export function Atividades() {
               <button
                 aria-label="Fechar"
                 className="icon-button modal-close"
-                onClick={() => setRegistroDetalhe(null)}
+                onClick={closeDetalhe}
                 type="button"
               >
                 <X size={20} />
@@ -676,7 +801,14 @@ export function Atividades() {
               </div>
 
               <div>
-                <h4 className="atividade-modal-subtitle">Fotos ({registroDetalhe.totalAnexos})</h4>
+                <h4 className="atividade-modal-subtitle">
+                  Fotos (
+                  {loadingAnexos || anexosError
+                    ? registroDetalhe.totalAnexos
+                    : anexosDetalhe.filter((a) => a.status === 'disponivel').length}
+                  )
+                </h4>
+                {detalheAviso && <p className="entity-modal-empty">{detalheAviso}</p>}
                 {loadingAnexos ? (
                   <p className="entity-modal-empty">Carregando fotos...</p>
                 ) : anexosError ? (
@@ -685,23 +817,56 @@ export function Atividades() {
                     onRetry={() => void openDetalhe(registroDetalhe)}
                     what="as fotos deste registro"
                   />
-                ) : anexosDetalhe.length === 0 ? (
-                  <p className="entity-modal-empty">Nenhuma foto anexada.</p>
                 ) : (
-                  <div className="foto-gallery">
-                    {anexosDetalhe.map((anexo) =>
-                      anexo.url ? (
-                        <a href={anexo.url} key={anexo.id} rel="noreferrer" target="_blank">
-                          <img alt={anexo.nomeArquivoOriginal} src={anexo.url} />
-                        </a>
-                      ) : (
-                        <span className="foto-indisponivel" key={anexo.id}>
-                          <ImageOff size={20} />
-                          {anexo.nomeArquivoOriginal}
+                  <>
+                    {anexosDetalhe.filter((a) => a.status === 'disponivel').length !== registroDetalhe.totalAnexos && (
+                      <div className="atividade-exclusao" role="alert">
+                        <AlertTriangle size={13} />
+                        <span>
+                          O contador do registro indica {registroDetalhe.totalAnexos} foto(s), mas há{' '}
+                          {anexosDetalhe.filter((a) => a.status === 'disponivel').length} gravada(s) por completo.
                         </span>
-                      )
+                        <button
+                          className="text-button"
+                          disabled={corrigindoContador}
+                          onClick={() => void corrigirContador()}
+                          type="button"
+                        >
+                          {corrigindoContador ? 'Corrigindo…' : 'Corrigir contador'}
+                        </button>
+                      </div>
                     )}
-                  </div>
+                    {anexosDetalhe.length === 0 ? (
+                      <p className="entity-modal-empty">Nenhuma foto anexada.</p>
+                    ) : (
+                      <div className="foto-gallery">
+                        {anexosDetalhe.map((anexo) =>
+                          anexo.conteudo.estado === 'disponivel' ? (
+                            <a href={anexo.conteudo.url} key={anexo.id} rel="noreferrer" target="_blank">
+                              <img alt={anexo.nomeArquivoOriginal} src={anexo.conteudo.url} />
+                            </a>
+                          ) : (
+                            <span className="foto-indisponivel" key={anexo.id}>
+                              <ImageOff size={20} />
+                              {anexo.nomeArquivoOriginal}
+                              <EstadoConteudoBadge conteudo={anexo.conteudo} />
+                              {anexo.conteudo.estado === 'erro_leitura' && (
+                                <button className="text-button" onClick={() => void openDetalhe(registroDetalhe)} type="button">
+                                  Tentar novamente
+                                </button>
+                              )}
+                              {anexo.conteudo.estado === 'envio_incompleto' &&
+                                (canDelete || anexo.enviadoPor === userProfile?.uid) && (
+                                  <button className="text-button" onClick={() => void descartarDoDetalhe(anexo)} type="button">
+                                    Descartar envio
+                                  </button>
+                                )}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

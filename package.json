@@ -12,6 +12,7 @@
     "seed:reset": "node scripts/seed-firestore.mjs reset",
     "seed:cleanup": "node scripts/seed-firestore.mjs cleanup",
     "migrate:turmas": "node scripts/migrate-legacy-turmas.mjs",
+    "anexos:orfaos": "node scripts/anexos-orfaos.mjs",
     "test": "vitest run src",
     "test:rules": "firebase emulators:exec --only firestore --project fundacao-toque-rules-test \"vitest run tests/firestore/rules.test.ts\""
   },

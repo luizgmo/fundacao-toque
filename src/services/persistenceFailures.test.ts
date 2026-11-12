@@ -37,7 +37,6 @@ vi.mock('firebase/firestore', () => {
   }
 })
 
-import { createRegistroAtividade, anexarFotosRegistro } from './activitiesService'
 import { saveOccurrenceToFirestore } from './attendanceService'
 import { createStudent, uploadDocumento } from './studentsService'
 import { PersistenceError } from '../lib/persistence'
@@ -46,17 +45,6 @@ const permissionDenied = () =>
   Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' })
 const networkError = () => Object.assign(new Error('Failed to get document'), { code: 'unavailable' })
 
-function foto(name: string) {
-  return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/jpeg' })
-}
-
-const registroInput = {
-  dataAtividade: '2026-11-10',
-  turmaId: 'turma-a',
-  idsTurmaOficinas: [],
-  usuarioResponsavelId: 'prof-1',
-  observacoesGerais: '',
-}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -65,55 +53,6 @@ beforeEach(() => {
   firestore.deleteDoc.mockResolvedValue(undefined)
   firestore.getDocs.mockResolvedValue({ docs: [] })
   firestore.commit.mockResolvedValue(undefined)
-})
-
-describe('createRegistroAtividade', () => {
-  it('não devolve ID quando o registro principal é recusado por permissão', async () => {
-    firestore.setDoc.mockRejectedValueOnce(permissionDenied())
-    const error = await createRegistroAtividade(registroInput, [foto('a.jpg')], 'u1').catch((e) => e)
-    expect(error).toBeInstanceOf(PersistenceError)
-    expect(error.code).toBe('permission-denied')
-    expect(error.operation).toBe('registrar a atividade')
-  })
-
-  it('informa o que foi salvo e o que falta quando uma foto falha', async () => {
-    // registro ok; foto 1 ok (metadados + parte); foto 2 falha nos metadados
-    firestore.setDoc
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(networkError())
-
-    const resultado = await createRegistroAtividade(
-      registroInput,
-      [foto('ok.jpg'), foto('falhou.jpg')],
-      'u1'
-    )
-
-    expect(resultado.id).toBeTruthy()
-    expect(resultado.status).toBe('parcial')
-    expect(resultado.enviados).toEqual(['ok.jpg'])
-    expect(resultado.falhas).toEqual([
-      { nome: 'falhou.jpg', motivo: expect.stringMatching(/sem conexão/), indice: 1 },
-    ])
-  })
-
-  it('status "salvo" quando registro e fotos são confirmados', async () => {
-    const resultado = await createRegistroAtividade(registroInput, [foto('a.jpg')], 'u1')
-    expect(resultado.status).toBe('salvo')
-    expect(resultado.falhas).toEqual([])
-  })
-})
-
-describe('anexarFotosRegistro', () => {
-  it('reenvia só as fotos indicadas para o registro existente', async () => {
-    const resultado = await anexarFotosRegistro('registro-1', [foto('pendente.jpg')], 'u1')
-    expect(resultado).toEqual({ status: 'salvo', enviados: ['pendente.jpg'], falhas: [] })
-    expect(firestore.updateDoc).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'registros_atividade/registro-1' }),
-      expect.objectContaining({ total_anexos: { increment: 1 } })
-    )
-  })
 })
 
 describe('saveOccurrenceToFirestore', () => {

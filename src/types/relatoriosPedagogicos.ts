@@ -1,3 +1,4 @@
+import type { AnexoComConteudo } from '../services/anexosService'
 export type TipoRelatorioPedagogico = 'diario' | 'semestral' | 'anual'
 export type StatusRelatorioPedagogico = 'rascunho' | 'concluido'
 
@@ -27,11 +28,5 @@ export type RelatorioPedagogicoInput = Omit<
   'id' | 'criado_em' | 'atualizado_em' | 'modelo_formulario_id' | 'modelo_formulario_versao'
 > & { id?: string; modelo_formulario_id?: string | null; modelo_formulario_versao?: number | null }
 
-export type AnexoRelatorioPedagogico = {
-  id: string
-  tipo_anexo: 'imagem' | 'documento'
-  nome_arquivo_original: string
-  tipo_conteudo: string
-  url: string | null
-  caminho_firestore: string
-}
+// Anexo com metadados e o estado do conteúdo (ver services/anexosService)
+export type AnexoRelatorioPedagogico = AnexoComConteudo

@@ -192,44 +192,91 @@ service cloud.firestore {
       allow create, update, delete: if isDirection() || isPedagogue();
     }
 
+    // ==== Anexos guardados no Firestore (metadados + partes base64) ====
+    // Limites repetidos de src/services/anexosService.ts (LIMITES_ANEXO, CHUNK_BYTES).
+    function anexoCriacaoValida(d, tipos, maxBytes) {
+      return d.keys().hasOnly(['tipo_anexo', 'armazenamento', 'status', 'total_partes', 'tamanho_bytes',
+          'nome_arquivo_original', 'tipo_conteudo', 'legenda', 'enviado_por', 'enviado_em']) &&
+        d.armazenamento == 'firestore' &&
+        d.status == 'enviando' &&
+        d.enviado_por == request.auth.uid &&
+        d.enviado_em == request.time &&
+        d.tipo_conteudo is string && d.tipo_conteudo in tipos &&
+        d.tipo_anexo == (d.tipo_conteudo.matches('image/.*') ? 'imagem' : 'documento') &&
+        d.tamanho_bytes is int && d.tamanho_bytes > 0 && d.tamanho_bytes <= maxBytes &&
+        d.total_partes == math.ceil(d.tamanho_bytes / 614400.0) &&
+        d.nome_arquivo_original is string &&
+        d.nome_arquivo_original.size() > 0 && d.nome_arquivo_original.size() <= 200;
+    }
+
+    // Só a troca enviando -> disponivel, sem alterar mais nada.
+    function anexoConcluido() {
+      return resource.data.status == 'enviando' &&
+        request.resource.data.status == 'disponivel' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+    }
+
+    function parteValida(chunkId, totalPartes) {
+      return request.resource.data.keys().hasOnly(['indice', 'conteudo_base64']) &&
+        request.resource.data.indice is int &&
+        request.resource.data.indice >= 0 &&
+        request.resource.data.indice < totalPartes &&
+        chunkId.matches('^[0-9]{6}$') && int(chunkId) == request.resource.data.indice &&
+        request.resource.data.conteudo_base64 is string &&
+        request.resource.data.conteudo_base64.size() <= 819200;
+    }
+
     match /registros_atividade/{activityId} {
       allow read: if canUseSystem();
       allow create, update: if canUseSystem();
       allow delete: if isDirection();
 
-      // Subcoleção: anexos do registro de atividade (fotos e documentos)
+      // Subcoleção: anexos do registro de atividade (fotos)
       match /anexos/{attachmentId} {
+        function registroPath() {
+          return /databases/$(database)/documents/registros_atividade/$(activityId);
+        }
+        function totalAntes() {
+          return get(registroPath()).data.get('total_anexos', 0);
+        }
         allow read: if canUseSystem();
+        // Não aceita anexos novos em registro inexistente ou com exclusão em andamento.
         allow create: if canUseSystem() &&
-          exists(/databases/$(database)/documents/registros_atividade/$(activityId)) &&
-          request.resource.data.armazenamento == 'firestore' &&
-          request.resource.data.status == 'enviando' &&
-          request.resource.data.enviado_por == request.auth.uid &&
-          request.resource.data.total_partes > 0 && request.resource.data.total_partes <= 100 &&
-          request.resource.data.tamanho_bytes > 0 && request.resource.data.tamanho_bytes <= 10485760;
-        allow update: if isDirection() || (
-          canUseSystem() && resource.data.enviado_por == request.auth.uid &&
-          resource.data.status == 'enviando' && request.resource.data.status == 'disponivel' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        );
-        allow delete: if isDirection() || (
-          canUseSystem() && resource.data.enviado_por == request.auth.uid && resource.data.status == 'enviando'
-        );
+          exists(registroPath()) &&
+          get(registroPath()).data.get('exclusao', null) == null &&
+          anexoCriacaoValida(request.resource.data, ['image/jpeg', 'image/png', 'image/webp'], 5242880);
+        // Concluir o envio exige +1 em total_anexos no mesmo batch: o contador só
+        // conta arquivos completos e não sobe duas vezes para o mesmo anexo.
+        allow update: if canUseSystem() &&
+          (resource.data.enviado_por == request.auth.uid || isDirection()) &&
+          anexoConcluido() &&
+          getAfter(registroPath()).data.get('total_anexos', 0) == totalAntes() + 1;
+        // Remover um anexo disponível exige -1 em total_anexos no mesmo batch
+        // (exceto se o registro já não existir: anexo órfão).
+        allow delete: if (isDirection() || (
+            canUseSystem() && resource.data.enviado_por == request.auth.uid && resource.data.status == 'enviando'
+          )) && (
+            resource.data.status != 'disponivel' ||
+            !exists(registroPath()) || !existsAfter(registroPath()) ||
+            getAfter(registroPath()).data.get('total_anexos', 0) == totalAntes() - 1
+          );
 
         match /chunks/{chunkId} {
-          function attachmentIsUploading() {
-            return exists(/databases/$(database)/documents/registros_atividade/$(activityId)/anexos/$(attachmentId)) &&
-              get(/databases/$(database)/documents/registros_atividade/$(activityId)/anexos/$(attachmentId)).data.status == 'enviando';
+          function anexo() {
+            return get(/databases/$(database)/documents/registros_atividade/$(activityId)/anexos/$(attachmentId));
+          }
+          function anexoExiste() {
+            return exists(/databases/$(database)/documents/registros_atividade/$(activityId)/anexos/$(attachmentId));
           }
           allow read: if canUseSystem();
-          allow create: if canUseSystem() && attachmentIsUploading() &&
-            request.resource.data.indice >= 0 &&
-            request.resource.data.indice < get(/databases/$(database)/documents/registros_atividade/$(activityId)/anexos/$(attachmentId)).data.total_partes &&
-            request.resource.data.conteudo_base64 is string &&
-            request.resource.data.conteudo_base64.size() <= 850000;
+          allow create: if canUseSystem() && anexoExiste() &&
+            anexo().data.status == 'enviando' &&
+            anexo().data.enviado_por == request.auth.uid &&
+            parteValida(chunkId, anexo().data.total_partes);
           allow update: if false;
-          allow delete: if isDirection() || (canUseSystem() && attachmentIsUploading() &&
-            get(/databases/$(database)/documents/registros_atividade/$(activityId)/anexos/$(attachmentId)).data.enviado_por == request.auth.uid);
+          // Partes sem anexo (órfãs) só a Direção remove.
+          allow delete: if isDirection() || (canUseSystem() && anexoExiste() &&
+            anexo().data.status == 'enviando' && anexo().data.enviado_por == request.auth.uid);
         }
       }
     }
@@ -250,43 +297,36 @@ service cloud.firestore {
       allow create, update: if isDirection() || isPedagogue();
       allow delete: if isDirection();
 
-      // Subcoleção: anexos do relatório pedagógico
+      // Subcoleção: anexos do relatório pedagógico (somente em rascunho)
       match /anexos/{attachmentId} {
         allow read: if isDirection() || isPedagogue();
         allow create: if (isDirection() || isPedagogue()) &&
           isReportDraft(reportId) &&
-          request.resource.data.armazenamento == 'firestore' &&
-          request.resource.data.status == 'enviando' &&
-          request.resource.data.enviado_por == request.auth.uid &&
-          request.resource.data.total_partes > 0 && request.resource.data.total_partes <= 100 &&
-          request.resource.data.tamanho_bytes > 0 && request.resource.data.tamanho_bytes <= 10485760;
-        allow update: if isDirection() || (
-          (isPedagogue() || isDirection()) && isReportDraft(reportId) &&
-          resource.data.enviado_por == request.auth.uid && resource.data.status == 'enviando' &&
-          request.resource.data.status == 'disponivel' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        );
+          anexoCriacaoValida(request.resource.data,
+            ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'], 10485760);
+        allow update: if (isDirection() || isPedagogue()) && isReportDraft(reportId) &&
+          (resource.data.enviado_por == request.auth.uid || isDirection()) &&
+          anexoConcluido();
+        // No rascunho, quem enviou pode excluir o próprio anexo (enviado ou não).
         allow delete: if isDirection() || (
-          (isDirection() || isPedagogue()) && isReportDraft(reportId) &&
-          resource.data.enviado_por == request.auth.uid && resource.data.status == 'enviando'
+          isPedagogue() && isReportDraft(reportId) && resource.data.enviado_por == request.auth.uid
         );
 
         match /chunks/{chunkId} {
-          function attachmentIsUploading() {
-            return exists(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)/anexos/$(attachmentId)) &&
-              get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)/anexos/$(attachmentId)).data.status == 'enviando' &&
-              isReportDraft(reportId);
+          function anexo() {
+            return get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)/anexos/$(attachmentId));
+          }
+          function anexoExiste() {
+            return exists(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)/anexos/$(attachmentId));
           }
           allow read: if isDirection() || isPedagogue();
-          allow create: if (isDirection() || isPedagogue()) && attachmentIsUploading() &&
-            request.resource.data.indice >= 0 &&
-            request.resource.data.indice < get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)/anexos/$(attachmentId)).data.total_partes &&
-            request.resource.data.conteudo_base64 is string &&
-            request.resource.data.conteudo_base64.size() <= 850000;
+          allow create: if (isDirection() || isPedagogue()) && isReportDraft(reportId) && anexoExiste() &&
+            anexo().data.status == 'enviando' &&
+            anexo().data.enviado_por == request.auth.uid &&
+            parteValida(chunkId, anexo().data.total_partes);
           allow update: if false;
-          allow delete: if isDirection() || ((isDirection() || isPedagogue()) &&
-            isReportDraft(reportId) && attachmentIsUploading() &&
-            get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)/anexos/$(attachmentId)).data.enviado_por == request.auth.uid);
+          allow delete: if isDirection() || (isPedagogue() && isReportDraft(reportId) && anexoExiste() &&
+            anexo().data.enviado_por == request.auth.uid);
         }
       }
     }
