@@ -24,6 +24,7 @@ interface AuthContextType {
   loading: boolean
   isConfigured: boolean
   isGuest: boolean
+  authError: string | null
   login: (email: string, pass: string) => Promise<void>
   loginAsGuest: (papel?: UserRole) => void
   logout: () => Promise<void>
@@ -78,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   })
   const [loading, setLoading] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
     // Sessão de convidado sempre implica modo demonstração explícito.
@@ -113,10 +115,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ativo: true,
               trocar_senha: data.trocar_senha === true,
             })
+            try {
+              await updateDoc(doc(db, 'usuarios', user.uid), {
+                ultimo_login_em: serverTimestamp(),
+                atualizado_em: serverTimestamp(),
+              })
+            } catch {
+              // Não bloqueia o login por causa do carimbo de último login.
+            }
           } else {
             throw new Error('Conta sem perfil no Firestore; solicite provisionamento à Direção.')
           }
         } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Erro desconhecido ao carregar perfil.'
+          setAuthError(msg)
           console.warn('Erro ao carregar perfil do Firestore:', err)
           setUserProfile(null)
           setCurrentUser(null)
@@ -137,10 +149,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, pass: string) => {
+    setAuthError(null)
     await signInWithEmailAndPassword(auth, email, pass)
   }
 
   const loginAsGuest = (papel: UserRole = 'direcao') => {
+    setAuthError(null)
     const mockUser = {
       uid: GUEST_UID,
       email: `${papel}@modo-demonstracao.local`,
@@ -167,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
+    setAuthError(null)
     try {
       localStorage.removeItem('ft_guest_session')
     } catch {
@@ -243,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isConfigured: isFirebaseConfigured,
         isGuest: currentUser?.uid === GUEST_UID,
+        authError,
         login,
         loginAsGuest,
         logout,

@@ -57,21 +57,36 @@ service cloud.firestore {
         get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)).data.status == 'rascunho';
     }
 
+    function primeiroDirecaoNaoExistia() {
+      return !exists(/databases/$(database)/documents/sistema/bootstrap);
+    }
+
     // Perfis são provisionados por Direção; usuário não pode criar, alterar ou remover o próprio papel.
     match /usuarios/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isDirection());
       allow list: if isDirection();
-      allow create: if isDirection();
+      allow create: if isDirection() ||
+        (primeiroDirecaoNaoExistia() &&
+          request.resource.data.papel == 'direcao' &&
+          request.auth.uid == userId);
       // O próprio usuário ativo só pode liberar a senha provisória (trocar_senha)
-      // e atualizar o carimbo de atualização; não pode trocar papel nem status.
+      // e atualizar os carimbos de atualização e último login; não pode trocar papel nem status.
       allow update: if isDirection() ||
         (request.auth.uid == userId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'trocar_senha',
             'atualizado_em',
+            'ultimo_login_em',
           ]) &&
           request.resource.data.atualizado_em == request.time);
       allow delete: if false;
+    }
+
+    // Lock de bootstrap: impede criação de novas contas direção após a primeira estar criada.
+    match /sistema/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isDirection() && docId == 'bootstrap';
+      allow update, delete: if false;
     }
 
     // Diretório mínimo usado pelos seletores de profissional e autoria dos registros.

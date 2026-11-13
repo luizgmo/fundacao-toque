@@ -14,7 +14,7 @@ import logoUrl from '../../assets/logo.png'
 import './LoginScreen.css'
 
 export function LoginScreen() {
-  const { login, loginAsGuest, isConfigured } = useAuth()
+  const { login, loginAsGuest, isConfigured, authError } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -68,6 +68,13 @@ export function LoginScreen() {
           <div className="login-alert error">
             <AlertCircle size={18} />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {authError && (
+          <div className="login-alert error">
+            <AlertCircle size={18} />
+            <span>{authError}</span>
           </div>
         )}
 
