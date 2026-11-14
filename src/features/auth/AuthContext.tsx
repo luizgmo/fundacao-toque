@@ -219,6 +219,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         criado_em: serverTimestamp(),
         atualizado_em: serverTimestamp(),
       })
+      await setDoc(doc(db, 'usuarios_publicos', newUid), {
+        nome_completo: nome,
+        papel: papel,
+        ativo: true,
+        atualizado_em: serverTimestamp(),
+      })
     } catch (err) {
       // Sem o perfil no Firestore a conta fica órfã no Auth e bloqueia o e-mail;
       // desfaz a criação para permitir nova tentativa.
