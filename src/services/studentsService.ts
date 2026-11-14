@@ -12,7 +12,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore'
-import { db, isFirebaseConfigured } from '../lib/firebase'
+import { auth, db, isFirebaseConfigured } from '../lib/firebase'
 import type { Student, StudentStatus, DocumentoTipo, DocumentEntry, Guardian } from '../features/alunos/students-data'
 import type { UserRole } from '../types/auth'
 import { demoStudents } from '../features/alunos/students-data'
@@ -60,6 +60,11 @@ function timestampToISO(value: unknown): string | undefined {
     if (typeof seconds === 'number') return new Date(seconds * 1000).toISOString()
   }
   return undefined
+}
+
+function todayLocalISO(): string {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
 }
 
 // Converte documento Firestore para a interface Student da UI
@@ -203,20 +208,47 @@ export function subscribeToStudents(
     return () => {}
   }
 
-  const colRef = collection(db, ALUNOS_COLLECTION)
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      const list = snapshot.docs.map((docSnap) => docToStudent(docSnap.id, docSnap.data()))
-      onSource?.(list.length > 0 ? 'firestore' : 'empty')
-      onSuccess(list)
-    },
-    (err) => {
-      console.warn('Erro ao carregar alunos do Firestore:', err.message)
-      onSource?.('error')
-      onError(err)
-    }
-  )
+  let students: Student[] | undefined
+  let enrollments: Array<{ alunoId: string; turmaId: string }> | undefined
+  let turmaNames = new Map<string, string>()
+  const emit = () => {
+    if (!students || !enrollments) return
+    const activeByStudent = new Map(enrollments.map((item) => [item.alunoId, item.turmaId]))
+    const list = students.map((student) => {
+      const turmaId = activeByStudent.get(student.id)
+      return turmaId
+        ? { ...student, turmaId, turma: turmaNames.get(turmaId) || student.turma }
+        : student // Fallback legado temporário até concluir a migração.
+    })
+    onSource?.(list.length > 0 ? 'firestore' : 'empty')
+    onSuccess(list)
+  }
+  let reportedError = false
+  const fail = (err: Error) => {
+    if (reportedError) return
+    reportedError = true
+    console.warn('Erro ao carregar alunos ou matrículas do Firestore:', err.message)
+    onSource?.('error')
+    onError(err)
+  }
+  const unsubs = [
+    onSnapshot(collection(db, ALUNOS_COLLECTION), (snapshot) => {
+      students = snapshot.docs.map((item) => docToStudent(item.id, item.data()))
+      emit()
+    }, fail),
+    onSnapshot(collection(db, 'matriculas'), (snapshot) => {
+      enrollments = snapshot.docs
+        .filter((item) => item.data().status === 'ativo')
+        .map((item) => ({ alunoId: String(item.data().aluno_id || ''), turmaId: String(item.data().turma_id || '') }))
+        .filter((item) => item.alunoId && item.turmaId)
+      emit()
+    }, fail),
+    onSnapshot(collection(db, 'turmas'), (snapshot) => {
+      turmaNames = new Map(snapshot.docs.map((item) => [item.id, String(item.data().nome || '')]))
+      emit()
+    }, fail),
+  ]
+  return () => unsubs.forEach((unsubscribe) => unsubscribe())
 }
 
 // Busca aluno por ID (sem fallback fictício). Devolve null somente quando o
@@ -228,7 +260,22 @@ export async function getStudentById(id: string): Promise<Student | null> {
     return getDemoStudents().find((s) => s.id === id) || null
   }
   const snap = await getDoc(doc(db, ALUNOS_COLLECTION, id))
-  return snap.exists() ? docToStudent(snap.id, snap.data()) : null
+  if (!snap.exists()) return null
+  const student = docToStudent(snap.id, snap.data())
+  const activeEnrollments = await getDocs(query(
+    collection(db, 'matriculas'),
+    where('aluno_id', '==', id),
+    where('status', '==', 'ativo')
+  ))
+  const enrollment = activeEnrollments.docs[0]?.data()
+  if (!enrollment?.turma_id) return student // Fallback legado durante a migração.
+  const turmaId = String(enrollment.turma_id)
+  const turmaSnap = await getDoc(doc(db, 'turmas', turmaId))
+  return {
+    ...student,
+    turmaId,
+    turma: String(turmaSnap.data()?.nome || student.turma),
+  }
 }
 
 export async function getStudentGuardians(studentId: string): Promise<Guardian[]> {
@@ -392,6 +439,21 @@ export async function createStudent(input: StudentInput): Promise<string> {
 
   const batch = writeBatch(db)
   batch.set(doc(db, ALUNOS_COLLECTION, id), studentData)
+  if (input.turmaId) {
+    const matriculaRef = doc(collection(db, 'matriculas'))
+    const actorId = auth.currentUser?.uid || 'sistema'
+    batch.set(matriculaRef, {
+      aluno_id: id,
+      turma_id: input.turmaId,
+      data_inicio: todayLocalISO(),
+      data_fim: null,
+      status: 'ativo',
+      criado_por: actorId,
+      criado_em: serverTimestamp(),
+      atualizado_por: actorId,
+      atualizado_em: serverTimestamp(),
+    })
+  }
   guardianEntries.forEach(({ guardian, ref }) => batch.set(ref, {
     nome_completo: guardian.nome.trim(),
     parentesco: guardian.parentesco,
@@ -470,8 +532,9 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
   if (input.nascimento !== undefined) updateData.data_nascimento = input.nascimento
   if (input.sexo !== undefined) updateData.sexo = input.sexo
   if (input.observacoes !== undefined) updateData.observacoes = input.observacoes
+  // Espelho temporário enquanto telas consumidoras migram para matriculas.
   if (input.turmas && input.turmas.length > 0) updateData.turma = input.turmas[0]
-  if (input.turmaId !== undefined) updateData.turma_id = input.turmaId
+  if (input.turmaId !== undefined) updateData.turma_id = input.turmaId || null
   if (input.turmaTurno !== undefined) updateData.turma_turno = input.turmaTurno
   if (input.oficinas !== undefined) updateData.oficinas = input.oficinas
   if (guardianPrincipal) {
@@ -509,6 +572,26 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
 
   const batch = writeBatch(db)
   const studentRef = doc(db, ALUNOS_COLLECTION, id)
+  if (input.turmaId !== undefined) {
+    const atuais = await getDocs(query(collection(db, 'matriculas'), where('aluno_id', '==', id), where('status', '==', 'ativo')))
+    const novaTurmaId = input.turmaId
+    const mesmaAtiva = atuais.docs.some((item) => item.data().turma_id === novaTurmaId)
+    if (!mesmaAtiva) {
+      const hoje = todayLocalISO()
+      const actorId = auth.currentUser?.uid
+      if (!actorId) throw new Error('Sua sessão expirou. Entre novamente para transferir o aluno.')
+      atuais.docs.forEach((item) => batch.update(item.ref, {
+        status: 'concluido', data_fim: hoje, atualizado_por: actorId, atualizado_em: serverTimestamp(),
+      }))
+      if (novaTurmaId) {
+        const nova = doc(collection(db, 'matriculas'))
+        batch.set(nova, {
+          aluno_id: id, turma_id: novaTurmaId, data_inicio: hoje, data_fim: null, status: 'ativo',
+          criado_por: actorId, criado_em: serverTimestamp(), atualizado_por: actorId, atualizado_em: serverTimestamp(),
+        })
+      }
+    }
+  }
   if (input.responsaveis) {
     const existing = await getDocs(collection(db, ALUNOS_COLLECTION, id, 'responsaveis'))
     const guardians = input.responsaveis

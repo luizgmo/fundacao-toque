@@ -22,16 +22,18 @@ import os from 'node:os'
 import path from 'node:path'
 
 function loadEnv() {
-  try {
-    const raw = readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
-    for (const line of raw.split('\n')) {
-      const match = line.match(/^\s*([\w.]+)\s*=\s*(.*)?\s*$/)
-      if (match && process.env[match[1]] === undefined) {
-        process.env[match[1]] = match[2] ?? ''
+  for (const file of ['.env.local', '.env']) {
+    try {
+      const raw = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+      for (const line of raw.split('\n')) {
+        const match = line.match(/^\s*([\w.]+)\s*=\s*(.*)?\s*$/)
+        if (match && process.env[match[1]] === undefined) {
+          process.env[match[1]] = (match[2] ?? '').replace(/^(['"])(.*)\1$/, '$2')
+        }
       }
+    } catch {
+      // Arquivo opcional; valores podem vir do ambiente.
     }
-  } catch {
-    console.warn('.env.local não encontrado — usando variáveis de ambiente existentes.')
   }
 }
 
@@ -43,6 +45,9 @@ if (!PROJECT_ID) {
 }
 
 const APPLY = process.env.APPLY === '1'
+if (APPLY && !process.env.MIGRATION_BACKUP_DIR) {
+  throw new Error('Defina MIGRATION_BACKUP_DIR para um destino seguro antes de aplicar a migração.')
+}
 const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 const FB_CLIENT_ID = '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com'
 const FB_CLIENT_SECRET = 'j9iVZfS8kkCEFUPaAeJV0sAi'
@@ -382,8 +387,9 @@ async function main() {
   const sessaoUpdates = []
   const atividadeUpdates = []
   const matriculaUpdates = []
+  const matriculasEncerrar = []
   const matriculasPlanejadas = []
-  const activeEnrollmentByStudent = new Map()
+  const activeEnrollmentDocsByStudent = new Map()
   const activePairs = new Set()
 
   for (const doc of matriculaDocs) {
@@ -397,7 +403,9 @@ async function main() {
     }
     if (turma && status === 'ativo' && alunoId) {
       activePairs.add(`${alunoId}::${turma.id}`)
-      activeEnrollmentByStudent.set(alunoId, turma.id)
+      const current = activeEnrollmentDocsByStudent.get(alunoId) || []
+      current.push({ id, turmaId: turma.id })
+      activeEnrollmentDocsByStudent.set(alunoId, current)
     }
   }
 
@@ -443,16 +451,14 @@ async function main() {
 
   for (const [alunoId, { turma, status }] of alunoTurma) {
     if (status !== 'ativo') continue
-    if (activePairs.has(`${alunoId}::${turma.id}`)) continue
-
-    const existingActive = activeEnrollmentByStudent.get(alunoId)
-    if (existingActive && existingActive !== turma.id) {
-      console.warn(
-        `[aviso] ${alunoId} já tem matrícula ativa em ${existingActive}; matrícula em ${turma.id} não criada.`
-      )
-      continue
+    const activeForStudent = activeEnrollmentDocsByStudent.get(alunoId) || []
+    for (const enrollment of activeForStudent) {
+      if (enrollment.turmaId !== turma.id) {
+        matriculasEncerrar.push({ id: enrollment.id })
+        activePairs.delete(`${alunoId}::${enrollment.turmaId}`)
+      }
     }
-
+    if (activePairs.has(`${alunoId}::${turma.id}`)) continue
     const id = `matricula-${alunoId}-${turma.id}`.slice(0, 1400)
     matriculasPlanejadas.push({
       id,
@@ -483,9 +489,15 @@ async function main() {
   console.log(`Alunos a atualizar: ${alunoUpdates.length}`)
   console.log(`Chamadas a normalizar: ${sessaoUpdates.length}`)
   console.log(`Atividades a normalizar: ${atividadeUpdates.length}`)
+  console.log(`Matriculas ativas a encerrar: ${matriculasEncerrar.length}`)
   console.log(`Matrículas a normalizar: ${matriculaUpdates.length}`)
   console.log(`Matrículas a criar: ${matriculasPlanejadas.length}`)
-  if (skippedReferences.size > 0) {
+  for (const item of matriculasEncerrar) {
+    console.log(`  - Encerrar matricula ${item.id}`)
+  }
+  for (const item of matriculasPlanejadas) {
+    console.log(`  + ${item.alunoId} -> ${item.turmaId} | inicio ${item.dataInicio} | estimada (${item.origemDataInicio})`)
+  }  if (skippedReferences.size > 0) {
     console.log('Referências ignoradas (não parecem turma):')
     for (const value of skippedReferences) console.log(`  - ${value || '(vazio)'}`)
   }
@@ -496,7 +508,7 @@ async function main() {
     return
   }
 
-  const backupDir = process.env.MIGRATION_BACKUP_DIR || '/tmp/opencode'
+  const backupDir = process.env.MIGRATION_BACKUP_DIR
   mkdirSync(backupDir, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const backupPath = path.join(backupDir, `migracao-turmas-${stamp}.json`)
@@ -557,6 +569,18 @@ async function main() {
     await db.update('matriculas', item.id, { turma_id: item.turmaId })
   }
   if (matriculaUpdates.length > 0) console.log(`Matrículas normalizadas: ${matriculaUpdates.length}`)
+
+  for (const item of matriculasEncerrar) {
+    await db.update('matriculas', item.id, {
+      status: 'concluido',
+      data_fim: todayISO(),
+      atualizado_por: ator,
+      atualizado_em: now,
+    })
+  }
+  if (matriculasEncerrar.length > 0) {
+    console.log(`Matriculas encerradas: ${matriculasEncerrar.length}`)
+  }
 
   for (const item of matriculasPlanejadas) {
     await db.create('matriculas', item.id, {

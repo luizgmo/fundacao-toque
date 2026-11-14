@@ -508,3 +508,15 @@ Substituir `ID_HOMOLOGACAO` somente após identificar o projeto Firebase aprovad
 - Matriz de acesso aos dados médicos e documentos sensíveis.
 - Quantidade de faltas consecutivas que deverá gerar alerta.
 - Participação de terapeutas e outros profissionais no controle de acesso.
+
+## Plano para concluir a migracao de matriculas
+
+A colecao `matriculas` e a fonte da verdade para a turma vigente. O cadastro cria uma matricula `ativo`; uma transferencia conclui a matricula ativa anterior, preenche `data_fim` e cria uma nova, preservando autoria e timestamps. Os campos `alunos.turma_id`, `alunos.turma` e `alunos.turma_turno` sao espelhos temporarios e nao devem controlar elegibilidade.
+
+### Fallback legado e retirada
+
+Durante a migracao, consumidores podem recorrer aos campos antigos somente quando nao houver matricula para o aluno. Uma matricula existente prevalece sobre os campos legados. Remova o fallback depois que homologacao confirmar que todos os alunos ativos com turma possuem matricula ativa e que frequencia, atividades, listagem de turmas e prestacao de contas consultam matriculas. Depois remova os espelhos do documento `alunos` e as leituras legadas.
+
+### Execucao segura
+
+`npm run migrate:turmas` executa somente dry-run. Confira os totais e referencias ignoradas antes de aplicar. Execute primeiro em homologacao, valide transferencias e relatorios e guarde o backup produzido pelo script. Aplique nos dados oficiais somente depois de confirmar backup e revisar a saida do dry-run. Reexecucoes nao devem duplicar matriculas ativas para o mesmo aluno e turma.
