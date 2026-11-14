@@ -34,6 +34,7 @@ import { ListarAlunos } from './features/alunos/ListarAlunos'
 import { DetalheAluno } from './features/alunos/DetalheAluno'
 import { Frequencia } from './features/frequencia/Frequencia'
 import { GerenciarUsuarios } from './features/usuarios/GerenciarUsuarios'
+import { ModelosFormulario } from './features/modelos/ModelosFormulario'
 import { Turmas } from './features/turmas/Turmas'
 import { Oficinas } from './features/oficinas/Oficinas'
 import { Atividades } from './features/atividades/Atividades'
@@ -81,6 +82,7 @@ type Screen =
   | 'atividades'
   | 'evolucao'
   | 'configuracao'
+  | 'modelos'
 
 const validScreens: Screen[] = [
   'reports',
@@ -94,6 +96,7 @@ const validScreens: Screen[] = [
   'atividades',
   'evolucao',
   'configuracao',
+  'modelos',
 ]
 
 type NavItem = {
@@ -118,6 +121,7 @@ const pedagogicalNavigation: NavItem[] = [
 
 const adminNavigation: NavItem[] = [
   { label: 'Equipe / Autores', icon: ShieldCheck, screen: 'usuarios' },
+  { label: 'Modelos de Formulário', icon: FileText, screen: 'modelos' },
   { label: 'Configurações', icon: Settings, screen: 'configuracao' },
 ]
 
@@ -257,6 +261,7 @@ function Topbar({
     atividades: 'Registro de Atividades',
     evolucao: 'Evolução',
     configuracao: 'Configurações do Sistema',
+    modelos: 'Modelos de Formulário',
   }
 
   const initials = userProfile
@@ -830,6 +835,7 @@ function App() {
             />
           )}
           {screen === 'configuracao' && <ConfiguracaoSistema />}
+          {screen === 'modelos' && <ModelosFormulario />}
           {screen === 'frequencia' && <Frequencia onViewStudentProfile={viewStudent} />}
           {screen === 'turmas' && <Turmas onViewStudent={viewStudent} />}
           {screen === 'oficinas' && <Oficinas />}

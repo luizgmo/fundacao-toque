@@ -1,0 +1,50 @@
+.campos-modelo .campos-modelo-vazio {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.campo-modelo-item {
+  margin-bottom: 0.75rem;
+}
+
+.campo-modelo-item.incompleto {
+  border-left: 3px solid var(--red-500);
+  padding-left: 0.5rem;
+}
+
+.campo-obrigatorio-aviso {
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 4px;
+  color: var(--red-600);
+}
+
+.selecao-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.selecao-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.booleano-opcoes {
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.booleano-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
