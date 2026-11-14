@@ -239,11 +239,15 @@ function Topbar({
   screen,
   userProfile,
   onOpenMenu,
+  onLogout,
 }: {
   screen: Screen
   userProfile?: UserProfile | null
   onOpenMenu: () => void
+  onLogout: () => void
 }) {
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+
   const titles: Record<Screen, string> = {
     home: 'Dashboard',
     reports: 'Relatórios',
@@ -291,12 +295,39 @@ function Topbar({
           <Bell size={19} />
           <span className="notification-dot" />
         </button>
-        <span className="profile-avatar" aria-hidden="true">{initials}</span>
-        <div className="profile-copy">
-          <strong>{displayName}</strong>
-          <span>{displayRole}</span>
+        <div
+          className="profile-container"
+          onClick={() => setProfileMenuOpen((open) => !open)}
+        >
+          <span className="profile-avatar" aria-hidden="true">{initials}</span>
+          <div className="profile-copy">
+            <strong>{displayName}</strong>
+            <span>{displayRole}</span>
+          </div>
+          <ChevronDown
+            className={`profile-chevron ${profileMenuOpen ? 'open' : ''}`}
+            size={18}
+          />
         </div>
-        <ChevronDown className="profile-chevron" size={18} />
+        {profileMenuOpen && (
+          <div className="profile-dropdown">
+            <div className="profile-dropdown-item" onClick={() => { setProfileMenuOpen(false) }}>
+              <span>{displayName}</span>
+              <span className="profile-dropdown-sub">{displayRole}</span>
+            </div>
+            <div className="profile-dropdown-divider" />
+            <button
+              className="profile-dropdown-item profile-dropdown-logout"
+              onClick={() => {
+                setProfileMenuOpen(false)
+                onLogout()
+              }}
+              type="button"
+            >
+              <LogOut size={16} /> Sair da conta
+            </button>
+          </div>
+        )}
       </div>
     </header>
   )
@@ -775,6 +806,7 @@ function App() {
           onOpenMenu={() => setSidebarOpen(true)}
           screen={screen}
           userProfile={userProfile}
+          onLogout={logout}
         />
         <main>
           {screen === 'home' && (
