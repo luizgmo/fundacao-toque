@@ -107,9 +107,9 @@ A arquitetura é **serverless**, sem servidor próprio: toda a infraestrutura de
 
 - Perfis de acesso: **Direção**, **Pedagogia** e **Administrativo**, definidos no campo `papel` do usuário;
 - Regras de leitura/escrita distintas por coleção (ex.: apenas a Direção apaga registros e gerencia usuários);
-- Ficha médica: leitura restrita a Direção e Pedagogia; escrita apenas pela Direção;
+- Ficha médica: leitura e escrita restritas a Direção e Pedagogia; anexo armazenado no Firebase Storage e metadados no Firestore;
 - Nenhum dado pessoal real é usado em desenvolvimento — apenas dados fictícios;
-- Fotos e anexos de atividade/relatório ficam no Firestore: metadados em `anexos/{id}` e conteúdo dividido na subcoleção `chunks`, respeitando o limite de 1 MiB por documento. Documentos do cadastro de alunos são Data URLs em documentos limitados a 500 KiB. Não há dependência de Firebase Storage.
+- A ficha médica usa o Firebase Storage apenas para o anexo (PDF/JPG/PNG/WEBP, até 10 MiB), mantendo no Firestore somente metadados e o caminho do arquivo. Fotos e anexos de atividade/relatório continuam no Firestore: metadados em `anexos/{id}` e conteúdo dividido na subcoleção `chunks`, respeitando o limite de 1 MiB por documento. Documentos do cadastro de alunos são Data URLs em documentos limitados a 500 KiB.
 
 ---
 
@@ -258,10 +258,13 @@ registrado_por
 **registros_evolucao/{registro_evolucao_id}**
 
 ```
-aluno_id, data_registro (YYYY-MM-DD), profissional_usuario_id
+aluno_id, data_registro (YYYY-MM-DD), profissional_usuario_id, profissional_nome
 area (cognitiva | motora | social | comunicacao | autonomia | outra)
 observacao
+criado_por, criado_em, atualizado_por, atualizado_em
 ```
+
+> O lançamento é **imutável**: correções são feitas por um novo registro. O profissional e a autoria são sempre o usuário autenticado.
 
 **modelos_formulario/{modelo_id}** — formulários versionados
 
@@ -356,12 +359,12 @@ Arquivo `firestore.rules` — nega tudo por padrão. **A matriz abaixo é a prop
 | usuarios | próprio perfil mínimo; Direção lista/consulta equipe | Direção; usuário não altera seu papel/ativo; exclusão negada |
 | usuarios_publicos | diretório mínimo (nome, papel e ativo) para papéis ativos | Direção provisiona/sincroniza; exclusão negada |
 | alunos | papéis ativos | Direção/Administrativo criam e excluem; três papéis atualizam |
-| ficha_medica | Direção + Pedagogia | Direção/Pedagogia editam; Administrativo pode criar no cadastro inicial |
+| ficha_medica | Direção + Pedagogia | Direção/Pedagogia criam/editam; anexo no Storage; Administrativo sem acesso |
 | responsáveis / documentos | papéis ativos | Direção/Administrativo |
 | turmas, oficinas, turma_oficinas, matriculas | papéis ativos | Direção, Pedagogia ou Administrativo |
 | aluno_oficinas | papéis ativos | Direção/Pedagogia |
 | registros_atividade e anexos | papéis ativos | papéis ativos criam/atualizam atividade; exclusão e alterações de anexo reservadas à Direção |
-| evolução | papéis ativos | Direção/Pedagogia; exclusão Direção |
+| registros_evolucao | papéis ativos | Direção/Pedagogia criam; registros imutáveis (sem update/delete) |
 | modelos_formulario | papéis ativos | Direção/Pedagogia |
 | relatorios_pedagogicos e anexos | Direção/Pedagogia | Direção/Pedagogia; exclusão do relatório reservada à Direção |
 | sessoes_chamada (frequência) | papéis ativos | Direção, Pedagogia ou Administrativo |
@@ -369,9 +372,9 @@ Arquivo `firestore.rules` — nega tudo por padrão. **A matriz abaixo é a prop
 | relatorios_gerados | Direção | Direção cria/exclui; atualização só de `status`/`gerado_em` na transição `processando -> concluido\|falhou` |
 | configuracoes_sistema | Direção | Direção |
 
-Essa matriz descreve a configuração local em implementação, e não cobre ainda escopo por turma, autorização de campos individuais ou segregação de dados médicos duplicados no documento `alunos`. O Firestore não mascara campos individuais de um documento autorizado para leitura. Remover dados sensíveis duplicados requer migração e validação próprias. O provisionamento da primeira conta de Direção deve ocorrer por canal confiável, fora da tela pública. Usuários já existentes precisam de um backfill confiável para `usuarios_publicos` antes de seus nomes aparecerem nos seletores; a tela atual de provisionamento grava essa projeção para novas contas.
+Essa matriz descreve a configuração local em implementação, e não cobre ainda escopo por turma, autorização de campos individuais ou remoção física de dados médicos legados no documento `alunos`. O Firestore não mascara campos individuais de um documento autorizado para leitura. A aplicação deixou de gravar e de exibir dados médicos no cadastro comum e oculta documentos embutidos com `tipo_documento == 'ficha_medica'`, mas remover as cópias antigas ainda requer migração e validação próprias. O provisionamento da primeira conta de Direção deve ocorrer por canal confiável, fora da tela pública. Usuários já existentes precisam de um backfill confiável para `usuarios_publicos` antes de seus nomes aparecerem nos seletores; a tela atual de provisionamento grava essa projeção para novas contas.
 
-Em 10/11/2026, o usuário aprovou que Direção e Pedagogia consultem CID, deficiência e ficha médica. Isso valida a leitura restrita da subcoleção `ficha_medica`; dados médicos duplicados no documento de `alunos` permanecem acessíveis a todos os papéis ativos até a migração e a remoção das cópias.
+Em 10/11/2026, o usuário aprovou que Direção e Pedagogia consultem CID, deficiência e ficha médica. A escrita da ficha também foi restrita a esses dois papéis, com anexo no Firebase Storage. Dados médicos legados duplicados no documento de `alunos` continuam legíveis no nível do Firestore por papéis ativos até a migração, embora a interface não os exiba mais.
 
 ## 3.7. População e teste do banco (seed)
 
@@ -388,7 +391,7 @@ O script valida o modelo ponta a ponta: alunos com ficha médica e responsáveis
 ## 3.8. Pendências de validação com a Fundação
 
 - Campos definitivos do relatório pedagógico e formato oficial do formulário de avaliação;
-- Formato da ficha médica (digitalizada, digitada ou ambos);
+- Validação formal dos campos da ficha médica (o sistema já aceita anexo digitalizado ou preenchimento digital);
 - Registro de frequência por turma/dia ou por oficina;
 - Níveis de suporte/dependência dos alunos;
 - Matriz de acesso aos dados médicos (participação de terapeutas);

@@ -229,7 +229,6 @@ export function ListarAlunos({
                 <th>Data de nasc.</th>
                 <th>Idade</th>
                 <th>Turma</th>
-                <th>Deficiência / CID</th>
                 <th>Status</th>
                 <th style={{ width: '110px', textAlign: 'center' }}>Faltas cons.</th>
                 <th>Ações</th>
@@ -254,9 +253,6 @@ export function ListarAlunos({
                       : '—'}
                   </td>
                   <td>{turmas.find((t) => t.id === student.turmaId)?.nome || student.turma}</td>
-                  <td>
-                    {student.deficiencia} / {student.cid}
-                  </td>
                   <td>
                     <span
                       className={
@@ -313,7 +309,7 @@ export function ListarAlunos({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td className="students-table-empty" colSpan={8}>
+                  <td className="students-table-empty" colSpan={7}>
                     {source === 'loading'
                       ? 'Carregando alunos do banco de dados…'
                       : source === 'error'

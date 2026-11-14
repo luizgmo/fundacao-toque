@@ -1,18 +1,20 @@
 import { useMemo, useState } from 'react'
 import { ROLE_LABELS } from '../../types/auth'
 import type { UserProfile, UserRole } from '../../types/auth'
-import {
-  BarChart3,
-  FileText,
-  Pencil,
-  UserRound,
-  X,
-} from 'lucide-react'
-import type { EvolutionEntry } from '../alunos/students-data'
+import { FileText, Pencil, UserRound, X } from 'lucide-react'
 import { useStudents } from '../alunos/useStudents'
 import { LoadError } from '../../components/LoadError'
 import { DataNotice } from '../../components/DataNotice'
 import { useAuth } from '../auth/AuthContext'
+import { useQuery } from '../../lib/useSubscription'
+import {
+  canCreateEvolution,
+  canReadEvolution,
+  EVOLUTION_AREAS,
+  listarEvolucao,
+} from '../../services/evolutionService'
+import type { EvolucaoRegistro } from '../../services/evolutionService'
+import { EvolucaoAluno } from './EvolucaoAluno'
 import './Evolucao.css'
 
 type Props = {
@@ -22,36 +24,9 @@ type Props = {
   onNovoRelatorio: (studentId?: string) => void
 }
 
-const EVOLUCAO_PAPEIS: UserRole[] = ['direcao', 'pedagogia']
-
-function parsePtBrDate(value: string): { y: number; m: number; d: number } | null {
-  const parts = value.split('/')
-  if (parts.length !== 3) return null
-  const [d, m, y] = parts.map((part) => Number(part))
-  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return null
-  const date = new Date(y, m - 1, d)
-  if (
-    date.getFullYear() !== y ||
-    date.getMonth() + 1 !== m ||
-    date.getDate() !== d
-  ) {
-    return null
-  }
-  return { y, m, d }
-}
-
-function dateKey(value: string): string | null {
-  const parsed = parsePtBrDate(value)
-  if (!parsed) return null
-  const { y, m, d } = parsed
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
-
 function isDateInRange(value: string, inicio?: string, fim?: string): boolean {
-  const key = dateKey(value)
-  if (!key) return false
-  if (inicio && key < inicio) return false
-  if (fim && key > fim) return false
+  if (inicio && value < inicio) return false
+  if (fim && value > fim) return false
   return true
 }
 
@@ -59,28 +34,25 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
   const { userProfile: authProfile } = useAuth()
   const profile = profileProp ?? authProfile ?? null
   const papel = profile?.papel
-  const podeVisualizar = papel ? EVOLUCAO_PAPEIS.includes(papel) : false
-  const podeCriar = podeVisualizar
+  const podeVisualizar = canReadEvolution(papel)
+  const podeCriar = canCreateEvolution(papel)
 
   const studentsSub = useStudents()
   const allStudents = studentsSub.data
   const source = studentsSub.source
+  const evolucaoSub = useQuery(() => listarEvolucao(), [], 'todos')
+  const [createdRecords, setCreatedRecords] = useState<EvolucaoRegistro[]>([])
+  const allRecords = useMemo(() => {
+    const map = new Map(evolucaoSub.data.map((registro) => [registro.id, registro]))
+    createdRecords.forEach((registro) => map.set(registro.id, registro))
+    return Array.from(map.values())
+  }, [evolucaoSub.data, createdRecords])
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
 
   const [filterStudent, setFilterStudent] = useState('')
   const [filterArea, setFilterArea] = useState('')
   const [periodoInicio, setPeriodoInicio] = useState('')
   const [periodoFim, setPeriodoFim] = useState('')
-
-  const areas = useMemo(() => {
-    const set = new Set<string>()
-    allStudents.forEach((student) => {
-      student.evolution.forEach((entry) => {
-        if (entry.area) set.add(entry.area)
-      })
-    })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [allStudents])
 
   const filteredStudents = useMemo(() => {
     const term = filterStudent.toLowerCase().trim()
@@ -95,18 +67,17 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
   }, [allStudents, filterStudent])
 
   const evolutionByStudent = useMemo(() => {
-    const map = new Map<string, EvolutionEntry[]>()
-    allStudents.forEach((student) => {
-      map.set(
-        student.id,
-        student.evolution.filter((entry) =>
-          isDateInRange(entry.date, periodoInicio || undefined, periodoFim || undefined) &&
-          (!filterArea || entry.area === filterArea)
-        )
-      )
+    const map = new Map<string, EvolucaoRegistro[]>()
+    allStudents.forEach((student) => map.set(student.id, []))
+    allRecords.forEach((registro) => {
+      if (!isDateInRange(registro.dataRegistro, periodoInicio || undefined, periodoFim || undefined)) {
+        return
+      }
+      if (filterArea && registro.area !== filterArea) return
+      map.get(registro.alunoId)?.push(registro)
     })
     return map
-  }, [allStudents, filterArea, periodoInicio, periodoFim])
+  }, [allStudents, allRecords, filterArea, periodoInicio, periodoFim])
 
   if (profile && !podeVisualizar) {
     return (
@@ -122,8 +93,8 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
             Seu perfil não tem acesso à Evolução pedagógica
           </h3>
           <p style={{ color: '#4b5563', marginBottom: '1rem' }}>
-            A evolução está disponível para os perfis <strong>Direção</strong> e{' '}
-            <strong>Pedagogia</strong>. Você está logado como{' '}
+            A evolução está disponível para os perfis <strong>Direção</strong>,{' '}
+            <strong>Pedagogia</strong> e <strong>Administrativo</strong>. Você está logado como{' '}
             <strong>{ROLE_LABELS[papel as UserRole] || papel}</strong>.
           </p>
           <button
@@ -138,7 +109,7 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
     )
   }
 
-  if (source === 'loading') {
+  if (source === 'loading' || evolucaoSub.status === 'loading') {
     return (
       <div className="page-container evolucao-page">
         <div className="report-page-heading">
@@ -147,7 +118,7 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
             <h2>Evolução dos alunos</h2>
           </div>
         </div>
-        <DataNotice kind="loading">Carregando alunos do banco de dados…</DataNotice>
+        <DataNotice kind="loading">Carregando evolução dos alunos…</DataNotice>
       </div>
     )
   }
@@ -162,6 +133,25 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
           </div>
         </div>
         <LoadError error={studentsSub.error} onRetry={studentsSub.retry} what="os alunos" />
+      </div>
+    )
+  }
+
+  if (evolucaoSub.status === 'error') {
+    return (
+      <div className="page-container evolucao-page">
+        <div className="report-page-heading">
+          <div>
+            <span className="eyebrow">Evolução Pedagógica</span>
+            <h2>Evolução dos alunos</h2>
+          </div>
+        </div>
+        <LoadError
+          error={evolucaoSub.error}
+          impact="As contagens e o histórico não são exibidos como vazios."
+          onRetry={evolucaoSub.retry}
+          what="os registros de evolução"
+        />
       </div>
     )
   }
@@ -227,9 +217,9 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
               value={filterArea}
             >
               <option value="">Todas as áreas</option>
-              {areas.map((area) => (
-                <option key={area} value={area}>
-                  {area}
+              {EVOLUTION_AREAS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -304,8 +294,6 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
     )
   }
 
-  const entries = evolutionByStudent.get(student.id) || []
-
   return (
     <div className="page-container evolucao-page">
       <div className="report-page-heading">
@@ -313,7 +301,7 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
           <span className="eyebrow">Evolução Pedagógica</span>
           <h2>{student.name}</h2>
           <p>
-            {student.turma} — {student.turmaTurno} · {student.deficiencia} ({student.cid})
+            {student.turma} — {student.turmaTurno}
           </p>
         </div>
         <div className="report-heading-actions">
@@ -332,7 +320,7 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
         </div>
       </div>
 
-      <div className="form-card evolucao-detail-card">
+      <div className="evolucao-detail-card">
         <div className="evolucao-filters">
           <div className="evolucao-filter">
             <span>Período inicial</span>
@@ -350,9 +338,9 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
               value={filterArea}
             >
               <option value="">Todas as áreas</option>
-              {areas.map((area) => (
-                <option key={area} value={area}>
-                  {area}
+              {EVOLUTION_AREAS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -370,29 +358,18 @@ export function Evolucao({ userProfile: profileProp, onNavigate, onViewStudent, 
           </button>
         </div>
 
-        <h3 className="evolucao-section-title">Histórico de evolução</h3>
-        {entries.length > 0 ? (
-          <div className="evolucao-timeline">
-            {entries.map((entry) => (
-              <div key={entry.date + entry.area} className="evolucao-timeline-item">
-                <span className="evolucao-timeline-dot">
-                  <BarChart3 size={14} />
-                </span>
-                <div className="evolucao-timeline-content">
-                  <div className="evolucao-timeline-header">
-                    <span className="evolucao-area">{entry.area}</span>
-                    <span className="evolucao-date">{entry.date}</span>
-                  </div>
-                  <p className="evolucao-note">{entry.note}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="student-empty">
-            Nenhuma observação de evolução registrada com os filtros informados.
-          </p>
-        )}
+        <EvolucaoAluno
+          alunoId={student.id}
+          filtros={{
+            area: filterArea || undefined,
+            inicio: periodoInicio || undefined,
+            fim: periodoFim || undefined,
+          }}
+          onRegistroCriado={(registro) =>
+            setCreatedRecords((current) => [...current, registro])
+          }
+          papel={papel}
+        />
       </div>
 
       <div className="evolucao-actions">

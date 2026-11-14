@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
-  BarChart3,
   Cake,
   ChevronLeft,
   ClipboardCheck,
   Download,
   FileText,
   ListChecks,
-  NotebookPen,
   Palette,
   Pencil,
   Phone,
@@ -38,6 +36,9 @@ import {
   subscribeToTurmaOficinas,
 } from '../../services/oficinasService'
 import { useAuth } from '../../features/auth/AuthContext'
+import { canReadMedicalRecord } from '../../services/medicalService'
+import { FichaMedica } from './FichaMedica'
+import { EvolucaoAluno } from '../evolucao/EvolucaoAluno'
 import './DetalheAluno.css'
 
 const tabs = [
@@ -47,6 +48,7 @@ const tabs = [
   { id: 'frequencia', label: 'Frequência' },
   { id: 'atividades', label: 'Atividades' },
   { id: 'contato', label: 'Contato por faltas' },
+  { id: 'ficha', label: 'Ficha médica' },
 ] as const
 
 type TabId = (typeof tabs)[number]['id']
@@ -99,6 +101,8 @@ export function DetalheAluno({
   const guardiansQuery = useQuery<Guardian[]>(() => getStudentGuardians(studentId), [], studentId)
   const guardians = guardiansQuery.data
   const papel = userProfile?.papel
+  const podeLerFichaMedica = canReadMedicalRecord(papel)
+  const visibleTabs = tabs.filter((tab) => tab.id !== 'ficha' || podeLerFichaMedica)
 
   const configuracaoQuery = useQuery<{ valor: number; fonte: 'configurado' | 'padrao' }>(
     () => obterLimiteFaltas(),
@@ -269,9 +273,6 @@ export function DetalheAluno({
             <span>
               <School size={14} /> {student.turma} — {student.turmaTurno}
             </span>
-            <span>
-              <NotebookPen size={14} /> {student.deficiencia} ({student.cid})
-            </span>
             {student.faltasConsecutivas > 0 && (
               <span className="status-pill warning">
                 ⚠️ {student.faltasConsecutivas} faltas consecutivas
@@ -298,7 +299,7 @@ export function DetalheAluno({
 
       <div className="form-card student-tabs-card">
         <div className="student-tabs">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               className={'student-tab' + (activeTab === tab.id ? ' active' : '')}
               key={tab.id}
@@ -323,12 +324,6 @@ export function DetalheAluno({
                 </p>
                 <p>
                   <strong>Sexo:</strong> {student.sexo}
-                </p>
-                <p>
-                  <strong>Tipo de deficiência:</strong> {student.deficiencia}
-                </p>
-                <p>
-                  <strong>CID:</strong> {student.cid}
                 </p>
                 <p>
                   <strong>Observações:</strong> {student.observacoes || 'Nenhuma'}
@@ -579,25 +574,7 @@ export function DetalheAluno({
 
         {activeTab === 'evolucao' && (
           <div className="student-tab-panel">
-            <h3>Evolução pedagógica</h3>
-            <div className="timeline">
-              {student.evolution.map((entry) => (
-                <article key={entry.date + entry.area}>
-                  <span className="timeline-dot">
-                    <BarChart3 size={15} />
-                  </span>
-                  <div>
-                    <small>
-                      {entry.date} — {entry.area}
-                    </small>
-                    <p>{entry.note}</p>
-                  </div>
-                </article>
-              ))}
-              {student.evolution.length === 0 && (
-                <p className="student-empty">Nenhuma observação registrada ainda.</p>
-              )}
-            </div>
+            <EvolucaoAluno alunoId={studentId} papel={papel} />
           </div>
         )}
 
@@ -659,6 +636,12 @@ export function DetalheAluno({
                 <li className="student-empty">Nenhuma atividade registrada ainda.</li>
               )}
             </ul>
+          </div>
+        )}
+
+        {activeTab === 'ficha' && podeLerFichaMedica && (
+          <div className="student-tab-panel">
+            <FichaMedica alunoId={studentId} papel={papel} />
           </div>
         )}
 

@@ -57,6 +57,30 @@ service cloud.firestore {
         get(/databases/$(database)/documents/relatorios_pedagogicos/$(reportId)).data.status == 'rascunho';
     }
 
+    // Evolução pedagógica: lançamento imutável, sempre vinculado ao aluno e ao
+    // profissional autenticado. Correções são feitas por um novo registro.
+    function validEvolution(d) {
+      return d.keys().hasOnly([
+          'aluno_id', 'data_registro', 'profissional_usuario_id', 'profissional_nome',
+          'area', 'observacao', 'criado_por', 'criado_em', 'atualizado_por', 'atualizado_em',
+        ]) &&
+        d.get('aluno_id', null) is string &&
+        d.aluno_id.size() > 0 &&
+        exists(/databases/$(database)/documents/alunos/$(d.aluno_id)) &&
+        d.get('data_registro', null) is string &&
+        d.data_registro.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        d.get('profissional_usuario_id', null) == request.auth.uid &&
+        d.get('profissional_nome', null) is string &&
+        d.profissional_nome.size() > 0 && d.profissional_nome.size() <= 200 &&
+        d.get('area', null) in ['cognitiva', 'motora', 'social', 'comunicacao', 'autonomia', 'outra'] &&
+        d.get('observacao', null) is string &&
+        d.observacao.size() > 0 && d.observacao.size() <= 5000 &&
+        d.get('criado_por', null) == request.auth.uid &&
+        d.get('criado_em', null) == request.time &&
+        d.get('atualizado_por', null) == request.auth.uid &&
+        d.get('atualizado_em', null) == request.time;
+    }
+
     function primeiroDirecaoNaoExistia() {
       return !exists(/databases/$(database)/documents/sistema/bootstrap);
     }
@@ -98,18 +122,96 @@ service cloud.firestore {
 
     // alunos — Direção e Administrativo gerenciam cadastro; Pedagogia lê e atualiza.
     match /alunos/{studentId} {
+      function chavesMedicasDoAluno() {
+        return [
+          'deficiencia', 'cid', 'grau_dependencia',
+          'tipos_deficiencia', 'codigos_cid', 'formato_ficha_medica', 'dados_ficha_medica',
+          'alergias', 'medicamentos', 'restricoes_alimentares', 'cuidados_especiais',
+          'contato_emergencia_nome', 'contato_emergencia_telefone', 'historico_medico',
+        ];
+      }
+
+      function alunoSemCamposMedicosNaCriacao() {
+        return !request.resource.data.keys().hasAny(chavesMedicasDoAluno());
+      }
+
+      function alunoNaoAlteraCamposMedicos() {
+        return !request.resource.data.diff(resource.data)
+          .affectedKeys().hasAny(chavesMedicasDoAluno());
+      }
+
+      function fichaMedicaSemAnexo(d) {
+        return d.get('anexo_caminho_storage', null) == null &&
+          d.get('anexo_nome_arquivo', null) == null &&
+          d.get('anexo_tipo_conteudo', null) == null &&
+          d.get('anexo_tamanho_bytes', null) == null &&
+          d.get('anexo_enviado_em', null) == null;
+      }
+
+      function anexoFichaMedicaValido(d) {
+        return d.get('anexo_caminho_storage', null) is string &&
+          d.anexo_caminho_storage.split('/').size() == 4 &&
+          d.anexo_caminho_storage.split('/')[0] == 'alunos' &&
+          d.anexo_caminho_storage.split('/')[1] == studentId &&
+          d.anexo_caminho_storage.split('/')[2] == 'ficha_medica' &&
+          d.anexo_caminho_storage.split('/')[3].size() > 0 &&
+          d.get('anexo_nome_arquivo', null) is string &&
+          d.anexo_nome_arquivo.size() > 0 && d.anexo_nome_arquivo.size() <= 200 &&
+          d.get('anexo_tipo_conteudo', null) in
+            ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] &&
+          d.get('anexo_tamanho_bytes', null) is int &&
+          d.anexo_tamanho_bytes > 0 && d.anexo_tamanho_bytes <= 10485760 &&
+          d.get('anexo_enviado_em', null) is timestamp;
+      }
+
+      function dadosFichaMedicaValidos(dados) {
+        return dados == null || (
+          dados is map &&
+          dados.keys().hasOnly([
+            'alergias', 'medicamentos', 'restricoes_alimentares', 'cuidados_especiais',
+            'contato_emergencia_nome', 'contato_emergencia_telefone', 'historico_medico',
+            'observacoes',
+          ])
+        );
+      }
+
+      function fichaMedicaValida(d) {
+        return d.keys().hasOnly([
+            'tipos_deficiencia', 'codigos_cid', 'formato_ficha_medica', 'dados_ficha_medica',
+            'anexo_caminho_storage', 'anexo_nome_arquivo', 'anexo_tipo_conteudo',
+            'anexo_tamanho_bytes', 'anexo_enviado_em', 'atualizado_por', 'atualizado_em',
+          ]) &&
+          d.get('tipos_deficiencia', null) is list &&
+          d.tipos_deficiencia.size() >= 1 && d.tipos_deficiencia.size() <= 20 &&
+          d.get('codigos_cid', null) is list &&
+          d.codigos_cid.size() <= 20 &&
+          d.get('formato_ficha_medica', null) in ['digital', 'anexo'] &&
+          d.get('atualizado_por', null) == request.auth.uid &&
+          d.get('atualizado_em', null) == request.time &&
+          (d.formato_ficha_medica == 'digital'
+            ? dadosFichaMedicaValidos(d.get('dados_ficha_medica', null)) &&
+              fichaMedicaSemAnexo(d)
+            : d.get('dados_ficha_medica', null) == null &&
+              anexoFichaMedicaValido(d));
+      }
+
       allow read: if canUseSystem();
-      allow create: if (isDirection() || isAdministrative()) && validPrincipalAfterWrite(studentId);
+      allow create: if (isDirection() || isAdministrative()) &&
+        alunoSemCamposMedicosNaCriacao() &&
+        validPrincipalAfterWrite(studentId);
       allow delete: if isDirection() || isAdministrative();
       allow update: if (isDirection() || isAdministrative() || isPedagogue()) &&
+        alunoNaoAlteraCamposMedicos() &&
         (!request.resource.data.keys().hasAny(['responsavel_principal_id']) ||
           validPrincipalAfterWrite(studentId));
 
-      // Subcoleção do aluno: ficha médica 1:1 — dados sensíveis (LGPD); ajustar com a Fundação.
+      // Subcoleção do aluno: ficha médica 1:1 — dados sensíveis (LGPD).
       match /ficha_medica/{fichaId} {
         allow read: if isDirection() || isPedagogue();
-        allow create: if isDirection() || isAdministrative();
-        allow update, delete: if isDirection() || isPedagogue();
+        allow create, update: if (isDirection() || isPedagogue()) &&
+          fichaId == 'ficha' &&
+          fichaMedicaValida(request.resource.data);
+        allow delete: if (isDirection() || isPedagogue()) && fichaId == 'ficha';
       }
 
       // Subcoleção: responsáveis do aluno
@@ -127,6 +229,7 @@ service cloud.firestore {
         allow read: if canUseSystem() &&
           (resource.data.tipo_documento != 'ficha_medica' || isDirection() || isPedagogue());
         allow create: if (isDirection() || isAdministrative()) &&
+          request.resource.data.get('tipo_documento', null) != 'ficha_medica' &&
           request.resource.data.tamanho_bytes <= 512000 &&
           request.resource.data.data_url is string &&
           request.resource.data.data_url.size() <= 700000;
@@ -307,8 +410,9 @@ service cloud.firestore {
 
     match /registros_evolucao/{progressId} {
       allow read: if canUseSystem();
-      allow create, update: if isDirection() || isPedagogue();
-      allow delete: if isDirection();
+      allow create: if (isDirection() || isPedagogue()) &&
+        validEvolution(request.resource.data);
+      allow update, delete: if false;
     }
 
     match /modelos_formulario/{templateId} {

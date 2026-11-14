@@ -21,10 +21,31 @@ import { confirmWrite } from '../lib/persistence'
 
 const ALUNOS_COLLECTION = 'alunos'
 
+type EmbeddedDocument = {
+  id?: string
+  name?: string
+  tipo_documento?: string
+  tipo?: string
+  data_url?: string
+  dataUrl?: string
+  nome_arquivo_original?: string
+  nomeArquivoOriginal?: string
+  tipo_conteudo?: string
+  tipoConteudo?: string
+  tamanho_bytes?: number
+  tamanhoBytes?: number
+  enviado_por?: string
+  enviadoPor?: string
+  enviado_em?: string | number | Date
+  attachedAt?: string
+  kind?: 'pdf' | 'lgpd'
+}
+
 // Converte Timestamp do Firestore (ou Date/ISO) para ISO-8601.
 function timestampToISO(value: unknown): string | undefined {
   if (!value) return undefined
   if (typeof value === 'string') return value
+  if (typeof value === 'number') return new Date(value).toISOString()
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object') {
     const withToDate = value as { toDate?: () => Date }
@@ -63,10 +84,6 @@ export function docToStudent(id: string, data: any): Student {
     turma: data.turma || 'Turma A',
     turmaId: data.turma_id || undefined,
     turmaTurno: data.turma_turno || data.turmaTurno || 'Manhã (8h–12h)',
-    deficiencia:
-      data.deficiencia ||
-      (Array.isArray(data.tipos_deficiencia) ? data.tipos_deficiencia.join(', ') : 'Não informada'),
-    cid: data.cid || (Array.isArray(data.codigos_cid) ? data.codigos_cid.join(', ') : '—'),
     status,
     observacoes: data.observacoes || '',
     usoImagemAutorizado: data.uso_imagem_autorizado === true,
@@ -77,51 +94,38 @@ export function docToStudent(id: string, data: any): Student {
     telefone: data.responsavel_telefone || data.telefone || '',
     email: data.responsavel_email || data.email || '',
     oficinas: Array.isArray(data.oficinas) ? data.oficinas : [],
-    grauDependencia: data.grau_dependencia || undefined,
     documentos: Array.isArray(data.documentos)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? data.documentos.map((d: any) => ({
-          id: d.id || d.name || 'doc-legacy',
-          tipo: (d.tipo_documento || d.tipo || 'ficha_medica') as DocumentoTipo,
-          dataUrl: d.data_url || d.dataUrl || '',
-          nomeArquivoOriginal: d.nome_arquivo_original || d.nomeArquivoOriginal || d.name || 'documento',
-          tipoConteudo: d.tipo_conteudo || d.tipoConteudo || 'application/octet-stream',
-          tamanhoBytes: d.tamanho_bytes ?? d.tamanhoBytes ?? 0,
-          enviadoPor: d.enviado_por || d.enviadoPor || 'sistema',
-          enviadoEm: d.enviado_em ? new Date(d.enviado_em).toISOString() : (d.attachedAt || new Date().toISOString()),
-          // Campos legados mantidos para compatibilidade com dados existentes
-          name: d.name || d.nome_arquivo_original || d.nomeArquivoOriginal || undefined,
-          attachedAt: d.attachedAt || undefined,
-          kind: (d.kind as 'pdf' | 'lgpd') || undefined,
-        }))
-      : [
-          {
-            id: 'ficha-medica-legacy',
-            tipo: 'ficha_medica' as DocumentoTipo,
+      ? (data.documentos as EmbeddedDocument[])
+          .filter((d) => (d.tipo_documento || d.tipo || 'outro') !== 'ficha_medica')
+          .map((d) => ({
+            id: d.id || d.name || 'doc-legacy',
+            tipo: (d.tipo_documento || d.tipo || 'outro') as DocumentoTipo,
+            dataUrl: d.data_url || d.dataUrl || '',
+            nomeArquivoOriginal: d.nome_arquivo_original || d.nomeArquivoOriginal || d.name || 'documento',
+            tipoConteudo: d.tipo_conteudo || d.tipoConteudo || 'application/octet-stream',
+            tamanhoBytes: d.tamanho_bytes ?? d.tamanhoBytes ?? 0,
+            enviadoPor: d.enviado_por || d.enviadoPor || 'sistema',
+            enviadoEm: timestampToISO(d.enviado_em) ?? (d.attachedAt || new Date().toISOString()),
+            // Campos legados mantidos para compatibilidade com dados existentes
+            name: d.name || d.nome_arquivo_original || d.nomeArquivoOriginal || undefined,
+            attachedAt: d.attachedAt || undefined,
+            kind: (d.kind as 'pdf' | 'lgpd') || undefined,
+          }))
+      : data.uso_imagem_autorizado
+        ? [{
+            id: 'lgpd-legacy',
+            tipo: 'autorizacao_imagem' as DocumentoTipo,
             dataUrl: '',
-            nomeArquivoOriginal: data.ficha_medica_nome || 'Ficha Médica',
+            nomeArquivoOriginal: 'Autorização de Imagem (LGPD)',
             tipoConteudo: 'application/pdf',
             tamanhoBytes: 0,
             enviadoPor: 'sistema',
             enviadoEm: new Date().toISOString(),
-          },
-          ...(data.uso_imagem_autorizado
-            ? [{
-                id: 'lgpd-legacy',
-                tipo: 'autorizacao_imagem' as DocumentoTipo,
-                dataUrl: '',
-                nomeArquivoOriginal: 'Autorização de Imagem (LGPD)',
-                tipoConteudo: 'application/pdf',
-                tamanhoBytes: 0,
-                enviadoPor: 'sistema',
-                enviadoEm: new Date().toISOString(),
-              }]
-            : []),
-        ],
+          }]
+        : [],
     faltasConsecutivas: data.faltas_consecutivas ?? data.faltasConsecutivas ?? 0,
     frequenciaMedia: data.frequencia_media ?? data.frequenciaMedia ?? 100,
     reports: Array.isArray(data.reports) ? data.reports : [],
-    evolution: Array.isArray(data.evolution) ? data.evolution : [],
     contacts: Array.isArray(data.contacts) ? data.contacts : [],
     activities: Array.isArray(data.activities) ? data.activities : [],
   }
@@ -250,8 +254,6 @@ export type StudentInput = {
   nome: string
   nascimento: string
   sexo: string
-  deficiencia: string
-  cid: string
   observacoes: string
   responsavelNome: string
   parentesco: string
@@ -266,8 +268,6 @@ export type StudentInput = {
   turmaId?: string
   turmaTurno?: string
   oficinas: string[]
-  grauDependencia?: string
-  fichaMedica?: string
   fichaMatricula?: string
   lgpdImagem?: boolean
   lgpdDados?: boolean
@@ -326,21 +326,17 @@ export async function createStudent(input: StudentInput): Promise<string> {
     turma: input.turmas[0] || 'Turma A',
     turmaId: input.turmaId,
     turmaTurno: input.turmaTurno || 'Manhã (8h–12h)',
-    deficiencia: input.deficiencia || 'Não informada',
-    cid: input.cid || '—',
     observacoes: input.observacoes || '',
     responsavelNome: input.responsavelNome,
     parentesco: input.parentesco || 'Mãe',
     telefone: input.telefonePrincipal,
     email: input.email || '',
     oficinas: input.oficinas || [],
-    grauDependencia: input.grauDependencia,
     documentos: [],
     responsaveis: guardians,
     faltasConsecutivas: 0,
     frequenciaMedia: 100,
     reports: [],
-    evolution: [],
     contacts: [],
     activities: [],
   }
@@ -384,13 +380,10 @@ export async function createStudent(input: StudentInput): Promise<string> {
     responsavel_email: principal.email || '',
     responsavel_principal_id: principalEntry.ref.id,
     responsavel_endereco: input.endereco || '',
-    grau_dependencia: input.grauDependencia || '',
-    ficha_medica_nome: input.fichaMedica || '',
     ficha_matricula_nome: input.fichaMatricula || '',
     faltas_consecutivas: 0,
     frequencia_media: 100,
     reports: [],
-    evolution: [],
     contacts: [],
     activities: [],
     criado_em: serverTimestamp(),
@@ -410,14 +403,6 @@ export async function createStudent(input: StudentInput): Promise<string> {
     criado_em: serverTimestamp(),
     atualizado_em: serverTimestamp(),
   }))
-  const healthRef = doc(db, `${ALUNOS_COLLECTION}/${id}/ficha_medica/geral`)
-  batch.set(healthRef, {
-    tipos_deficiencia: input.deficiencia ? [input.deficiencia] : [],
-    codigos_cid: input.cid ? [input.cid] : [],
-    anexo_nome: input.fichaMedica || null,
-    grau_dependencia: input.grauDependencia || null,
-    atualizado_em: serverTimestamp(),
-  })
   await confirmWrite('cadastrar o aluno', batch.commit())
 
   return id
@@ -461,15 +446,12 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
               : st.consentimentoImagemEm,
         tratamentoDadosAutorizado:
           input.lgpdDados !== undefined ? input.lgpdDados : st.tratamentoDadosAutorizado,
-        deficiencia: input.deficiencia !== undefined ? input.deficiencia : st.deficiencia,
-        cid: input.cid !== undefined ? input.cid : st.cid,
         observacoes: input.observacoes !== undefined ? input.observacoes : st.observacoes,
         responsavelNome: input.responsavelNome !== undefined ? input.responsavelNome : st.responsavelNome,
         parentesco: input.parentesco !== undefined ? input.parentesco : st.parentesco,
         telefone: input.telefonePrincipal !== undefined ? input.telefonePrincipal : st.telefone,
         email: input.email !== undefined ? input.email : st.email,
         oficinas: input.oficinas !== undefined ? input.oficinas : st.oficinas,
-        grauDependencia: input.grauDependencia !== undefined ? input.grauDependencia : st.grauDependencia,
         status: input.status !== undefined ? input.status : st.status,
         responsaveis: input.responsaveis !== undefined ? input.responsaveis : st.responsaveis,
       }
@@ -508,7 +490,6 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
   if (!guardianPrincipal && input.telefoneSecundario !== undefined) updateData.responsavel_telefone_secundario = input.telefoneSecundario
   if (!guardianPrincipal && input.email !== undefined) updateData.responsavel_email = input.email
   if (input.endereco !== undefined) updateData.responsavel_endereco = input.endereco
-  if (input.grauDependencia !== undefined) updateData.grau_dependencia = input.grauDependencia
   if (input.lgpdImagem !== undefined) {
     updateData.uso_imagem_autorizado = input.lgpdImagem
     if (!input.lgpdImagem) {
@@ -552,14 +533,6 @@ export async function updateStudent(id: string, input: Partial<StudentInput>): P
     }, { merge: true }))
   }
   batch.update(studentRef, updateData)
-  if (input.deficiencia !== undefined || input.cid !== undefined || input.grauDependencia !== undefined) {
-    const healthRef = doc(db, ALUNOS_COLLECTION, id, 'ficha_medica', 'geral')
-    const healthData: Record<string, unknown> = { atualizado_em: serverTimestamp() }
-    if (input.deficiencia !== undefined) healthData.tipos_deficiencia = input.deficiencia ? [input.deficiencia] : []
-    if (input.cid !== undefined) healthData.codigos_cid = input.cid ? [input.cid] : []
-    if (input.grauDependencia !== undefined) healthData.grau_dependencia = input.grauDependencia || null
-    batch.set(healthRef, healthData, { merge: true })
-  }
   await confirmWrite('atualizar os dados do aluno', batch.commit())
 }
 
@@ -705,7 +678,7 @@ export async function getDocumentosComUrl(
       }
       const entry: DocumentEntry = {
         id: d.id,
-        tipo: (data.tipo_documento || 'ficha_medica') as DocumentoTipo,
+        tipo: (data.tipo_documento || 'outro') as DocumentoTipo,
         dataUrl: data.data_url || '',
         nomeArquivoOriginal: data.nome_arquivo_original || 'documento',
         tipoConteudo: data.tipo_conteudo || 'application/octet-stream',

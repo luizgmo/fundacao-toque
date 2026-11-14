@@ -321,3 +321,269 @@
   font-size: 0.85rem;
   margin: 0;
 }
+
+/* Ficha médica */
+.medical-record {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.medical-record-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.medical-record-header h3 {
+  margin: 0 0 4px;
+  color: var(--navy-800);
+  font-size: 15px;
+}
+
+.medical-record-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.medical-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: 9px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.medical-alert.error {
+  color: #7f1d1d;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.medical-alert.success {
+  color: #166534;
+  background: #f0f9f4;
+  border-color: #bfe5cd;
+}
+
+.medical-section {
+  padding: 16px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.medical-section h4 {
+  margin: 0 0 12px;
+  color: var(--navy-800);
+  font-size: 13px;
+}
+
+.medical-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.medical-chip {
+  padding: 4px 10px;
+  color: var(--green-700);
+  background: var(--green-50);
+  border: 1px solid #d8ecdf;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.medical-line {
+  margin: 8px 0 0;
+  color: var(--navy-700);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.medical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.medical-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.medical-field span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.medical-field strong {
+  color: var(--navy-800);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.medical-attachment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.medical-attachment > svg {
+  flex: 0 0 auto;
+  color: var(--green-700);
+}
+
+.medical-attachment > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.medical-attachment strong {
+  overflow: hidden;
+  color: var(--navy-800);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.medical-attachment span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.medical-footer {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.medical-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.medical-empty > svg {
+  flex: 0 0 auto;
+  color: var(--green-700);
+}
+
+.medical-empty > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.medical-empty strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--navy-800);
+  font-size: 13px;
+}
+
+.medical-empty p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.medical-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.medical-form > .field,
+.medical-form > .medical-format {
+  margin-top: 0;
+}
+
+.medical-form .medical-grid .field {
+  margin-top: 0;
+}
+
+.medical-format {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.medical-format legend {
+  padding: 0 4px;
+  color: var(--navy-700);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.medical-format label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--navy-700);
+  font-size: 12.5px;
+}
+
+.medical-attachment-editor {
+  margin-top: 0;
+}
+
+.medical-attachment-editor p {
+  margin: 0 0 10px;
+  color: var(--navy-700);
+  font-size: 12.5px;
+}
+
+.medical-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 780px) {
+  .medical-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .medical-record-header,
+  .medical-empty,
+  .medical-attachment {
+    flex-wrap: wrap;
+  }
+
+  .medical-actions {
+    flex-direction: column-reverse;
+  }
+
+  .medical-actions .button {
+    justify-content: center;
+    width: 100%;
+  }
+}

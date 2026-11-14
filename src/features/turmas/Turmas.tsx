@@ -702,10 +702,6 @@ export function Turmas({ onViewStudent }: { onViewStudent: (id: string) => void 
                       <span className="mini-avatar">{s.name.charAt(0)}</span>
                       <div>
                         <strong>{s.name}</strong>
-                        <span>
-                          {s.deficiencia}
-                          {s.grauDependencia ? ` · Dependência ${s.grauDependencia.toLowerCase()}` : ''}
-                        </span>
                       </div>
                       <button
                         className="text-button"

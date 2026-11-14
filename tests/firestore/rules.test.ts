@@ -35,6 +35,7 @@ beforeEach(async () => {
       setDoc(doc(db, 'usuarios/pedagogia-1'), { papel: 'pedagogia', ativo: true, nome_completo: 'Pedagogia' }),
       setDoc(doc(db, 'usuarios/admin-1'), { papel: 'administrativo', ativo: true, nome_completo: 'Administrativo' }),
       setDoc(doc(db, 'usuarios/inativo-1'), { papel: 'direcao', ativo: false }),
+      setDoc(doc(db, 'sistema/bootstrap'), { inicializado: true }),
       setDoc(doc(db, 'alunos/aluno-1'), { nome_completo: 'Aluno fictício', responsavel_principal_id: 'principal-1' }),
       setDoc(doc(db, 'alunos/aluno-1/responsaveis/principal-1'), { nome_completo: 'Principal', parentesco: 'Mãe', telefone: '0000', ativo: true, principal: true }),
       setDoc(doc(db, 'alunos/aluno-1/documentos/ficha-medica'), { tipo_documento: 'ficha_medica', data_url: 'data:application/pdf;base64,AA==', tamanho_bytes: 1 }),
@@ -53,7 +54,14 @@ beforeEach(async () => {
       setDoc(doc(db, 'relatorios_pedagogicos/concluido-1'), { status: 'concluido', aluno_id: 'aluno-1' }),
       setDoc(doc(db, 'contatos_familia/contato-1'), {
         aluno_id: 'aluno-1', responsavel_id: 'principal-1',
-        responsavel_snapshot: { nome: 'Nome da época', contato: '0000' },
+        responsavel_snapshot: { nome: 'Nome da Acpoca', contato: '0000' },
+      }),
+      setDoc(doc(db, 'registros_evolucao/evo-1'), {
+        aluno_id: 'aluno-1', data_registro: '2026-09-01',
+        profissional_usuario_id: 'pedagogia-1', profissional_nome: 'Pedagogia',
+        area: 'social', observacao: 'Registro semeado.',
+        criado_por: 'pedagogia-1', criado_em: new Date(),
+        atualizado_por: 'pedagogia-1', atualizado_em: new Date(),
       }),
     ])
   })
@@ -77,6 +85,53 @@ function firestore(uid?: string, papel?: string) {
   return uid ? testEnv.authenticatedContext(uid, { papel }).firestore() : testEnv.unauthenticatedContext().firestore()
 }
 
+function fichaDigital(uid: string, extra: Record<string, unknown> = {}) {
+  return {
+    tipos_deficiencia: ['TEA'],
+    codigos_cid: ['F84.0'],
+    formato_ficha_medica: 'digital',
+    dados_ficha_medica: { alergias: 'Nenhuma' },
+    anexo_caminho_storage: null,
+    anexo_nome_arquivo: null,
+    anexo_tipo_conteudo: null,
+    anexo_tamanho_bytes: null,
+    anexo_enviado_em: null,
+    atualizado_por: uid,
+    atualizado_em: serverTimestamp(),
+    ...extra,
+  }
+}
+
+function evolucaoValida(uid: string, extra: Record<string, unknown> = {}) {
+  return {
+    aluno_id: 'aluno-1',
+    data_registro: '2026-11-13',
+    profissional_usuario_id: uid,
+    profissional_nome: 'Profissional de Teste',
+    area: 'social',
+    observacao: 'Interagiu bem com os colegas.',
+    criado_por: uid,
+    criado_em: serverTimestamp(),
+    atualizado_por: uid,
+    atualizado_em: serverTimestamp(),
+    ...extra,
+  }
+}
+
+function fichaComAnexo(uid: string, alunoId = 'aluno-1', extra: Record<string, unknown> = {}) {
+  return {
+    ...fichaDigital(uid),
+    formato_ficha_medica: 'anexo',
+    dados_ficha_medica: null,
+    anexo_caminho_storage: `alunos/${alunoId}/ficha_medica/123-ficha.pdf`,
+    anexo_nome_arquivo: 'ficha.pdf',
+    anexo_tipo_conteudo: 'application/pdf',
+    anexo_tamanho_bytes: 1200,
+    anexo_enviado_em: serverTimestamp(),
+    ...extra,
+  }
+}
+
 describe('Firestore security rules', () => {
   it('nega acesso anônimo e perfil ausente a dados operacionais', async () => {
     await assertFails(getDoc(doc(firestore(), 'alunos/aluno-1')))
@@ -97,6 +152,75 @@ describe('Firestore security rules', () => {
     await assertSucceeds(getDoc(doc(firestore('admin-1'), 'alunos/aluno-1/documentos/matricula')))
   })
 
+  describe('ficha médica', () => {
+    it('restringe leitura e escrita à Direção e Pedagogia', async () => {
+      const ref = 'alunos/aluno-1/ficha_medica/ficha'
+      await assertSucceeds(getDoc(doc(firestore('direcao-1'), ref)))
+      await assertSucceeds(getDoc(doc(firestore('pedagogia-1'), ref)))
+      await assertFails(getDoc(doc(firestore('admin-1'), ref)))
+
+      await assertSucceeds(setDoc(doc(firestore('pedagogia-1'), ref), fichaDigital('pedagogia-1')))
+      await assertFails(setDoc(doc(firestore('admin-1'), ref), fichaDigital('admin-1')))
+    })
+
+    it('valida formato, tipo de deficiência e auditoria', async () => {
+      const db = firestore('pedagogia-1')
+      const ref = doc(db, 'alunos/aluno-1/ficha_medica/ficha')
+      await assertSucceeds(setDoc(ref, fichaDigital('pedagogia-1')))
+      await assertFails(setDoc(doc(db, 'alunos/aluno-1/ficha_medica/outra'), fichaDigital('pedagogia-1')))
+      await assertFails(setDoc(ref, fichaDigital('pedagogia-1', { tipos_deficiencia: [] })))
+      await assertFails(setDoc(ref, fichaDigital('pedagogia-1', { formato_ficha_medica: 'outro' })))
+      await assertFails(setDoc(ref, fichaDigital('pedagogia-1', { atualizado_por: 'outro-uid' })))
+      await assertFails(setDoc(ref, fichaDigital('pedagogia-1', {
+        dados_ficha_medica: { campo_invalido: 'x' },
+      })))
+    })
+
+    it('exige anexo no caminho do próprio aluno e do tipo permitido', async () => {
+      const db = firestore('direcao-1')
+      const ref = doc(db, 'alunos/aluno-1/ficha_medica/ficha')
+      await assertSucceeds(setDoc(ref, fichaComAnexo('direcao-1')))
+      await assertFails(setDoc(ref, fichaComAnexo('direcao-1', 'aluno-2')))
+      await assertFails(setDoc(ref, fichaComAnexo('direcao-1', 'aluno-1', {
+        anexo_tipo_conteudo: 'image/gif',
+      })))
+      await assertFails(setDoc(ref, fichaComAnexo('direcao-1', 'aluno-1', {
+        anexo_tamanho_bytes: 10 * 1024 * 1024 + 1,
+      })))
+    })
+
+    it('impede dados médicos no cadastro comum do aluno', async () => {
+      const db = firestore('admin-1')
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'alunos/aluno-3'), {
+        nome_completo: 'Com dados médicos',
+        responsavel_principal_id: 'principal-3',
+        deficiencia: 'TEA',
+      })
+      batch.set(doc(db, 'alunos/aluno-3/responsaveis/principal-3'), {
+        nome_completo: 'Principal', ativo: true, principal: true,
+      })
+      await assertFails(batch.commit())
+
+      await assertFails(updateDoc(doc(db, 'alunos/aluno-1'), { cid: 'F84.0' }))
+      await assertSucceeds(updateDoc(doc(db, 'alunos/aluno-1'), { observacoes: 'Sem dados médicos' }))
+    })
+
+    it('bloqueia novos documentos do tipo ficha_medica', async () => {
+      const db = firestore('admin-1')
+      await assertFails(setDoc(doc(db, 'alunos/aluno-1/documentos/nova-ficha'), {
+        tipo_documento: 'ficha_medica',
+        data_url: 'data:application/pdf;base64,AA==',
+        tamanho_bytes: 1,
+      }))
+      await assertSucceeds(setDoc(doc(db, 'alunos/aluno-1/documentos/nova-matricula'), {
+        tipo_documento: 'ficha_matricula',
+        data_url: 'data:application/pdf;base64,AA==',
+        tamanho_bytes: 1,
+      }))
+    })
+  })
+
   it('impede autoelevação, reativação, criação arbitrária e exclusão de perfil', async () => {
     const own = doc(firestore('pedagogia-1'), 'usuarios/pedagogia-1')
     await assertSucceeds(getDoc(own))
@@ -106,21 +230,13 @@ describe('Firestore security rules', () => {
     await assertFails(deleteDoc(own))
     await assertSucceeds(setDoc(doc(firestore('direcao-1'), 'usuarios/novo-uid'), { papel: 'administrativo', ativo: true }))
 
-    it('permitir que o próprio usuário libere a senha provisória', async () => {
-      const own = doc(firestore('pedagogia-1'), 'usuarios/pedagogia-1')
-      await assertSucceeds(updateDoc(own, { trocar_senha: false, atualizado_em: serverTimestamp() }))
-    })
+    const proprio = doc(firestore('pedagogia-1'), 'usuarios/pedagogia-1')
+    await assertSucceeds(updateDoc(proprio, { trocar_senha: false, atualizado_em: serverTimestamp() }))
+    await assertFails(updateDoc(proprio, { papel: 'direcao', trocar_senha: false, atualizado_em: serverTimestamp() }))
+    await assertFails(updateDoc(proprio, { ativo: false, trocar_senha: false, atualizado_em: serverTimestamp() }))
 
-    it('negaria que o próprio usuário troque papel ou status via changePassword', async () => {
-      const own = doc(firestore('pedagogia-1'), 'usuarios/pedagogia-1')
-      await assertFails(updateDoc(own, { papel: 'direcao', trocar_senha: false, atualizado_em: serverTimestamp() }))
-      await assertFails(updateDoc(own, { ativo: false, trocar_senha: false, atualizado_em: serverTimestamp() }))
-    })
-
-    it('negaria que um usuário altere o perfil de outro', async () => {
-      const outro = doc(firestore('pedagogia-1'), 'usuarios/admin-1')
-      await assertFails(updateDoc(outro, { trocar_senha: false, atualizado_em: serverTimestamp() }))
-    })
+    const outro = doc(firestore('pedagogia-1'), 'usuarios/admin-1')
+    await assertFails(updateDoc(outro, { trocar_senha: false, atualizado_em: serverTimestamp() }))
   })
 
   it('limita responsáveis a Direção/Administrativo e protege o documento pai', async () => {
@@ -474,6 +590,79 @@ describe('Firestore security rules', () => {
         ...configuracaoValida,
         limite_faltas_consecutivas: 0,
       }))
+    })
+  })
+
+  describe('registros_evolucao', () => {
+    const ref = 'registros_evolucao/novo'
+
+    it('permite leitura a papéis ativos e nega anônimo/inativo', async () => {
+      await assertFails(getDoc(doc(firestore(), 'registros_evolucao/evo-1')))
+      await assertFails(getDoc(doc(firestore('inativo-1'), 'registros_evolucao/evo-1')))
+      for (const uid of ['direcao-1', 'pedagogia-1', 'admin-1']) {
+        await assertSucceeds(getDoc(doc(firestore(uid), 'registros_evolucao/evo-1')))
+      }
+    })
+
+    it('permite criar apenas para Direção/Pedagogia com autoria da sessão', async () => {
+      await assertSucceeds(setDoc(
+        doc(firestore('direcao-1'), 'registros_evolucao/novo-direcao'),
+        evolucaoValida('direcao-1')
+      ))
+      await assertSucceeds(setDoc(
+        doc(firestore('pedagogia-1'), 'registros_evolucao/novo-pedagogia'),
+        evolucaoValida('pedagogia-1')
+      ))
+      await assertFails(setDoc(
+        doc(firestore('admin-1'), 'registros_evolucao/novo-admin'),
+        evolucaoValida('admin-1')
+      ))
+      await assertFails(setDoc(
+        doc(firestore(), 'registros_evolucao/novo-anonimo'),
+        evolucaoValida('anonimo')
+      ))
+    })
+
+    it('rejeita profissional diferente, aluno inexistente e campos inválidos', async () => {
+      const db = firestore('pedagogia-1')
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        profissional_usuario_id: 'outro-uid',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        aluno_id: 'aluno-inexistente',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        data_registro: '13/11/2026',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        area: 'financeira',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        observacao: '',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        profissional_nome: '',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        criado_por: 'outro-uid',
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        extra: true,
+      })))
+      await assertFails(setDoc(doc(db, ref), evolucaoValida('pedagogia-1', {
+        criado_em: '2026-11-13T00:00:00Z',
+      })))
+    })
+
+    it('mantém registros imutáveis: update e delete são negados', async () => {
+      const db = firestore('direcao-1')
+      await assertFails(updateDoc(doc(db, 'registros_evolucao/evo-1'), {
+        observacao: 'Correção indevida.',
+        atualizado_por: 'direcao-1',
+        atualizado_em: serverTimestamp(),
+      }))
+      await assertFails(deleteDoc(doc(db, 'registros_evolucao/evo-1')))
+      await assertFails(deleteDoc(doc(firestore('pedagogia-1'), 'registros_evolucao/evo-1')))
     })
   })
 

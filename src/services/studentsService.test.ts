@@ -38,3 +38,30 @@ describe('docToStudent · consentimento de imagem', () => {
     expect(student.consentimentoImagemEm).toBe('2026-05-04T10:00:00.000Z')
   })
 })
+
+describe('docToStudent · separação da ficha médica', () => {
+  it('não expõe documentos médicos embutidos no cadastro do aluno', () => {
+    const student = docToStudent('aluno-4', {
+      nome_completo: 'Aluno Teste',
+      status: 'ativo',
+      documentos: [
+        { tipo_documento: 'ficha_medica', name: 'antiga.pdf' },
+        { tipo_documento: 'autorizacao_imagem', name: 'autorizacao.pdf' },
+      ],
+    })
+
+    expect(student.documentos.map((documento) => documento.tipo)).toEqual([
+      'autorizacao_imagem',
+    ])
+  })
+
+  it('classifica documento legado sem tipo como outro, não como ficha médica', () => {
+    const student = docToStudent('aluno-5', {
+      nome_completo: 'Aluno Teste',
+      status: 'ativo',
+      documentos: [{ name: 'sem-tipo.pdf' }],
+    })
+
+    expect(student.documentos[0]?.tipo).toBe('outro')
+  })
+})

@@ -6,12 +6,6 @@ export type ReportEntry = {
   summary: string
 }
 
-export type EvolutionEntry = {
-  date: string
-  area: string
-  note: string
-}
-
 export type ContactEntry = {
   id?: string
   faltaDate: string
@@ -64,8 +58,6 @@ export type Student = {
   turma: string
   turmaId?: string
   turmaTurno: string
-  deficiencia: string
-  cid: string
   status: StudentStatus
   observacoes: string
   /** Consentimento persistido do responsável para uso de imagem (LGPD). */
@@ -80,12 +72,10 @@ export type Student = {
   email: string
   responsaveis?: Guardian[]
   oficinas: string[]
-  grauDependencia?: string
   documentos: DocumentEntry[]
   faltasConsecutivas: number
   frequenciaMedia: number
   reports: ReportEntry[]
-  evolution: EvolutionEntry[]
   contacts: ContactEntry[]
   activities: string[]
 }
@@ -115,8 +105,6 @@ export const demoStudents: Student[] = [
     sexo: 'Não informado',
     turma: 'Turma Exemplo A',
     turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Exemplo',
-    cid: 'Exemplo',
     status: 'Ativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
     usoImagemAutorizado: true,
@@ -133,9 +121,6 @@ export const demoStudents: Student[] = [
     reports: [
       { date: '01/06/2026', title: 'Relatório de exemplo', summary: 'Conteúdo fictício de demonstração.' },
     ],
-    evolution: [
-      { date: '01/06/2026', area: 'Exemplo', note: 'Observação fictícia de demonstração.' },
-    ],
     contacts: [],
     activities: ['Oficina Exemplo A — 01/06/2026'],
   },
@@ -146,8 +131,6 @@ export const demoStudents: Student[] = [
     sexo: 'Não informado',
     turma: 'Turma Exemplo B',
     turmaTurno: 'Tarde (13h–17h)',
-    deficiencia: 'Exemplo',
-    cid: 'Exemplo',
     status: 'Ativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
     usoImagemAutorizado: true,
@@ -162,7 +145,6 @@ export const demoStudents: Student[] = [
     faltasConsecutivas: 0,
     frequenciaMedia: 90,
     reports: [],
-    evolution: [],
     contacts: [],
     activities: ['Oficina Exemplo B — 02/06/2026'],
   },
@@ -173,8 +155,6 @@ export const demoStudents: Student[] = [
     sexo: 'Não informado',
     turma: 'Turma Exemplo A',
     turmaTurno: 'Manhã (8h–12h)',
-    deficiencia: 'Exemplo',
-    cid: 'Exemplo',
     status: 'Ativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
     usoImagemAutorizado: false,
@@ -188,7 +168,6 @@ export const demoStudents: Student[] = [
     faltasConsecutivas: 4,
     frequenciaMedia: 70,
     reports: [],
-    evolution: [],
     contacts: [],
     activities: [],
   },
@@ -199,8 +178,6 @@ export const demoStudents: Student[] = [
     sexo: 'Não informado',
     turma: 'Turma Exemplo C',
     turmaTurno: 'Tarde (13h–17h)',
-    deficiencia: 'Exemplo',
-    cid: 'Exemplo',
     status: 'Inativo',
     observacoes: 'Registro fictício criado apenas para demonstração.',
     usoImagemAutorizado: true,
@@ -215,7 +192,6 @@ export const demoStudents: Student[] = [
     faltasConsecutivas: 0,
     frequenciaMedia: 100,
     reports: [],
-    evolution: [],
     contacts: [],
     activities: [],
   },

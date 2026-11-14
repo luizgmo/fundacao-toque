@@ -136,9 +136,9 @@ Seed de dados & Node.js (script próprio) & População do banco com dados fict�
 \begin{itemize}[nosep]
   \item Perfis de acesso: \textbf{Direção}, \textbf{Pedagogia} e \textbf{Administrativo}, definidos no campo \texttt{papel} do usuário;
   \item Regras de leitura/escrita distintas por coleção (ex.: apenas a Direção apaga registros e gerencia usuários);
-  \item Ficha médica: leitura restrita a Direção e Pedagogia; escrita apenas pela Direção;
+  \item Ficha médica: leitura e escrita restritas a Direção e Pedagogia; anexo no Firebase Storage e metadados no Firestore;
   \item Nenhum dado pessoal real é usado em desenvolvimento --- apenas dados fictícios;
-  \item Fotos e anexos de atividade/relatório ficam no Firestore: metadados em \texttt{anexos/\{id\}} e conteúdo dividido em \texttt{chunks}, respeitando o limite de 1 MiB por documento. Documentos do cadastro de alunos são Data URLs em documentos limitados a 500 KiB. Não há dependência de Firebase Storage.
+  \item A ficha médica usa o Firebase Storage apenas para o anexo (PDF/JPG/PNG/WEBP, até 10 MiB), mantendo no Firestore somente metadados e o caminho do arquivo. Fotos e anexos de atividade/relatório continuam no Firestore: metadados em \texttt{anexos/\{id\}} e conteúdo dividido em \texttt{chunks}, respeitando o limite de 1 MiB por documento. Documentos do cadastro de alunos são Data URLs em documentos limitados a 500 KiB.
 \end{itemize}
 
 \section{Banco de Dados (Cloud Firestore)}
@@ -205,8 +205,11 @@ caminho_foto: string           opcional (referência do arquivo no Firestore)
 \begin{verbatim}
 tipos_deficiencia: array<string>      obrigatório
 codigos_cid: array<string>            opcional
-formato_ficha_medica: string          opcional (anexo | digital)
-dados_ficha_medica: map               opcional
+formato_ficha_medica: string          obrigatório (anexo | digital)
+dados_ficha_medica: map               opcional (formato digital)
+anexo_caminho_storage: string|null    opcional (formato anexo)
+anexo_nome_arquivo, anexo_tipo_conteudo, anexo_tamanho_bytes, anexo_enviado_em
+atualizado_por, atualizado_em         auditoria
 \end{verbatim}
 
 \subsubsection*{\texttt{alunos/\{aluno\_id\}/responsaveis/\{responsavel\_id\}}}
@@ -219,7 +222,7 @@ telefone_alternativo (opcional), email (opcional), principal: boolean
 \subsubsection*{\texttt{alunos/\{aluno\_id\}/documentos/\{documento\_id\}}}
 
 \begin{verbatim}
-tipo_documento: string        (ficha_medica | ficha_matricula | autorizacao_imagem | outro)
+tipo_documento: string        (ficha_matricula | autorizacao_imagem | outro; ficha_medica é legado bloqueado)
 armazenamento: "firestore", status: enviando | disponivel, total_partes
 tamanho_bytes, nome_arquivo_original, tipo_conteudo, enviado_por, enviado_em
 \end{verbatim}
@@ -284,10 +287,13 @@ registrado_por
 \subsubsection*{\texttt{registros\_evolucao/\{registro\_evolucao\_id\}}}
 
 \begin{verbatim}
-aluno_id, data_registro (YYYY-MM-DD), profissional_usuario_id
+aluno_id, data_registro (YYYY-MM-DD), profissional_usuario_id, profissional_nome
 area (cognitiva | motora | social | comunicacao | autonomia | outra)
 observacao
+criado_por, criado_em, atualizado_por, atualizado_em
 \end{verbatim}
+
+\textit{O lançamento é imutável: correções são feitas por um novo registro. O profissional e a autoria são sempre o usuário autenticado.}
 
 \subsubsection*{\texttt{modelos\_formulario/\{modelo\_id\}} --- formulários versionados}
 
@@ -396,11 +402,12 @@ Arquivo \texttt{firestore.rules} --- \textbf{nega tudo por padrão} e concede ac
 \midrule
 usuarios & autenticados & Direção \\
 alunos & autenticados & Direção/Administrativo (criar/excluir); autenticados (atualizar) \\
-ficha\_medica & Direção + Pedagogia & Direção \\
+ficha\_medica & Direção + Pedagogia & Direção/Pedagogia; anexo no Storage \\
 responsaveis / documentos & autenticados & Direção/Administrativo \\
 turmas, oficinas, turma\_oficinas, matriculas & autenticados & Direção, Pedagogia ou Administrativo \\
 aluno\_oficinas & autenticados & Direção/Pedagogia \\
-registros\_atividade, evolução, anexos & autenticados & autenticados (criar/atualizar); exclusão só Direção \\
+registros\_atividade e anexos & autenticados & autenticados (criar/atualizar); exclusão só Direção \\
+registros\_evolucao & autenticados & Direção/Pedagogia criam; registros imutáveis \\
 modelos\_formulario & autenticados & Direção/Pedagogia \\
 relatorios\_pedagogicos & autenticados & Direção/Pedagogia \\
 sessoes\_chamada (frequência) & autenticados & Direção, Pedagogia ou Administrativo \\
@@ -432,7 +439,7 @@ O script valida o modelo ponta a ponta: alunos com ficha médica e responsáveis
 
 \begin{itemize}[nosep]
   \item Campos definitivos do relatório pedagógico e formato oficial do formulário de avaliação;
-  \item Formato da ficha médica (digitalizada, digitada ou ambos);
+  \item Validação formal dos campos da ficha médica (o sistema já aceita anexo digitalizado ou preenchimento digital);
   \item Registro de frequência por turma/dia ou por oficina;
   \item Níveis de suporte/dependência dos alunos;
   \item Matriz de acesso aos dados médicos (participação de terapeutas);

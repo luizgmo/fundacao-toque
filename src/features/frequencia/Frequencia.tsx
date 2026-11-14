@@ -212,13 +212,16 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   // ID reservado para a ocorrência em edição; reutilizado se o usuário repetir o envio.
   const [pendingContactId, setPendingContactId] = useState<string | null>(null)
 
+  const fecharContato = () => {
+    setSelectedStudentForContact(null)
+    setContactGuardians([])
+    setSelectedGuardianId('')
+    setGuardiansError(null)
+  }
+
   useEffect(() => {
     let active = true
-    if (!selectedStudentForContact) {
-      setContactGuardians([])
-      setSelectedGuardianId('')
-      return () => { active = false }
-    }
+    if (!selectedStudentForContact) return () => { active = false }
     getStudentGuardians(selectedStudentForContact.id).then((items) => {
       if (!active) return
       const eligible = items.filter((item) => item.ativo && item.id)
@@ -430,6 +433,9 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     defaultReason?: string
   ) => {
     setSelectedStudentForContact(student)
+    setContactGuardians([])
+    setSelectedGuardianId('')
+    setGuardiansError(null)
     setContactFaltaDate(defaultFaltaDate || dateStr)
     setContactType('WhatsApp')
     setContactResponsible(userProfile?.nome_completo || '')
@@ -507,7 +513,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
       setTimeout(() => {
         setFamilyContactSuccess(null)
-        setSelectedStudentForContact(null)
+        fecharContato()
       }, 1800)
     } catch (err) {
       console.error('Erro ao salvar ocorrência no Firestore:', err)
@@ -797,7 +803,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                                 )}
                               </div>
                               <span className="student-sub">
-                                CID {student.cid} · {student.responsavelNome} ({student.telefone})
+                                {student.responsavelNome} ({student.telefone})
                               </span>
                             </div>
                           </div>
@@ -1079,7 +1085,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
       {/* Modal: Registrar Contato com a Família / Abrir Ocorrência */}
       {selectedStudentForContact && (
-        <div className="modal-backdrop" onClick={() => setSelectedStudentForContact(null)}>
+        <div className="modal-backdrop" onClick={fecharContato}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <header className="modal-header">
               <div className="modal-title-group">
@@ -1092,7 +1098,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               <button
                 aria-label="Fechar"
                 className="icon-button modal-close"
-                onClick={() => setSelectedStudentForContact(null)}
+                onClick={fecharContato}
                 type="button"
               >
                 <X size={20} />
@@ -1258,7 +1264,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               <footer className="modal-footer">
                 <button
                   className="button secondary"
-                  onClick={() => setSelectedStudentForContact(null)}
+                  onClick={fecharContato}
                   type="button"
                 >
                   Cancelar

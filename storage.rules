@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Padrão: negar tudo. Acesso concedido apenas por regras explícitas.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isActiveUser() {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.ativo == true;
+    }
+
+    function userRole() {
+      return firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data.papel;
+    }
+
+    function isDirection() {
+      return isActiveUser() && userRole() == 'direcao';
+    }
+
+    function isPedagogue() {
+      return isActiveUser() && userRole() == 'pedagogia';
+    }
+
+    function alunoExists(alunoId) {
+      return firestore.exists(/databases/(default)/documents/alunos/$(alunoId));
+    }
+
+    // Anexo da ficha médica: dados sensíveis (LGPD). Apenas Direção e
+    // Pedagogia leem/enviam/removem, com limite de 10 MB e tipos permitidos.
+    match /alunos/{alunoId}/ficha_medica/{fileName} {
+      allow read: if isDirection() || isPedagogue();
+      allow create: if (isDirection() || isPedagogue()) &&
+        alunoExists(alunoId) &&
+        request.resource.metadata.aluno_id == alunoId &&
+        request.resource.metadata.enviado_por == request.auth.uid &&
+        request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('^(application/pdf|image/(jpeg|png|webp))$');
+      allow update: if false;
+      allow delete: if isDirection() || isPedagogue();
+    }
+  }
+}

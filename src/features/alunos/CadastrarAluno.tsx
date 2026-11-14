@@ -17,7 +17,7 @@ import {
   X,
   AlertCircle,
 } from 'lucide-react'
-import { maskCPF, maskPhone, maskRG, maskCID } from '../../lib/masks'
+import { maskCPF, maskPhone, maskRG } from '../../lib/masks'
 import type { Student, StudentStatus, DocumentoTipo, Guardian } from './students-data'
 import { createStudent, gerarIdAluno, getStudentGuardians, updateStudent, uploadDocumento, MAX_DOCUMENTO_BYTES } from '../../services/studentsService'
 import type { StudentInput } from '../../services/studentsService'
@@ -54,8 +54,6 @@ type AlunoForm = {
   nome: string
   nascimento: string
   sexo: string
-  deficiencia: string
-  cid: string
   observacoes: string
   responsavelNome: string
   parentesco: string
@@ -67,7 +65,6 @@ type AlunoForm = {
   endereco: string
   turmas: string[]
   oficinas: string[]
-  grauDependencia: string
   status: StudentStatus
 }
 
@@ -75,8 +72,6 @@ const initialForm: AlunoForm = {
   nome: '',
   nascimento: '',
   sexo: '',
-  deficiencia: '',
-  cid: '',
   observacoes: '',
   responsavelNome: '',
   parentesco: 'Mãe',
@@ -88,7 +83,6 @@ const initialForm: AlunoForm = {
   endereco: '',
   turmas: [],
   oficinas: [],
-  grauDependencia: '',
   status: 'Ativo',
 }
 
@@ -121,8 +115,6 @@ function studentToForm(st: Student): AlunoForm {
     nome: st.name || '',
     nascimento: dateFormatted,
     sexo: st.sexo || '',
-    deficiencia: st.deficiencia || '',
-    cid: st.cid || '',
     observacoes: st.observacoes || '',
     responsavelNome: st.responsavelNome || '',
     parentesco: st.parentesco || 'Mãe',
@@ -135,7 +127,6 @@ function studentToForm(st: Student): AlunoForm {
     turmas: turmaValue ? [turmaValue] : [],
     // Nomes das oficinas (resumo do aluno); resolvidos contra as oficinas do banco na tela
     oficinas: st.oficinas || [],
-    grauDependencia: '',
     status: st.status,
   }
 }
@@ -284,7 +275,6 @@ export function CadastrarAluno({
   const [guardianId, setGuardianId] = useState<string | undefined>(() => initialStudent?.responsaveis?.find((item) => item.principal)?.id)
   const [additionalGuardians, setAdditionalGuardians] = useState<Guardian[]>(() => initialStudent?.responsaveis?.filter((item) => !item.principal) || [])
   const [photoName, setPhotoName] = useState('')
-  const [fichaMedicaFile, setFichaMedicaFile] = useState<File | null>(null)
   const [fichaMatriculaFile, setFichaMatriculaFile] = useState<File | null>(null)
   const [autorizacaoImagemFile, setAutorizacaoImagemFile] = useState<File | null>(null)
   const [outroFile, setOutroFile] = useState<File | null>(null)
@@ -429,14 +419,6 @@ export function CadastrarAluno({
         setSaveError('Por favor, selecione o sexo do aluno.')
         return false
       }
-      if (!form.deficiencia) {
-        setSaveError('Por favor, selecione o tipo de deficiência.')
-        return false
-      }
-      if (!form.cid.trim()) {
-        setSaveError('Por favor, informe o CID.')
-        return false
-      }
     } else if (currentStep === 2) {
       if (!form.responsavelNome.trim()) {
         setSaveError('Por favor, informe o nome do responsável.')
@@ -543,8 +525,6 @@ export function CadastrarAluno({
         nome: form.nome.trim(),
         nascimento: form.nascimento,
         sexo: form.sexo,
-        deficiencia: form.deficiencia,
-        cid: form.cid,
         observacoes: form.observacoes,
         responsavelNome: form.responsavelNome.trim(),
         parentesco: form.parentesco,
@@ -571,7 +551,6 @@ export function CadastrarAluno({
         turmaId: turmaPrincipal?.id,
         turmaTurno: turmaPrincipal?.turno,
         oficinas: selectedOficinasLabels,
-        grauDependencia: form.grauDependencia,
         lgpdImagem,
         lgpdDados,
         status: form.status,
@@ -643,7 +622,6 @@ export function CadastrarAluno({
       label: string
       limpar: () => void
     }[] = [
-      { tipo: 'ficha_medica', file: fichaMedicaFile, label: 'Ficha médica', limpar: () => setFichaMedicaFile(null) },
       { tipo: 'ficha_matricula', file: fichaMatriculaFile, label: 'Ficha de matrícula', limpar: () => setFichaMatriculaFile(null) },
       { tipo: 'autorizacao_imagem', file: autorizacaoImagemFile, label: 'Autorização de imagem', limpar: () => setAutorizacaoImagemFile(null) },
       { tipo: 'outro', file: outroFile, label: outroLabel || 'Outro documento', limpar: () => setOutroFile(null) },
@@ -693,7 +671,6 @@ export function CadastrarAluno({
   const resetForm = () => {
     setForm(initialForm)
     setPhotoName('')
-    setFichaMedicaFile(null)
     setFichaMatriculaFile(null)
     setAutorizacaoImagemFile(null)
     setOutroFile(null)
@@ -883,32 +860,6 @@ export function CadastrarAluno({
                   <option>Prefere não informar</option>
                 </select>
               </label>
-              <label className="field">
-                <span>Tipo de deficiência *</span>
-                <select
-                  onChange={(event) => updateField('deficiencia', event.target.value)}
-                  required
-                  value={form.deficiencia}
-                >
-                  <option value="">Selecione</option>
-                  <option>Intelectual</option>
-                  <option>Múltipla</option>
-                  <option>Física</option>
-                  <option>Autismo (TEA)</option>
-                  <option>Síndrome de Down</option>
-                  <option>Paralisia Cerebral</option>
-                  <option>Outra</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>CID *</span>
-                <input
-                  onChange={(event) => updateField('cid', maskCID(event.target.value))}
-                  placeholder="Ex: F71, F84"
-                  required
-                  value={form.cid}
-                />
-              </label>
               <label className="field field-wide">
                 <span>
                   Observações gerais <em>(opcional)</em>
@@ -1074,17 +1025,6 @@ export function CadastrarAluno({
                 <p>Anexe os arquivos necessários para o cadastro.</p>
               </div>
             </div>
-
-            <UploadDocumentoField
-              label="Ficha médica (PDF ou imagem)"
-              tipo="ficha_medica"
-              file={fichaMedicaFile}
-              onChange={pickFile(setFichaMedicaFile)}
-              status={uploadStatus['ficha_medica']}
-              progress={uploadProgress['ficha_medica'] ?? 0}
-              error={uploadError['ficha_medica']}
-              placeholder="Selecione um arquivo para anexar"
-            />
 
             <UploadDocumentoField
               label="Ficha de matrícula <em>(opcional)</em>"
@@ -1285,21 +1225,6 @@ export function CadastrarAluno({
             </label>
 
             <label className="field">
-              <span>
-                Grau de dependência <em>(opcional)</em>
-              </span>
-              <select
-                onChange={(event) => updateField('grauDependencia', event.target.value)}
-                value={form.grauDependencia}
-              >
-                <option value="">Selecione</option>
-                <option>Baixo</option>
-                <option>Médio</option>
-                <option>Alto</option>
-              </select>
-            </label>
-
-            <label className="field">
               <span>Status do aluno *</span>
               <select
                 onChange={(event) => updateField('status', event.target.value as StudentStatus)}
@@ -1342,12 +1267,6 @@ export function CadastrarAluno({
                     <dt>Sexo</dt>
                     <dd>{form.sexo || '—'}</dd>
                   </div>
-                  <div>
-                    <dt>Deficiência / CID</dt>
-                    <dd>
-                      {[form.deficiencia, form.cid].filter(Boolean).join(' / ') || '—'}
-                    </dd>
-                  </div>
                 </dl>
               </div>
 
@@ -1382,12 +1301,6 @@ export function CadastrarAluno({
                   <Stethoscope size={16} /> Documentos
                 </h4>
                 <dl>
-                  <div>
-                    <dt>Ficha médica</dt>
-                    <dd>
-                      {uploadStatus['ficha_medica'] === 'error' ? 'Não enviada — reenviar' : fichaMedicaFile ? 'Anexada' : uploadStatus['ficha_medica'] === 'success' ? 'Enviada ao sistema' : 'Pendente'}
-                    </dd>
-                  </div>
                   <div>
                     <dt>Ficha de matrícula</dt>
                     <dd>

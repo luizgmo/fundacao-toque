@@ -227,12 +227,18 @@ const healthRecords = {
   [STUDENT_1]: {
     tipos_deficiencia: ['TEA'], codigos_cid: ['F84.0'],
     formato_ficha_medica: 'digital',
-    dados_ficha_medica: { allergies: 'Nenhuma relatada', medications: 'Não informado' },
+    dados_ficha_medica: {
+      alergias: 'Nenhuma relatada',
+      medicamentos: 'Não informado',
+    },
     atualizado_por: DIRECTION_UID, atualizado_em: now(),
   },
   [STUDENT_2]: {
     tipos_deficiencia: ['Deficiência intelectual'], codigos_cid: ['F70'],
-    formato_ficha_medica: 'anexo', dados_ficha_medica: null,
+    formato_ficha_medica: 'digital',
+    dados_ficha_medica: {
+      cuidados_especiais: 'Acompanhamento pedagógico individualizado',
+    },
     atualizado_por: DIRECTION_UID, atualizado_em: now(),
   },
 }
@@ -341,7 +347,12 @@ const familyContacts = {
 }
 
 const progressEntries = {
-  'seed-progress-1': { aluno_id: STUDENT_1, data_registro: '2026-09-14', profissional_usuario_id: PEDAGOGUE_UID, area: 'social', observacao: 'Interagiu bem com os colegas na oficina de música.', criado_em: now(), atualizado_em: now() },
+  'seed-progress-1': {
+    aluno_id: STUDENT_1, data_registro: '2026-09-14', profissional_usuario_id: PEDAGOGUE_UID,
+    profissional_nome: 'Usuário Pedagogia (seed)', area: 'social',
+    observacao: 'Interagiu bem com os colegas na oficina de música.',
+    criado_por: PEDAGOGUE_UID, criado_em: now(), atualizado_por: PEDAGOGUE_UID, atualizado_em: now(),
+  },
 }
 
 const formTemplates = {

@@ -81,8 +81,6 @@ describe('studentsService', () => {
     nome: 'Aluno Teste',
     nascimento: '2015-01-01',
     sexo: 'F',
-    deficiencia: '',
-    cid: '',
     observacoes: '',
     responsavelNome: 'Mãe',
     parentesco: 'Mãe',

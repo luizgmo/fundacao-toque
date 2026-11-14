@@ -859,12 +859,6 @@ export function Oficinas() {
                           />
                           <span className="oficina-aluno-info">
                             <strong>{s.name}</strong>
-                            <span>
-                              {s.deficiencia}
-                              {s.grauDependencia
-                                ? ` · Dependência ${s.grauDependencia.toLowerCase()}`
-                                : ''}
-                            </span>
                           </span>
                         </label>
                         {checked && (
