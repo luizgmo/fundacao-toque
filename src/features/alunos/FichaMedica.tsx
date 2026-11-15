@@ -245,7 +245,7 @@ export function FichaMedica({
             .filter(Boolean),
           formatoFichaMedica: form.formato,
           dadosFichaMedica: form.formato === 'digital' ? dadosDoForm(form) : null,
-          anexo: form.formato === 'anexo' ? ficha?.anexo ?? null : null,
+          anexo: ficha?.anexo ?? null,
           novoAnexo: form.formato === 'anexo' ? arquivo : null,
           removerAnexo: form.formato !== 'anexo' && Boolean(ficha?.anexo),
         },

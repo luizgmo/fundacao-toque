@@ -13,6 +13,7 @@ const firestore = vi.hoisted(() => ({
     constraints,
   })),
   where: vi.fn((field: string, op: string, value: unknown) => ({ field, op, value })),
+  orderBy: vi.fn((field: string, direction: string) => ({ field, direction })),
   limit: vi.fn((value: number) => ({ limit: value })),
   serverTimestamp: vi.fn(() => 'SERVER_TS'),
 }))
@@ -28,6 +29,7 @@ vi.mock('firebase/firestore', () => firestore)
 
 import {
   criarEvolucao,
+  listarEvolucao,
   listarEvolucaoAluno,
   validarEvolucao,
 } from './evolutionService'
@@ -135,6 +137,15 @@ describe('criarEvolucao', () => {
 })
 
 describe('listarEvolucaoAluno', () => {
+  it('consulta as evoluções mais recentes antes de aplicar o limite', async () => {
+    await listarEvolucao()
+    await listarEvolucaoAluno('aluno-1')
+
+    expect(firestore.orderBy).toHaveBeenCalledWith('data_registro', 'desc')
+    expect(firestore.limit).toHaveBeenCalledWith(500)
+    expect(firestore.limit).toHaveBeenCalledWith(200)
+  })
+
   it('ordena por data e autor mais recente', async () => {
     firestore.getDocs.mockResolvedValueOnce({
       docs: [

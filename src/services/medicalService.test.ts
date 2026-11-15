@@ -126,6 +126,37 @@ describe('salvarFichaMedica', () => {
     expect(JSON.stringify(payload)).not.toContain('data:')
   })
 
+  it('remove o anexo anterior ao trocar o formato para digital', async () => {
+    const anexoAnterior = {
+      caminhoStorage: 'alunos/aluno-1/ficha_medica/old-ficha.pdf',
+      nomeArquivo: 'old-ficha.pdf',
+      tipoConteudo: 'application/pdf',
+      tamanhoBytes: 10,
+    }
+
+    const salva = await salvarFichaMedica(
+      'aluno-1',
+      {
+        ...fichaBase,
+        formatoFichaMedica: 'digital',
+        anexo: anexoAnterior,
+        removerAnexo: true,
+      },
+      'usuario-1'
+    )
+
+    expect(salva.anexo).toBeNull()
+    expect(storage.deleteObject).toHaveBeenCalledTimes(1)
+    expect(storage.deleteObject.mock.calls[0][0].path).toBe(
+      'alunos/aluno-1/ficha_medica/old-ficha.pdf'
+    )
+    expect(firestore.setDoc.mock.calls[0][1]).toMatchObject({
+      formato_ficha_medica: 'digital',
+      anexo_caminho_storage: null,
+      anexo_nome_arquivo: null,
+    })
+  })
+
   it('remove o anexo recém-enviado quando a gravação no Firestore falha', async () => {
     firestore.setDoc.mockRejectedValueOnce(permissionDenied())
     const arquivo = new File([new Uint8Array([1])], 'ficha.pdf', {

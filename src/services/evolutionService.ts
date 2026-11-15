@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -164,7 +165,9 @@ export function validarEvolucao(input: EvolucaoInput): string | null {
 export async function listarEvolucao(): Promise<EvolucaoRegistro[]> {
   if (isDemoModeEnabled()) return ordenarEvolucao(getDemoEvolucao())
 
-  const snap = await getDocs(query(collection(db, COLLECTION), limit(500)))
+  const snap = await getDocs(
+    query(collection(db, COLLECTION), orderBy('data_registro', 'desc'), limit(500))
+  )
   return ordenarEvolucao(
     snap.docs.map((item) => asEvolucao(item.id, item.data() as Record<string, unknown>))
   )
@@ -177,7 +180,12 @@ export async function listarEvolucaoAluno(alunoId: string): Promise<EvolucaoRegi
   }
 
   const snap = await getDocs(
-    query(collection(db, COLLECTION), where('aluno_id', '==', alunoId), limit(200))
+    query(
+      collection(db, COLLECTION),
+      where('aluno_id', '==', alunoId),
+      orderBy('data_registro', 'desc'),
+      limit(200)
+    )
   )
   return ordenarEvolucao(
     snap.docs.map((item) => asEvolucao(item.id, item.data() as Record<string, unknown>))
