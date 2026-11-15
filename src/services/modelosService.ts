@@ -13,12 +13,20 @@ import {
 import { confirmWrite } from '../lib/persistence'
 import { db } from '../lib/firebase'
 import type {
-  CampoFormulario,
   ModeloFormulario,
   ModeloFormularioInput,
+  TipoCampo,
 } from '../types/modelosFormulario'
+import { TIPOS_CAMPO, VALID_TIPOS_MODELO } from '../types/modelosFormulario'
 
 const COLLECTION = 'modelos_formulario'
+
+function asTipoCampo(value: unknown): TipoCampo {
+  const tipo = String(value || 'texto')
+  return Object.prototype.hasOwnProperty.call(TIPOS_CAMPO, tipo)
+    ? (tipo as TipoCampo)
+    : 'texto'
+}
 
 function asModelo(id: string, data: Record<string, unknown>): ModeloFormulario {
   const campos = Array.isArray(data.campos) ? data.campos : []
@@ -30,7 +38,7 @@ function asModelo(id: string, data: Record<string, unknown>): ModeloFormulario {
     campos: campos.map((c: Record<string, unknown>) => ({
       chave: String(c.chave || ''),
       rotulo: String(c.rotulo || ''),
-      tipo: String(c.tipo || 'texto'),
+      tipo: asTipoCampo(c.tipo),
       obrigatorio: Boolean(c.obrigatorio === true),
       opcoes: Array.isArray(c.opcoes) ? (c.opcoes as string[]).map(String) : [],
     })),

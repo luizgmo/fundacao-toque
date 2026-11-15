@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import {
-  AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   FileText,
   Paperclip,
@@ -41,7 +41,8 @@ import type {
   RelatorioPedagogicoInput,
   TipoRelatorioPedagogico,
 } from '../../types/relatoriosPedagogicos'
-import { CamposModelo, validarCamposObrigatorios } from './CamposModelo'
+import { CamposModelo } from './CamposModelo'
+import { validarCamposObrigatorios } from './camposModeloUtils'
 import type { ModeloFormulario } from '../../types/modelosFormulario'
 import './CamposModelo.css'
 
@@ -59,6 +60,13 @@ const emptyForm = (studentId: string, userId: string, userName: string): Relator
 })
 const typeLabels: Record<TipoRelatorioPedagogico, string> = { diario: 'Diário', semestral: 'Semestral', anual: 'Anual' }
 const dateLabel = (value: string) => value ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`)) : 'Período não informado'
+const mergeModelos = (current: ModeloFormulario[], data: ModeloFormulario[]) => {
+  const porId = new Map(data.map((modelo) => [modelo.id, modelo]))
+  current.forEach((modelo) => {
+    if (!porId.has(modelo.id)) porId.set(modelo.id, modelo)
+  })
+  return [...porId.values()]
+}
 
 export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?: string }) {
   const { currentUser, userProfile } = useAuth()
@@ -75,7 +83,6 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
   // Modelo de formulário selecionado e respostas dinâmicas dos campos configuráveis.
   const [modelos, setModelos] = useState<ModeloFormulario[]>([])
   const [modelosLoading, setModelosLoading] = useState(false)
-  const [selecoes, setSelecoes] = useState<Record<string, string[]>>({})
   const modeloSelecionado = modelos.find((m) => m.id === form.modelo_formulario_id) || null
 
   // Estados separados de carregando / erro / dados para alunos e histórico.
@@ -93,7 +100,7 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
     setModelosLoading(true)
     try {
       const data = await listarModelosAtivos()
-      setModelos(data)
+      setModelos((current) => mergeModelos(current, data))
     } catch (cause) {
       console.warn('Não foi possível carregar os modelos de formulário:', cause)
     } finally {
@@ -101,13 +108,27 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
     }
   }
 
+  useEffect(() => {
+    let cancelled = false
+    listarModelosAtivos()
+      .then((data) => {
+        if (!cancelled) setModelos((current) => mergeModelos(current, data))
+      })
+      .catch((cause) => {
+        if (!cancelled) console.warn('Não foi possível carregar os modelos de formulário:', cause)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const update = <K extends keyof RelatorioPedagogicoInput>(key: K, value: RelatorioPedagogicoInput[K]) => {
     setForm((current) => ({ ...current, [key]: value, status: current.id ? current.status : 'rascunho' }))
     setMessage('Alterações ainda não salvas.')
   }
 
-  const updateResposta = (chave: string, valor: string) => {
-    setForm((current) => ({ ...current, respostas: { ...current.respostas, [chave]: valor } }))
+  const updateResposta = (respostas: Record<string, string>) => {
+    setForm((current) => ({ ...current, respostas }))
     setMessage('Alterações ainda não salvas.')
   }
 
@@ -184,7 +205,6 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
     setError(''); setMessage(''); setBusy(true)
     try {
       setForm({ ...report })
-      setSelecoes({})
       showAttachments(await listarAnexosRelatorio(report.id))
       setSelectedFiles([])
       if (report.modelo_formulario_id) {
@@ -210,7 +230,7 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
 
       // Valida os campos obrigatórios do modelo selecionado ao concluir.
       if (status === 'concluido' && modeloSelecionado) {
-        const erroObrigatorio = validarCamposObrigatorios(modeloSelecionado, form.respostas, selecoes)
+        const erroObrigatorio = validarCamposObrigatorios(modeloSelecionado, form.respostas)
         if (erroObrigatorio) throw new Error(erroObrigatorio)
       }
 
@@ -247,7 +267,7 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
   }
 
   const startNew = () => {
-    setForm(emptyForm(form.aluno_id, userId, userName)); setReservedId(novoIdRelatorio()); showAttachments([]); setSelectedFiles([]); setSelecoes({}); setError(''); setMessage('Novo relatório. Salve para criar um rascunho.')
+    setForm(emptyForm(form.aluno_id, userId, userName)); setReservedId(novoIdRelatorio()); showAttachments([]); setSelectedFiles([]); setError(''); setMessage('Novo relatório. Salve para criar um rascunho.')
   }
 
   const selectFiles = (files: FileList | null) => {
@@ -271,10 +291,10 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
     {message && <p role="status" className="save-feedback">{message}</p>}
     <div className="report-layout"><form className="report-form" onSubmit={(event) => { event.preventDefault(); void persist('rascunho') }}>
       <section className="form-card"><div className="form-card-heading"><span className="form-heading-icon"><FileText size={21}/></span><div><h3>Identificação do relatório</h3><p>Selecione um aluno cadastrado e informe o período avaliado.</p></div></div>
-        <div className="form-grid"><label className="field field-wide"><span>Aluno</span><select disabled={studentsQuery.status !== 'ready' || Boolean(form.id)} onChange={(e) => { update('aluno_id', e.target.value); setForm(emptyForm(e.target.value, userId, userName)); setReservedId(novoIdRelatorio()); showAttachments([]); setSelectedFiles([]); setSelecoes({}); void carregarModelos() }} value={form.aluno_id}><option value="">{studentsQuery.status === 'loading' ? 'Carregando alunos…' : studentsQuery.status === 'error' ? 'Alunos indisponíveis' : students.length === 0 ? 'Nenhum aluno cadastrado' : 'Selecione um aluno'}</option>{students.map((item) => <option key={item.id} value={item.id}>{item.name}{item.status.toLowerCase() === 'inativo' ? ' (inativo)' : ''}</option>)}</select></label>
+        <div className="form-grid"><label className="field field-wide"><span>Aluno</span><select disabled={studentsQuery.status !== 'ready' || Boolean(form.id)} onChange={(e) => { update('aluno_id', e.target.value); setForm(emptyForm(e.target.value, userId, userName)); setReservedId(novoIdRelatorio()); showAttachments([]); setSelectedFiles([]); void carregarModelos() }} value={form.aluno_id}><option value="">{studentsQuery.status === 'loading' ? 'Carregando alunos…' : studentsQuery.status === 'error' ? 'Alunos indisponíveis' : students.length === 0 ? 'Nenhum aluno cadastrado' : 'Selecione um aluno'}</option>{students.map((item) => <option key={item.id} value={item.id}>{item.name}{item.status.toLowerCase() === 'inativo' ? ' (inativo)' : ''}</option>)}</select></label>
           <label className="field"><span>Tipo de relatório</span><select disabled={form.status === 'concluido'} onChange={(e) => update('tipo_relatorio', e.target.value as TipoRelatorioPedagogico)} value={form.tipo_relatorio}><option value="diario">Diário</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select></label>
           <label className="field"><span>Início do período</span><input disabled={form.status === 'concluido'} onChange={(e) => update('periodo_inicio', e.target.value)} required type="date" value={form.periodo_inicio}/></label><label className="field"><span>Fim do período</span><input disabled={form.status === 'concluido'} min={form.periodo_inicio || undefined} onChange={(e) => update('periodo_fim', e.target.value)} required type="date" value={form.periodo_fim}/></label>
-          <label className="field field-wide"><span>Modelo de formulário</span><select disabled={form.status === 'concluido' || modelosLoading} onChange={(e) => { const id = e.target.value || null; const modelo = modelos.find((m) => m.id === id) || null; setForm((current) => ({ ...current, modelo_formulario_id: id, modelo_formulario_versao: modelo?.versao ?? null })); setSelecoes({}); setMessage('Campos do modelo carregados. Preencha-os antes de concluir.') }} value={form.modelo_formulario_id || ''}><option value="">Nenhum modelo (campos livres)</option>{!modelosLoading && modelos.map((m) => <option key={m.id} value={m.id}>{m.nome} (v{m.versao})</option>)}</select></label>
+          <label className="field field-wide"><span>Modelo de formulário</span><select disabled={form.status === 'concluido' || modelosLoading} onChange={(e) => { const id = e.target.value || null; const modelo = modelos.find((m) => m.id === id) || null; setForm((current) => ({ ...current, modelo_formulario_id: id, modelo_formulario_versao: modelo?.versao ?? null, respostas: {} })); setMessage('Campos do modelo carregados. Preencha-os antes de concluir.') }} value={form.modelo_formulario_id || ''}><option value="">Nenhum modelo (campos livres)</option>{!modelosLoading && modelos.map((m) => <option key={m.id} value={m.id}>{m.nome} (v{m.versao})</option>)}</select></label>
           <label className="field field-wide"><span>Profissional responsável</span><input readOnly value={userName} /></label></div>
         <div className="selected-student"><div><strong>{student?.name || 'Nenhum aluno selecionado'}</strong><span>Responsável pelo registro: {userName || 'perfil não identificado'}</span></div><button className="text-button" onClick={startNew} type="button">Novo relatório</button></div>
       </section>

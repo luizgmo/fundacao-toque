@@ -17,7 +17,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from 'lucide-react'
-import { calculateAge } from './students-data'
+import { calculateAge, contactMethodLabel } from './students-data'
 import type { Student, ContactEntry, DocumentEntry, Guardian } from './students-data'
 import type { AlunoOficina, Oficina, TurmaOficina } from '../../types/oficinas'
 import { describePersistenceError } from '../../lib/persistence'
@@ -658,7 +658,7 @@ export function DetalheAluno({
                 />
               )}
               {allContacts.map((contact, index) => (
-                <article key={contact.contactDate + index}>
+                <article key={contact.id || contact.contactDate + index}>
                   <span className="timeline-dot">
                     <Phone size={15} />
                   </span>
@@ -673,7 +673,7 @@ export function DetalheAluno({
                     >
                       <small>
                         Falta em {contact.faltaDate} — contato em {contact.contactDate} (
-                        {contact.type})
+                        {contactMethodLabel(contact.type)})
                       </small>
                       {contact.status && (
                         <span
@@ -695,8 +695,16 @@ export function DetalheAluno({
                         {contact.reason}
                       </p>
                     )}
+                    {contact.guardianName && (
+                      <p style={{ margin: '0.2rem 0' }}>
+                        <strong>Responsável contatado:</strong> {contact.guardianName}
+                        {contact.guardianRelationship ? ` (${contact.guardianRelationship})` : ''}
+                        {contact.guardianContact ? ` — ${contact.guardianContact}` : ''}
+                      </p>
+                    )}
                     <p>
-                      {contact.note} <em>— {contact.responsible}</em>
+                      {contact.note || 'Sem observações.'}{' '}
+                      <em>— Registrado por {contact.responsible}</em>
                     </p>
                   </div>
                 </article>

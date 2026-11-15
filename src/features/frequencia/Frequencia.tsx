@@ -20,7 +20,12 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { AttendanceSession, AttendanceStatus, ContactEntry, Guardian, Student } from '../alunos/students-data'
-import { addContactToStudent, saveAttendanceSession } from '../alunos/students-data'
+import {
+  addContactToStudent,
+  CONTACT_METHOD_OPTIONS,
+  normalizeContactMethod,
+  saveAttendanceSession,
+} from '../alunos/students-data'
 import { getStudentById, getStudentGuardians } from '../../services/studentsService'
 import { subscribeToTurmas } from '../../services/turmasService'
 import {
@@ -37,6 +42,7 @@ import {
   recalcularFaltasConsecutivasContexto,
   saveAttendanceToFirestore,
   saveOccurrenceToFirestore,
+  subscribeStudentOccurrences,
 } from '../../services/attendanceService'
 import { obterLimiteFaltas, LIMITE_FALTAS_PADRAO } from '../../services/configuracaoService'
 import { isDemoModeEnabled } from '../../lib/demoMode'
@@ -57,7 +63,7 @@ type Props = {
 }
 
 export function Frequencia({ onViewStudentProfile }: Props) {
-  const { userProfile } = useAuth()
+  const { userProfile, currentUser } = useAuth()
   // Estados separados de carregando / erro / dados para cada fonte.
   const studentsSub = useStudents()
   const allStudents = studentsSub.data
@@ -198,7 +204,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   const [guardiansError, setGuardiansError] = useState<unknown>(null)
   const [selectedGuardianId, setSelectedGuardianId] = useState('')
   const [contactFaltaDate, setContactFaltaDate] = useState<string>('')
-  const [contactType, setContactType] = useState<string>('WhatsApp')
+  const [contactType, setContactType] = useState<string>('whatsapp')
   const [contactResponsible, setContactResponsible] = useState<string>(
     userProfile?.nome_completo || ''
   )
@@ -211,6 +217,18 @@ export function Frequencia({ onViewStudentProfile }: Props) {
   const [savingContact, setSavingContact] = useState(false)
   // ID reservado para a ocorrência em edição; reutilizado se o usuário repetir o envio.
   const [pendingContactId, setPendingContactId] = useState<string | null>(null)
+
+  // Histórico real de contatos do aluno selecionado. O modal precisa refletir a
+  // coleção contatos_familia, não apenas os contatos legados embutidos no aluno.
+  const contactStudentId = selectedStudentForContact?.id || ''
+  const occurrencesSub = useSubscription<ContactEntry[]>(
+    (onData, onError) => {
+      if (!contactStudentId) return () => {}
+      return subscribeStudentOccurrences(contactStudentId, onData, onError)
+    },
+    [],
+    contactStudentId,
+  )
 
   const fecharContato = () => {
     setSelectedStudentForContact(null)
@@ -437,7 +455,7 @@ export function Frequencia({ onViewStudentProfile }: Props) {
     setSelectedGuardianId('')
     setGuardiansError(null)
     setContactFaltaDate(defaultFaltaDate || dateStr)
-    setContactType('WhatsApp')
+    setContactType('whatsapp')
     setContactResponsible(userProfile?.nome_completo || '')
     setContactReason(
       defaultReason ||
@@ -473,13 +491,15 @@ export function Frequencia({ onViewStudentProfile }: Props) {
         studentId: selectedStudentForContact.id,
         studentName: selectedStudentForContact.name,
         faltaDate: contactFaltaDate,
+        relatedAbsenceDates: [contactFaltaDate],
         type: contactType,
+        responsibleId: currentUser?.uid || userProfile?.uid || '',
         responsible: contactResponsible,
         guardianId: guardian.id,
         guardianSnapshot: {
           nome: guardian.nome,
           parentesco: guardian.parentesco,
-          canal: contactType,
+          canal: normalizeContactMethod(contactType),
           contato: guardian.telefone,
         },
         reason: contactReason,
@@ -504,6 +524,8 @@ export function Frequencia({ onViewStudentProfile }: Props) {
 
       if (isDemoModeEnabled()) {
         addContactToStudent(selectedStudentForContact.id, newContact)
+        // A assinatura de demonstração lê o armazenamento local uma única vez.
+        occurrencesSub.retry()
       }
       setFamilyContactSuccess(
         isDemoModeEnabled()
@@ -522,6 +544,13 @@ export function Frequencia({ onViewStudentProfile }: Props) {
       setSavingContact(false)
     }
   }
+
+  const contactHistory =
+    occurrencesSub.status === 'ready' && occurrencesSub.data.length > 0
+      ? occurrencesSub.data
+      : occurrencesSub.status === 'ready'
+        ? selectedStudentForContact?.contacts ?? []
+        : []
 
   return (
     <div className="frequencia-page page-container">
@@ -1153,20 +1182,20 @@ export function Frequencia({ onViewStudentProfile }: Props) {
                     onChange={(e) => setContactType(e.target.value)}
                     value={contactType}
                   >
-                    <option value="WhatsApp">WhatsApp</option>
-                    <option value="Ligação telefônica">Ligação Telefônica</option>
-                    <option value="Atendimento Presencial">Atendimento Presencial</option>
-                    <option value="Visita Domiciliar">Visita Domiciliar</option>
-                    <option value="E-mail">E-mail</option>
-                    <option value="Outro">Outro</option>
+                    {CONTACT_METHOD_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
                 <label className="field">
                   <span>Responsável pelo Contato (Profissional)</span>
                   <input
-                    onChange={(e) => setContactResponsible(e.target.value)}
+                    readOnly
                     required
+                    title="Registrado com o usuário autenticado"
                     type="text"
                     value={contactResponsible}
                   />
@@ -1235,20 +1264,53 @@ export function Frequencia({ onViewStudentProfile }: Props) {
               </div>
 
               {/* History of Previous Contacts */}
-              {selectedStudentForContact.contacts.length > 0 && (
+              {occurrencesSub.status === 'error' && (
+                <LoadError
+                  error={occurrencesSub.error}
+                  what="o histórico de contatos"
+                  onRetry={occurrencesSub.retry}
+                />
+              )}
+
+              {occurrencesSub.status === 'loading' && (
+                <div className="contact-history-section">
+                  <h4>
+                    <History size={16} /> Histórico de Contatos Anteriores
+                  </h4>
+                  <p className="history-item-note">Carregando histórico…</p>
+                </div>
+              )}
+
+              {occurrencesSub.status === 'ready' && contactHistory.length === 0 && (
+                <div className="contact-history-section">
+                  <h4>
+                    <History size={16} /> Histórico de Contatos Anteriores
+                  </h4>
+                  <p className="history-item-note">Nenhum contato registrado para este aluno.</p>
+                </div>
+              )}
+
+              {occurrencesSub.status === 'ready' && contactHistory.length > 0 && (
                 <div className="contact-history-section">
                   <h4>
                     <History size={16} /> Histórico de Contatos Anteriores (
-                    {selectedStudentForContact.contacts.length})
+                    {contactHistory.length})
                   </h4>
                   <div className="contact-history-list">
-                    {selectedStudentForContact.contacts.map((c, index) => (
-                      <div className="history-item-row" key={index}>
+                    {contactHistory.map((c, index) => (
+                      <div className="history-item-row" key={c.id || index}>
                         <div className="history-item-meta">
                           <strong>{c.contactDate}</strong> — <small>{c.type}</small> por{' '}
                           <em>{c.responsible}</em> (Falta de {c.faltaDate})
                           {c.status && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', opacity: 0.85 }}>[{c.status}]</span>}
                         </div>
+                        {(c.guardianName || c.guardianContact) && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-sub, #4b5563)', margin: '0.2rem 0' }}>
+                            <strong>Familiar:</strong> {c.guardianName || 'Não identificado'}
+                            {c.guardianRelationship ? ` (${c.guardianRelationship})` : ''}
+                            {c.guardianContact ? ` · ${c.guardianContact}` : ''}
+                          </div>
+                        )}
                         {c.reason && (
                           <div style={{ fontSize: '0.8rem', color: 'var(--color-text-sub, #4b5563)', margin: '0.2rem 0' }}>
                             <strong>Motivo:</strong> {c.reason}

@@ -426,6 +426,13 @@
   font-size: 14px;
 }
 
+.metric-hint {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .dashboard-primary-grid,
 .dashboard-secondary-grid {
   display: grid;

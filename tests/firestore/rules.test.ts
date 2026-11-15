@@ -118,6 +118,30 @@ function evolucaoValida(uid: string, extra: Record<string, unknown> = {}) {
   }
 }
 
+function contatoValido(uid: string, extra: Record<string, unknown> = {}) {
+  return {
+    aluno_id: 'aluno-1',
+    aluno_nome: 'Aluno fictício',
+    responsavel_id: 'principal-1',
+    responsavel_snapshot: {
+      nome: 'Principal',
+      parentesco: 'Mãe',
+      canal: 'whatsapp',
+      contato: '0000',
+    },
+    datas_faltas_relacionadas: ['2026-11-10'],
+    contatado_em: serverTimestamp(),
+    meio_contato: 'whatsapp',
+    motivo_ocorrencia: 'Faltas consecutivas',
+    status_ocorrencia: 'Aberta',
+    observacoes: 'Contato realizado com a família.',
+    usuario_responsavel_id: uid,
+    usuario_responsavel_nome: 'Profissional de Teste',
+    criado_em: serverTimestamp(),
+    ...extra,
+  }
+}
+
 function fichaComAnexo(uid: string, alunoId = 'aluno-1', extra: Record<string, unknown> = {}) {
   return {
     ...fichaDigital(uid),
@@ -136,6 +160,48 @@ describe('Firestore security rules', () => {
   it('nega acesso anônimo e perfil ausente a dados operacionais', async () => {
     await assertFails(getDoc(doc(firestore(), 'alunos/aluno-1')))
     await assertFails(getDoc(doc(firestore('sem-perfil'), 'alunos/aluno-1')))
+  })
+
+  it('nega escrita operacional a anônimo e usuário sem perfil', async () => {
+    const escritas = [
+      (db: ReturnType<typeof firestore>) =>
+        setDoc(doc(db, 'alunos/aluno-1'), { nome_completo: 'Alteração indevida' }),
+      (db: ReturnType<typeof firestore>) =>
+        setDoc(doc(db, 'sessoes_chamada/2026-11-10_turma-1_geral'), {
+          data_chamada: '2026-11-10', turma_id: 'turma-1', escopo: 'turma',
+          turma_oficina_id: null, presencas: { 'aluno-1': 'presente' },
+          observacoes: {}, registrado_por: 'Anônimo', versao: 1,
+        }),
+      (db: ReturnType<typeof firestore>) =>
+        setDoc(doc(db, 'contatos_familia/negado'), contatoValido('sem-perfil')),
+      (db: ReturnType<typeof firestore>) =>
+        setDoc(doc(db, 'registros_evolucao/negado'), evolucaoValida('sem-perfil')),
+      (db: ReturnType<typeof firestore>) =>
+        setDoc(doc(db, 'alunos/aluno-1/ficha_medica/ficha'), fichaDigital('sem-perfil')),
+      (db: ReturnType<typeof firestore>) =>
+        setDoc(doc(db, 'relatorios_pedagogicos/negado'), { status: 'rascunho', aluno_id: 'aluno-1' }),
+    ]
+
+    for (const escrita of escritas) {
+      await assertFails(escrita(firestore()))
+      await assertFails(escrita(firestore('sem-perfil')))
+    }
+  })
+
+  it('limita a autorização de imagem a Direção/Administrativo sem expor à Pedagogia para escrita', async () => {
+    const autorizacao = {
+      tipo_documento: 'autorizacao_imagem',
+      data_url: 'data:application/pdf;base64,AA==',
+      tamanho_bytes: 1,
+    }
+    await assertSucceeds(
+      setDoc(doc(firestore('admin-1'), 'alunos/aluno-1/documentos/autorizacao'), autorizacao),
+    )
+    await assertFails(
+      setDoc(doc(firestore('pedagogia-1'), 'alunos/aluno-1/documentos/autorizacao-2'), autorizacao),
+    )
+    await assertSucceeds(getDoc(doc(firestore('pedagogia-1'), 'alunos/aluno-1/documentos/autorizacao')))
+    await assertFails(getDoc(doc(firestore(), 'alunos/aluno-1/documentos/autorizacao')))
   })
 
   it('nega acesso a usuários inativos e mantém leitura de aluno para papéis ativos', async () => {
@@ -358,16 +424,57 @@ describe('Firestore security rules', () => {
     })
   })
 
-  it('permite criar contatos sem permitir reescrita do snapshot histórico', async () => {
+  it('grava contatos com o contrato documentado e sem permitir reescrita do histórico', async () => {
     const db = firestore('pedagogia-1')
-    await assertSucceeds(setDoc(doc(db, 'contatos_familia/novo'), {
-      aluno_id: 'aluno-1', responsavel_id: 'principal-1',
-      responsavel_snapshot: { nome: 'Principal', parentesco: 'Mãe', contato: '0000' },
-    }))
-    await assertFails(setDoc(doc(db, 'contatos_familia/forjado'), {
-      aluno_id: 'aluno-1', responsavel_id: 'principal-1',
-      responsavel_snapshot: { nome: 'Nome forjado', parentesco: 'Mãe', contato: '0000' },
-    }))
+    await assertSucceeds(
+      setDoc(doc(db, 'contatos_familia/novo'), contatoValido('pedagogia-1')),
+    )
+    await assertSucceeds(
+      setDoc(doc(firestore('admin-1'), 'contatos_familia/admin'), contatoValido('admin-1')),
+    )
+    await assertSucceeds(
+      setDoc(doc(firestore('direcao-1'), 'contatos_familia/direcao'), contatoValido('direcao-1')),
+    )
+
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/forjado'), contatoValido('pedagogia-1', {
+        responsavel_snapshot: {
+          nome: 'Nome forjado', parentesco: 'Mãe', canal: 'whatsapp', contato: '0000',
+        },
+      })),
+    )
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/sem-metodo'), contatoValido('pedagogia-1', {
+        meio_contato: 'WhatsApp',
+        responsavel_snapshot: {
+          nome: 'Principal', parentesco: 'Mãe', canal: 'WhatsApp', contato: '0000',
+        },
+      })),
+    )
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/sem-faltas'), contatoValido('pedagogia-1', {
+        datas_faltas_relacionadas: [],
+      })),
+    )
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/falta-invalida'), contatoValido('pedagogia-1', {
+        datas_faltas_relacionadas: ['2026-11-10', '10/11/2026'],
+      })),
+    )
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/sem-autor'), contatoValido('outro-uid')),
+    )
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/sem-observacao'), contatoValido('pedagogia-1', {
+        observacoes: '',
+      })),
+    )
+    await assertFails(
+      setDoc(doc(db, 'contatos_familia/campo-extra'), contatoValido('pedagogia-1', {
+        data_formatada: '10/11/2026',
+      })),
+    )
+
     await assertFails(updateDoc(doc(db, 'contatos_familia/contato-1'), { responsavel_snapshot: { nome: 'Nome alterado' } }))
     await assertSucceeds(getDoc(doc(db, 'contatos_familia/contato-1')))
   })

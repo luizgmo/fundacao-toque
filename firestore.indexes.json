@@ -58,6 +58,14 @@
       ]
     },
     {
+      "collectionGroup": "relatorios_pedagogicos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "atualizado_em", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sessoes_chamada",
       "queryScope": "COLLECTION",
       "fields": [

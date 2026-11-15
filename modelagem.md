@@ -392,17 +392,31 @@ Quando `escopo` for `oficina`, o campo `turma_oficina_id` será obrigatório; qu
 ### `contatos_familia/{contato_id}`
 
 ```text
-aluno_id: string                        obrigatório
-responsavel_id: string                       opcional
-datas_faltas_relacionadas: array<string>      obrigatório
+aluno_id: string                              obrigatório
+aluno_nome: string                            obrigatório (desnormalizado para o histórico)
+responsavel_id: string                        obrigatório
+responsavel_snapshot: map                     obrigatório
+  nome: string                                obrigatório (igual ao cadastro no momento do contato)
+  parentesco: string                          obrigatório
+  canal: string                               obrigatório (igual a meio_contato)
+  contato: string                             obrigatório (telefone usado no contato)
+datas_faltas_relacionadas: array<string>      obrigatório (1 a 50)
   datas das faltas, formato YYYY-MM-DD
-contatado_em: Timestamp                   obrigatório
-meio_contato: string                    obrigatório
+contatado_em: Timestamp                       obrigatório (igual a request.time)
+meio_contato: string                          obrigatório
   valores: telefone | whatsapp | email | presencial | outro
-observacoes: string                             obrigatório
-usuario_responsavel_id: string               obrigatório
-criado_em: Timestamp                     obrigatório
+motivo_ocorrencia: string                     obrigatório
+status_ocorrencia: string                     obrigatório
+observacoes: string                           obrigatório
+usuario_responsavel_id: string                obrigatório (UID autenticado, igual a request.auth.uid)
+usuario_responsavel_nome: string              obrigatório (desnormalizado para exibição)
+criado_em: Timestamp                          obrigatório (igual a request.time)
 ```
+
+O documento é imutável: correções geram um novo contato. O `responsavel_snapshot`
+preserva quem foi contatado e por qual canal, mesmo que o cadastro do responsável
+mude depois. A tela usa o valor padronizado de `meio_contato`; rótulos em
+português existem apenas na interface.
 
 ### `relatorios_gerados/{relatorio_gerado_id}`
 
@@ -464,6 +478,7 @@ atualizado_em: Timestamp                     obrigatório
 | `registros_atividade` | `turma_id`, `data_atividade DESC` |
 | `registros_evolucao` | `aluno_id`, `data_registro DESC` |
 | `relatorios_pedagogicos` | `aluno_id`, `tipo_relatorio`, `periodo_fim DESC` |
+| `relatorios_pedagogicos` | `status`, `atualizado_em` |
 | `sessoes_chamada` | `turma_id`, `data_chamada DESC` |
 | `contatos_familia` | `aluno_id`, `contatado_em DESC` |
 | `aluno_oficinas` | `aluno_id`, `status` |
@@ -492,7 +507,7 @@ Substituir `ID_HOMOLOGACAO` somente após identificar o projeto Firebase aprovad
 - [ ] Relacionamentos aluno-turma e turma-oficina preservam histórico.
 - [ ] Não é possível duplicar a presença do aluno em uma mesma chamada.
 - [ ] Índices necessários estão declarados em `firestore.indexes.json`.
-- [ ] Regras de acesso possuem testes no Firebase Emulator Suite.
+- [x] Regras de acesso possuem testes no Firebase Emulator Suite.
 - [ ] Backup diário e retenção mínima de 30 dias foram avaliados e configurados no plano disponível.
 - [ ] A modelagem foi validada com dados fictícios.
 

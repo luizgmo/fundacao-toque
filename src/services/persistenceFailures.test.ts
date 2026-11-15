@@ -55,23 +55,51 @@ beforeEach(() => {
   firestore.commit.mockResolvedValue(undefined)
 })
 
+const contatoInput = {
+  studentId: 'aluno-1',
+  studentName: 'Aluno',
+  faltaDate: '2026-11-10',
+  type: 'WhatsApp',
+  responsibleId: 'pedagogia-1',
+  responsible: 'Prof',
+  reason: 'Falta',
+  status: 'Aberta',
+  note: 'Contato realizado.',
+  guardianId: 'g1',
+  guardianSnapshot: { nome: 'Mãe', parentesco: 'Mãe', canal: 'WhatsApp', contato: '1' },
+}
+
 describe('saveOccurrenceToFirestore', () => {
   it('propaga erro de rede em vez de devolver ID', async () => {
     firestore.setDoc.mockRejectedValueOnce(networkError())
-    const input = {
-      studentId: 'aluno-1',
-      studentName: 'Aluno',
-      faltaDate: '10/11/2026',
-      type: 'WhatsApp',
-      responsible: 'Prof',
-      reason: 'Falta',
-      status: 'Aberta',
-      note: '',
-      guardianId: 'g1',
-      guardianSnapshot: { nome: 'Mãe', parentesco: 'Mãe', canal: 'WhatsApp', contato: '1' },
-    }
-    await expect(saveOccurrenceToFirestore(input, 'contato-fixo')).rejects.toMatchObject({
+    await expect(saveOccurrenceToFirestore(contatoInput, 'contato-fixo')).rejects.toMatchObject({
       code: 'unavailable',
+    })
+  })
+
+  it('grava o contrato documentado e só devolve o ID após confirmar', async () => {
+    await expect(saveOccurrenceToFirestore(contatoInput, 'contato-fixo')).resolves.toBe('contato-fixo')
+
+    const [, dados] = firestore.setDoc.mock.calls[0]
+    expect(dados).toMatchObject({
+      aluno_id: 'aluno-1',
+      aluno_nome: 'Aluno',
+      datas_faltas_relacionadas: ['2026-11-10'],
+      contatado_em: 'ts',
+      meio_contato: 'whatsapp',
+      motivo_ocorrencia: 'Falta',
+      status_ocorrencia: 'Aberta',
+      observacoes: 'Contato realizado.',
+      usuario_responsavel_id: 'pedagogia-1',
+      usuario_responsavel_nome: 'Prof',
+      responsavel_id: 'g1',
+      criado_em: 'ts',
+    })
+    expect(dados.responsavel_snapshot).toEqual({
+      nome: 'Mãe',
+      parentesco: 'Mãe',
+      canal: 'whatsapp',
+      contato: '1',
     })
   })
 })

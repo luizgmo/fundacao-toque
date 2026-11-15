@@ -34,7 +34,11 @@ export type ResultadoFaltasRecorrentes = {
   alertas: AlunoFaltaAlerta[]
   // Limite aplicado (configurado na Fundação ou o padrão).
   limite: number
+  // Janela efetivamente consultada, para deixar o recorte visível na tela.
+  janela: { sessoesLidas: number; limiteSessoes: number }
 }
+
+const LIMITE_SESSOES_FALTAS = 200
 
 export type TimelineItem = {
   id: string
@@ -44,10 +48,34 @@ export type TimelineItem = {
   data: string
 }
 
+function localDateISO(date: Date): string {
+  const offset = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offset).toISOString().split('T')[0]
+}
+
 function todayISO(): string {
-  const now = new Date()
-  const offset = now.getTimezoneOffset() * 60000
-  return new Date(now.getTime() - offset).toISOString().split('T')[0]
+  return localDateISO(new Date())
+}
+
+function localDateTimeMillis(
+  value: unknown,
+  fallbackDate: string,
+  fallbackHora: string,
+): number {
+  const anyTs = value as { toDate?: () => Date } | null
+  if (anyTs && typeof anyTs.toDate === 'function') {
+    try {
+      const data = anyTs.toDate()
+      if (!Number.isNaN(data.getTime())) return data.getTime()
+    } catch {
+      // usa o fallback abaixo
+    }
+  }
+  const [ano, mes, dia] = fallbackDate.split('-').map(Number)
+  if (!ano || !mes || !dia) return 0
+  const [hora, minuto] = fallbackHora.split(':').map(Number)
+  const data = new Date(ano, mes - 1, dia, hora || 0, minuto || 0)
+  return Number.isNaN(data.getTime()) ? 0 : data.getTime()
 }
 
 function formatHorario(timestamp: unknown, fallbackDate: string, fallbackHora: string): string {
@@ -55,16 +83,15 @@ function formatHorario(timestamp: unknown, fallbackDate: string, fallbackHora: s
     const anyTs = timestamp as { toDate?: () => Date } | null
     if (anyTs && typeof anyTs.toDate === 'function') {
       const d = anyTs.toDate()
-      const hoje = todayISO()
-      const dataISO = d.toISOString().split('T')[0]
+      const dataISO = localDateISO(d)
       const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-      if (dataISO === hoje) return `Hoje, ${hora}`
+      if (dataISO === todayISO()) return `Hoje, ${hora}`
       return `${d.toLocaleDateString('pt-BR')}, ${hora}`
     }
   } catch {
     // ignore
   }
-  if (fallbackDate === todayISO()) return `Hoje, ${fallbackHora}`
+  if (fallbackDate === todayISO()) return `Hoje, ${fallbackHora}`.trim()
   return `${fallbackDate} ${fallbackHora}`.trim()
 }
 
@@ -92,28 +119,63 @@ async function metrica<T>(load: () => Promise<T>, nome: string): Promise<Metrica
   }
 }
 
-// Frequência média: lê até 200 sessões recentes e calcula % presentes.
-// `null` significa que a consulta funcionou, mas não há presenças registradas.
-async function calcularFrequenciaMedia(): Promise<number | null> {
-  const q = query(collection(db, 'sessoes_chamada'), orderBy('data_chamada', 'desc'), limit(200))
+export type PeriodoIndicador = {
+  inicio: string
+  fim: string
+}
+
+export type FrequenciaMedia = {
+  // `null` significa que a consulta funcionou, mas não há registros no período.
+  percentual: number | null
+  presentes: number
+  justificados: number
+  ausentes: number
+  registros: number
+  sessoes: number
+  periodo: PeriodoIndicador
+}
+
+// Frequência média do mês corrente: chamadas registradas do dia 1 até hoje.
+// Justificadas contam como presença, conforme a regra documentada; a base é
+// sempre exibida para permitir conferir o cálculo contra as chamadas.
+async function calcularFrequenciaMedia(): Promise<FrequenciaMedia> {
+  const fim = todayISO()
+  const inicio = `${fim.slice(0, 7)}-01`
+  const q = query(
+    collection(db, 'sessoes_chamada'),
+    where('data_chamada', '>=', inicio),
+    where('data_chamada', '<=', fim),
+  )
   const snap = await getDocs(q)
   let presentes = 0
-  let total = 0
+  let justificados = 0
+  let ausentes = 0
+  let registros = 0
   snap.forEach((d) => {
     const presencas = (d.data().presencas || {}) as Record<string, string>
     Object.values(presencas).forEach((status) => {
-      total += 1
+      registros += 1
       if (status === 'presente') presentes += 1
+      else if (status === 'justificado') justificados += 1
+      else if (status === 'ausente') ausentes += 1
     })
   })
-  return total > 0 ? Math.round((presentes / total) * 100) : null
+  return {
+    percentual: registros > 0 ? Math.round(((presentes + justificados) / registros) * 100) : null,
+    presentes,
+    justificados,
+    ausentes,
+    registros,
+    sessoes: snap.size,
+    periodo: { inicio, fim },
+  }
 }
 
 export type DashboardMetrics = {
   alunosAtivos: Metrica<number>
   turmasAtivas: Metrica<number>
   oficinasAtivas: Metrica<number>
-  frequenciaMedia: Metrica<number | null>
+  frequenciaMedia: Metrica<FrequenciaMedia>
 }
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
@@ -191,6 +253,70 @@ export function sequenciaDoContexto(
   return sequencias
 }
 
+type VinculoVigencia = {
+  alunoId: string
+  turmaId: string
+  turmaOficinaId: string
+  dataInicio: string
+  dataFim: string
+  status: string
+}
+
+function matriculaVigenteNaData(v: VinculoVigencia, data: string): boolean {
+  if (v.dataInicio && data < v.dataInicio) return false
+  if (v.status === 'ativo') return true
+  return Boolean(v.dataFim && data <= v.dataFim)
+}
+
+function participacaoVigenteNaData(v: VinculoVigencia, data: string): boolean {
+  if (v.dataInicio && data < v.dataInicio) return false
+  if (v.status === 'ativo') return true
+  return Boolean(v.dataFim && data <= v.dataFim)
+}
+
+// Só conta a presença/falta quando o aluno pertencia à turma na data. Quando
+// não há nenhum vínculo importado (base legada), mantém o registro para não
+// apagar o histórico anterior à migração de matrículas.
+function montarElegibilidade(
+  matriculas: VinculoVigencia[],
+  alunoOficinas: VinculoVigencia[],
+) {
+  const porAluno = new Map<string, VinculoVigencia[]>()
+  matriculas.forEach((v) => {
+    const lista = porAluno.get(v.alunoId) ?? []
+    lista.push(v)
+    porAluno.set(v.alunoId, lista)
+  })
+
+  const oficinasPorChave = new Map<string, VinculoVigencia[]>()
+  alunoOficinas.forEach((v) => {
+    const chave = `${v.alunoId}|${v.turmaOficinaId}`
+    const lista = oficinasPorChave.get(chave) ?? []
+    lista.push(v)
+    oficinasPorChave.set(chave, lista)
+  })
+
+  return (alunoId: string, sessao: SessaoChamadaResumo): boolean => {
+    const doAluno = porAluno.get(alunoId)
+    if (doAluno && doAluno.length > 0) {
+      const daTurma = doAluno.some(
+        (v) => v.turmaId === sessao.turma_id && matriculaVigenteNaData(v, sessao.data_chamada),
+      )
+      if (!daTurma) return false
+    }
+
+    if (sessao.escopo === 'turma') return true
+    if (!sessao.turma_oficina_id) return false
+
+    const daOficina = oficinasPorChave.get(`${alunoId}|${sessao.turma_oficina_id}`)
+    if (daOficina && daOficina.length > 0) {
+      return daOficina.some((v) => participacaoVigenteNaData(v, sessao.data_chamada))
+    }
+    // Base legada sem aluno_oficinas para este aluno: vale a matrícula.
+    return true
+  }
+}
+
 // Alunos com faltas consecutivas >= limite, calculadas por contexto
 // (turma geral ou vínculo de oficina) e nunca misturando sessões
 // incompatíveis. Falhas de consulta são propagadas: nunca viram "sem alertas".
@@ -198,13 +324,71 @@ export async function getAlunosFaltasRecorrentes(
   maxItens = 5,
   limiteFaltas = LIMITE_FALTAS_PADRAO,
 ): Promise<ResultadoFaltasRecorrentes> {
-  const q = query(collection(db, 'sessoes_chamada'), orderBy('data_chamada', 'desc'), limit(200))
-  const snap = await getDocs(q)
+  const q = query(
+    collection(db, 'sessoes_chamada'),
+    orderBy('data_chamada', 'desc'),
+    limit(LIMITE_SESSOES_FALTAS),
+  )
+  const [snap, matriculasSnap, alunoOficinasSnap] = await Promise.all([
+    getDocs(q),
+    getDocs(collection(db, 'matriculas')),
+    getDocs(collection(db, 'aluno_oficinas')),
+  ])
 
-  const sessoes = snap.docs.map((d) => ({
-    id: d.id,
-    ...(d.data() as Record<string, unknown>),
-  })) as SessaoChamadaResumo[]
+  const matriculas: (VinculoVigencia & { alunoId: string })[] = []
+  matriculasSnap.forEach((d) => {
+    const data = d.data()
+    const alunoId = getStr(data, 'aluno_id')
+    if (!alunoId) return
+    matriculas.push({
+      alunoId,
+      turmaId: getStr(data, 'turma_id'),
+      turmaOficinaId: '',
+      dataInicio: getStr(data, 'data_inicio').slice(0, 10),
+      dataFim: getStr(data, 'data_fim').slice(0, 10),
+      status: getStr(data, 'status').toLowerCase(),
+    })
+  })
+
+  const alunoOficinas: (VinculoVigencia & { alunoId: string })[] = []
+  alunoOficinasSnap.forEach((d) => {
+    const data = d.data()
+    const alunoId = getStr(data, 'aluno_id')
+    const turmaOficinaId = getStr(data, 'turma_oficina_id')
+    if (!alunoId || !turmaOficinaId) return
+    alunoOficinas.push({
+      alunoId,
+      turmaId: '',
+      turmaOficinaId,
+      dataInicio: getStr(data, 'data_inicio').slice(0, 10),
+      dataFim: getStr(data, 'data_fim').slice(0, 10),
+      status: getStr(data, 'status').toLowerCase(),
+    })
+  })
+
+  const elegivel = montarElegibilidade(matriculas, alunoOficinas)
+
+  const sessoes = snap.docs.map((d) => {
+    const data = d.data() as Record<string, unknown>
+    const presencas = getMap(data, 'presencas')
+    const filtradas = Object.fromEntries(
+      Object.entries(presencas).filter(([alunoId]) =>
+        elegivel(alunoId, {
+          id: d.id,
+          data_chamada: getStr(data, 'data_chamada'),
+          turma_id: getStr(data, 'turma_id'),
+          escopo: getStr(data, 'escopo') === 'oficina' ? 'oficina' : 'turma',
+          turma_oficina_id: getStr(data, 'turma_oficina_id') || undefined,
+          presencas,
+        }),
+      ),
+    )
+    return {
+      id: d.id,
+      ...data,
+      presencas: filtradas,
+    } as unknown as SessaoChamadaResumo
+  })
 
   // Melhor sequência corrente de cada aluno entre todos os seus contextos.
   const melhorPorAluno = new Map<
@@ -241,8 +425,10 @@ export async function getAlunosFaltasRecorrentes(
     })
     .slice(0, maxItens)
 
+  const janela = { sessoesLidas: sessoes.length, limiteSessoes: LIMITE_SESSOES_FALTAS }
+
   if (alertas.length === 0) {
-    return { alertas: [], limite: limiteFaltas }
+    return { alertas: [], limite: limiteFaltas, janela }
   }
 
   // Nomes dos alunos e de turmas/oficinas para exibir no alerta.
@@ -321,6 +507,7 @@ export async function getAlunosFaltasRecorrentes(
       }
     }),
     limite: limiteFaltas,
+    janela,
   }
 }
 
@@ -345,43 +532,54 @@ export async function getUltimasAtualizacoes(maxItems = 6): Promise<UltimasAtual
   }
   const [regsSnap, sessoesSnap, relsSnap] = resultados.map((r) => (r.status === 'fulfilled' ? r.value : null))
   const items: TimelineItem[] = []
+  const ordemPorItem = new Map<string, number>()
 
   regsSnap?.forEach((d) => {
     const data = d.data()
     const reg = docToRegistro(d.id, data)
+    const id = `reg_${d.id}`
     items.push({
-      id: `reg_${d.id}`,
+      id,
       horario: formatHorario(data.atualizado_em, reg.dataAtividade, ''),
       autor: data.usuario_responsavel_nome || 'Equipe',
       texto: `registrou atividade da turma ${reg.turmaId || '—'} em ${reg.dataAtividade || '—'}.`,
       data: reg.dataAtividade,
     })
+    ordemPorItem.set(id, localDateTimeMillis(data.atualizado_em, reg.dataAtividade, ''))
   })
 
   sessoesSnap?.forEach((d) => {
     const data = d.data()
+    const id = `ses_${d.id}`
     items.push({
-      id: `ses_${d.id}`,
+      id,
       horario: formatHorario(data.atualizado_em, String(data.data_chamada || ''), ''),
       autor: String(data.registrado_por || 'Equipe'),
       texto: `registrou frequência (${String(data.escopo || 'turma')}) de ${String(data.data_chamada || '—')}.`,
       data: String(data.data_chamada || ''),
     })
+    ordemPorItem.set(
+      id,
+      localDateTimeMillis(data.atualizado_em, String(data.data_chamada || ''), ''),
+    )
   })
 
   relsSnap?.forEach((d) => {
     const data = d.data()
     const periodoInicio = String(data.periodo_inicio || '')
     const periodoFim = String(data.periodo_fim || '')
+    const id = `rel_${d.id}`
     items.push({
-      id: `rel_${d.id}`,
+      id,
       horario: formatHorario(data.atualizado_em, periodoFim, ''),
       autor: String(data.usuario_responsavel_nome || 'Equipe pedagógica'),
       texto: `atualizou relatório ${String(data.tipo_relatorio || '')} (${periodoInicio} a ${periodoFim}).`,
       data: periodoFim,
     })
+    ordemPorItem.set(id, localDateTimeMillis(data.atualizado_em, periodoFim, ''))
   })
 
+  items.sort((a, b) => (ordemPorItem.get(b.id) ?? 0) - (ordemPorItem.get(a.id) ?? 0))
   return { items: items.slice(0, maxItems), fontesComFalha }
 }
 
@@ -397,10 +595,26 @@ export type TarefaDoDia = {
 // verificação que falhar aparece como "não verificada", nunca como pendente com zero.
 export async function getTarefasDeHoje(): Promise<TarefaDoDia[]> {
   const hoje = todayISO()
+  const inicioDoDia = new Date()
+  inicioDoDia.setHours(0, 0, 0, 0)
+  const inicioDoDiaSeguinte = new Date(inicioDoDia)
+  inicioDoDiaSeguinte.setDate(inicioDoDiaSeguinte.getDate() + 1)
+
   const [chamadas, atividades, relatorios] = await Promise.all([
     metrica(() => getDocs(query(collection(db, 'sessoes_chamada'), where('data_chamada', '==', hoje))).then((s) => s.size), 'chamadas de hoje'),
     metrica(() => getDocs(query(collection(db, 'registros_atividade'), where('data_atividade', '==', hoje))).then((s) => s.size), 'atividades de hoje'),
-    metrica(() => getDocs(query(collection(db, 'relatorios_pedagogicos'), where('status', '==', 'concluido'), limit(50))).then((s) => s.size), 'relatórios concluídos'),
+    metrica(
+      () =>
+        getDocs(
+          query(
+            collection(db, 'relatorios_pedagogicos'),
+            where('status', '==', 'concluido'),
+            where('atualizado_em', '>=', inicioDoDia),
+            where('atualizado_em', '<', inicioDoDiaSeguinte),
+          ),
+        ).then((s) => s.size),
+      'relatórios concluídos hoje',
+    ),
   ])
 
   const tarefa = (m: Metrica<number>, rotulo: (n: number) => string, base: string, prazo: string): TarefaDoDia =>
@@ -411,7 +625,7 @@ export async function getTarefasDeHoje(): Promise<TarefaDoDia[]> {
   return [
     tarefa(chamadas, (n) => `Frequência de hoje (${n} registrada${n === 1 ? '' : 's'})`, 'Frequência de hoje', 'Prazo: 12h00'),
     tarefa(atividades, (n) => `Atividades de hoje (${n} registrada${n === 1 ? '' : 's'})`, 'Atividades de hoje', 'Prazo: 17h00'),
-    tarefa(relatorios, (n) => `Relatórios concluídos (${n})`, 'Relatórios concluídos', 'Prazo: sexta'),
+    tarefa(relatorios, (n) => `Relatórios concluídos hoje (${n})`, 'Relatórios concluídos hoje', 'Prazo: hoje'),
   ]
 }
 

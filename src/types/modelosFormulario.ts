@@ -49,4 +49,5 @@ export const emptyModeloInput: ModeloFormularioInput = {
   versao: 1,
   campos: [],
   ativo: true,
+  criado_por: '',
 }

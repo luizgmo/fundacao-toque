@@ -15,7 +15,10 @@ import {
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { AttendanceSession, AttendanceStatus, ContactEntry } from '../features/alunos/students-data'
-import { demoAttendanceSessions } from '../features/alunos/students-data'
+import {
+  demoAttendanceSessions,
+  normalizeContactMethod,
+} from '../features/alunos/students-data'
 import {
   DEMO_CONTACTS_STORAGE_KEY,
   DEMO_SESSIONS_STORAGE_KEY,
@@ -341,7 +344,9 @@ export interface SaveOccurrenceInput {
   studentId: string
   studentName: string
   faltaDate: string
+  relatedAbsenceDates?: string[]
   type: string
+  responsibleId: string
   responsible: string
   reason: string
   status: string
@@ -358,6 +363,11 @@ export async function saveOccurrenceToFirestore(
   contactId = `contato-${input.studentId}-${Date.now()}`
 ): Promise<string> {
   const todayStr = new Intl.DateTimeFormat('pt-BR').format(new Date())
+  const meioContato = normalizeContactMethod(input.type)
+  const datasFaltas =
+    input.relatedAbsenceDates && input.relatedAbsenceDates.length > 0
+      ? input.relatedAbsenceDates
+      : [input.faltaDate]
 
   if (isDemoModeEnabled()) {
     const contacts = readDemoContacts()
@@ -365,7 +375,7 @@ export async function saveOccurrenceToFirestore(
       studentId: input.studentId,
       faltaDate: input.faltaDate,
       contactDate: todayStr,
-      type: input.type,
+      type: meioContato,
       responsible: input.responsible,
       guardianId: input.guardianId,
       guardianName: input.guardianSnapshot.nome,
@@ -382,17 +392,16 @@ export async function saveOccurrenceToFirestore(
   const docData = {
     aluno_id: input.studentId,
     aluno_nome: input.studentName,
-    datas_faltas_relacionadas: [input.faltaDate],
+    datas_faltas_relacionadas: datasFaltas,
     contatado_em: serverTimestamp(),
-    data_formatada: todayStr,
-    meio_contato: input.type,
+    meio_contato: meioContato,
     motivo_ocorrencia: input.reason,
     status_ocorrencia: input.status,
     observacoes: input.note,
-    usuario_responsavel: input.responsible,
+    usuario_responsavel_id: input.responsibleId,
     usuario_responsavel_nome: input.responsible,
     responsavel_id: input.guardianId,
-    responsavel_snapshot: input.guardianSnapshot,
+    responsavel_snapshot: { ...input.guardianSnapshot, canal: meioContato },
     criado_em: serverTimestamp(),
   }
 
@@ -431,31 +440,37 @@ export function subscribeStudentOccurrences(
 
   const q = query(
     collection(db, CONTATOS_COLLECTION),
-    where('aluno_id', '==', studentId)
+    where('aluno_id', '==', studentId),
+    orderBy('contatado_em', 'desc')
   )
 
   return onSnapshot(
     q,
     (snapshot) => {
       const list: ContactEntry[] = []
-      const orderedDocs = [...snapshot.docs].sort((a, b) => {
-        const left = a.data().contatado_em?.toMillis?.() || 0
-        const right = b.data().contatado_em?.toMillis?.() || 0
-        return right - left
-      })
-      orderedDocs.forEach((snap) => {
+      snapshot.forEach((snap) => {
         const d = snap.data()
+        const contatadoEm = d.contatado_em as { toDate?: () => Date } | undefined
+        const dataContato = contatadoEm?.toDate?.()
+        const datasFaltas = Array.isArray(d.datas_faltas_relacionadas)
+          ? d.datas_faltas_relacionadas.filter(Boolean).join(', ')
+          : ''
         list.push({
           id: snap.id,
-          faltaDate: (d.datas_faltas_relacionadas && d.datas_faltas_relacionadas[0]) || '—',
-          contactDate: d.data_formatada || new Intl.DateTimeFormat('pt-BR').format(new Date()),
-          type: d.meio_contato || 'Telefone',
-          responsible: d.usuario_responsavel || 'Equipe',
+          faltaDate: datasFaltas || '—',
+          contactDate: dataContato
+            ? dataContato.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+            : d.data_formatada || 'Data não registrada',
+          type: normalizeContactMethod(String(d.meio_contato || 'telefone')),
+          responsible:
+            d.usuario_responsavel_nome || d.usuario_responsavel || 'Equipe',
           reason: d.motivo_ocorrencia || '',
           status: d.status_ocorrencia || 'Aberta',
           note: d.observacoes || '',
           guardianId: d.responsavel_id || undefined,
-          guardianName: d.responsavel_snapshot?.nome || 'Responsável não identificado no registro original',
+          guardianName:
+            d.responsavel_snapshot?.nome ||
+            'Responsável não identificado no registro original',
           guardianRelationship: d.responsavel_snapshot?.parentesco || '',
           guardianContact: d.responsavel_snapshot?.contato || '',
         })

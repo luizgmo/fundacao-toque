@@ -6,6 +6,39 @@ export type ReportEntry = {
   summary: string
 }
 
+export type ContactMethod = 'telefone' | 'whatsapp' | 'email' | 'presencial' | 'outro'
+
+export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] = [
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'telefone', label: 'Ligação telefônica' },
+  { value: 'presencial', label: 'Atendimento presencial / visita domiciliar' },
+  { value: 'email', label: 'E-mail' },
+  { value: 'outro', label: 'Outro' },
+]
+
+const CONTACT_METHOD_ALIASES: Record<string, ContactMethod> = {
+  whatsapp: 'whatsapp',
+  telefone: 'telefone',
+  'ligação telefônica': 'telefone',
+  'ligacao telefonica': 'telefone',
+  'atendimento presencial': 'presencial',
+  'visita domiciliar': 'presencial',
+  presencial: 'presencial',
+  'e-mail': 'email',
+  email: 'email',
+  outro: 'outro',
+}
+
+export function normalizeContactMethod(value: string): ContactMethod {
+  return CONTACT_METHOD_ALIASES[value.trim().toLowerCase()] ?? 'outro'
+}
+
+export function contactMethodLabel(value: string): string {
+  const metodo = CONTACT_METHOD_ALIASES[value.trim().toLowerCase()]
+  if (!metodo) return value
+  return CONTACT_METHOD_OPTIONS.find((option) => option.value === metodo)?.label ?? value
+}
+
 export type ContactEntry = {
   id?: string
   faltaDate: string

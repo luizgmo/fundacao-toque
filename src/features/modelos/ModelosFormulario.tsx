@@ -1,9 +1,7 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
-  CheckCircle2,
-  ChevronDown,
   Plus,
   Save,
   Trash2,
@@ -28,12 +26,12 @@ const emptyInput: ModeloFormularioInput = {
   versao: 1,
   campos: [],
   ativo: true,
+  criado_por: '',
 }
 
 export function ModelosFormulario() {
   const { userProfile } = useAuth()
   const userId = userProfile?.uid || ''
-  const userName = userProfile?.nome_completo || ''
   const papel = userProfile?.papel
 
   const [modelos, setModelos] = useState<ModeloFormularioInput[]>([])
@@ -44,9 +42,9 @@ export function ModelosFormulario() {
   const [form, setForm] = useState<ModeloFormularioInput>({ ...emptyInput })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [reservedId, setReservedId] = useState(() => novoIdModelo())
+  const [reservedId] = useState(() => novoIdModelo())
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -57,7 +55,24 @@ export function ModelosFormulario() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    listarModelos()
+      .then((data) => {
+        if (!cancelled) setModelos(data.map((m) => ({ ...m, id: m.id })))
+      })
+      .catch((cause) => {
+        if (!cancelled) setError(describePersistenceError(cause))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const resetForm = () => {
     setForm({ ...emptyInput, id: reservedId })
@@ -185,8 +200,10 @@ export function ModelosFormulario() {
   const novaVersao = async (id: string) => {
     setError(null)
     try {
+      const modelo = await obterModelo(id)
+      if (!modelo) throw new Error('Modelo não encontrado.')
       const novoId = await salvarModelo(
-        { ...(await obterModelo(id)), id: undefined, versao: (await obterModelo(id))!.versao + 1, ativo: true },
+        { ...modelo, id: undefined, versao: modelo.versao + 1, ativo: true },
         userId
       )
       await load()
@@ -305,7 +322,7 @@ export function ModelosFormulario() {
         </div>
       )}
 
-      {editingId || form.nome.trim() || form.campos.length > 0 ? (
+      {(editingId || form.nome.trim() || form.campos.length > 0) && (
         <div className="modal-backdrop" onClick={() => resetForm()}>
           <div className="modal-container modelo-modal" onClick={(e) => e.stopPropagation()}>
             <header className="modal-header">

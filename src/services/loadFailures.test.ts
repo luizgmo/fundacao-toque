@@ -57,8 +57,13 @@ describe('dashboard: falha de consulta nunca vira zero', () => {
     expect(metrics.alunosAtivos).toEqual({ ok: true, valor: 4 })
     expect(metrics.turmasAtivas.ok).toBe(false)
     expect(metrics.oficinasAtivas).toEqual({ ok: true, valor: 4 })
-    // Consulta funcionou mas não há presenças: null (sem dados), não erro.
-    expect(metrics.frequenciaMedia).toEqual({ ok: true, valor: null })
+    // Consulta funcionou mas não há presenças: percentual null (sem dados), não erro.
+    expect(metrics.frequenciaMedia.ok).toBe(true)
+    expect(metrics.frequenciaMedia.ok && metrics.frequenciaMedia.valor).toMatchObject({
+      percentual: null,
+      registros: 0,
+      sessoes: 0,
+    })
   })
 
   it('frequência média que falha é erro, não "sem dados"', async () => {

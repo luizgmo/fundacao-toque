@@ -343,11 +343,13 @@ function MetricCard({
   value,
   label,
   tone,
+  hint,
 }: {
   icon: LucideIcon
   value: string
   label: string
   tone: string
+  hint?: string
 }) {
   return (
     <article className="metric-card">
@@ -357,9 +359,15 @@ function MetricCard({
       <div>
         <strong>{value}</strong>
         <span>{label}</span>
+        {hint && <small className="metric-hint">{hint}</small>}
       </div>
     </article>
   )
+}
+
+function formatIsoBR(iso: string): string {
+  const [ano, mes, dia] = iso.split('-')
+  return dia && mes && ano ? `${dia}/${mes}/${ano}` : iso
 }
 
 function SectionCard({
@@ -414,7 +422,7 @@ function Dashboard({
     configuracaoQuery.status === 'ready' ? configuracaoQuery.data.valor : LIMITE_FALTAS_PADRAO
   const faltasQuery = useQuery<ResultadoFaltasRecorrentes>(
     () => getAlunosFaltasRecorrentes(5, limiteFaltas),
-    { alertas: [], limite: limiteFaltas },
+    { alertas: [], limite: limiteFaltas, janela: { sessoesLidas: 0, limiteSessoes: 200 } },
     `limite-${limiteFaltas}`,
   )
 
@@ -437,6 +445,19 @@ function Dashboard({
     if (!m || !m.ok) return 'Erro'
     return format(m.valor)
   }
+
+  const frequenciaMedia = metrics?.frequenciaMedia.ok ? metrics.frequenciaMedia.valor : null
+  const frequenciaPeriodo = frequenciaMedia
+    ? `${formatIsoBR(frequenciaMedia.periodo.inicio)} a ${formatIsoBR(frequenciaMedia.periodo.fim)}`
+    : ''
+  const frequenciaHint =
+    metricsQuery.status === 'loading'
+      ? 'Calculando o mês corrente.'
+      : !metrics?.frequenciaMedia.ok
+        ? 'Falha na consulta: o valor não foi convertido em zero.'
+        : frequenciaMedia && frequenciaMedia.registros > 0
+          ? `${frequenciaPeriodo} · ${frequenciaMedia.presentes} presentes + ${frequenciaMedia.justificados} justificadas de ${frequenciaMedia.registros} registros em ${frequenciaMedia.sessoes} sessões.`
+          : `${frequenciaPeriodo} · sem chamadas registradas.`
 
   const shortcuts = [
     { label: 'Cadastrar aluno', description: 'Novo cadastro completo', icon: UserRound, action: 'register' as Screen, tone: 'green' },
@@ -484,21 +505,18 @@ function Dashboard({
         <MetricCard icon={GraduationCap} label="Turmas ativas" tone="blue" value={metricValue(metrics?.turmasAtivas)} />
         <MetricCard icon={Palette} label="Oficinas em andamento" tone="orange" value={metricValue(metrics?.oficinasAtivas)} />
         <MetricCard
+          hint={frequenciaHint}
           icon={TrendingUp}
-          label={
-            metrics?.frequenciaMedia.ok && metrics.frequenciaMedia.valor === null
-              ? 'Frequência média (sem chamadas registradas)'
-              : 'Frequência média (mês)'
-          }
+          label="Frequência média (mês corrente)"
           tone="yellow"
           value={
             metricsQuery.status === 'loading'
               ? '…'
               : !metrics?.frequenciaMedia.ok
                 ? 'Erro'
-                : metrics.frequenciaMedia.valor === null
-                  ? '—'
-                  : `${metrics.frequenciaMedia.valor}%`
+                : !frequenciaMedia || frequenciaMedia.percentual === null
+                  ? '-'
+                  : `${frequenciaMedia.percentual}%`
           }
         />
       </section>
@@ -586,7 +604,15 @@ function Dashboard({
 
       <div className="dashboard-secondary-grid">
         <SectionCard
-          action={<span className="status-pill warning">{limiteFaltas}+ faltas</span>}
+          action={
+            <span
+              className="status-pill warning"
+              title="A base são as chamadas mais recentes; só entram registros de alunos com matrícula/participação vigente na data."
+            >
+              {limiteFaltas}+ faltas · {faltasQuery.data.janela.sessoesLidas}/
+              {faltasQuery.data.janela.limiteSessoes} sessões
+            </span>
+          }
           title="Alunos com faltas recorrentes"
         >
           {configuracaoQuery.status === 'error' ? (
@@ -612,7 +638,11 @@ function Dashboard({
                     ? `Nenhum aluno com ${limiteFaltas}+ faltas consecutivas`
                     : `${faltas.length} aluno${faltas.length === 1 ? '' : 's'} com ${limiteFaltas}+ faltas consecutivas`}
                 </strong>
-                <span>Verifique os registros de contato e as ausências recentes.</span>
+                <span>
+                  Verifique os registros de contato e as ausências recentes. Base:{' '}
+                  {faltasQuery.data.janela.sessoesLidas} chamadas mais recentes, com matrícula ou
+                  participação vigente na data.
+                </span>
               </div>
             </div>
           )}

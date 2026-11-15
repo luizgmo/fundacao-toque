@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { ModeloFormulario, CampoFormulario } from '../../types/modelosFormulario'
+import type { ModeloFormulario } from '../../types/modelosFormulario'
+import { parseSelecao, toggleSelecaoAtual } from './camposModeloUtils'
 
 type CamposModeloProps = {
   modelo: ModeloFormulario | null
@@ -16,30 +16,12 @@ export function CamposModelo({
   disabled = false,
   className,
 }: CamposModeloProps) {
-  const [selecoes, setSelecoes] = useState<Record<string, string[]>>({})
-
   const toggleSelecao = (chave: string, valor: string) => {
-    setSelecoes((current) => {
-      const next = [...(current[chave] || [])]
-      const idx = next.indexOf(valor)
-      const atualizado = idx >= 0 ? next.filter((_, i) => i !== idx) : [...next, valor]
-      const respostasAtualizadas = { ...respostas }
-      if (atualizado.length) respostasAtualizadas[chave] = atualizado.join('; ')
-      else delete respostasAtualizadas[chave]
-      onChange(respostasAtualizadas)
-      return { ...current, [chave]: atualizado }
-    })
+    onChange(toggleSelecaoAtual(respostas, chave, valor))
   }
 
   const handleChange = (chave: string, valor: string) => {
     onChange({ ...respostas, [chave]: valor })
-    if (selecoes[chave]) {
-      setSelecoes((current) => {
-        const next = { ...current }
-        delete next[chave]
-        return next
-      })
-    }
   }
 
   if (!modelo || modelo.campos.length === 0) {
@@ -85,7 +67,7 @@ export function CamposModelo({
                 ) : campo.tipo === 'selecao' ? (
                   <div className="selecao-opcoes">
                     {campo.opcoes.map((opcao) => {
-                      const selecionado = (selecoes[campo.chave] || []).includes(opcao)
+                      const selecionado = parseSelecao(valor).includes(opcao)
                       return (
                         <label className="selecao-item" key={opcao}>
                           <input
@@ -155,25 +137,3 @@ export function CamposModelo({
     </div>
   )
 }
-
-export function validarCamposObrigatorios(
-  modelo: ModeloFormulario | null,
-  respostas: Record<string, string>,
-  selecoes: Record<string, string[]>
-): string | null {
-  if (!modelo) return null
-  for (const campo of modelo.campos) {
-    if (campo.obrigatorio === true) {
-      const valor = respostas[campo.chave]
-      const preenchidoTexto = valor && valor.trim().length > 0
-      const preenchidoSelecao =
-        campo.tipo === 'selecao' && (selecoes[campo.chave] || []).length > 0
-      if (!preenchidoTexto && !preenchidoSelecao) {
-        return `Preencha o campo obrigatório "${campo.rotulo}".`
-      }
-    }
-  }
-  return null
-}
-
-export type { CampoFormulario }

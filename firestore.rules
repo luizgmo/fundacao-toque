@@ -81,6 +81,54 @@ service cloud.firestore {
         d.get('atualizado_em', null) == request.time;
     }
 
+    // Contato familiar: registro imutável com o destinatário, as faltas
+    // relacionadas e o profissional autenticado que fez o contato.
+    function validContact(d) {
+      let alunoId = d.get('aluno_id', '');
+      let responsavelId = d.get('responsavel_id', '');
+      let responsavelPath = /databases/$(database)/documents/alunos/$(alunoId)/responsaveis/$(responsavelId);
+      return d.keys().hasOnly([
+          'aluno_id', 'aluno_nome', 'responsavel_id', 'responsavel_snapshot',
+          'datas_faltas_relacionadas', 'contatado_em', 'meio_contato',
+          'motivo_ocorrencia', 'status_ocorrencia', 'observacoes',
+          'usuario_responsavel_id', 'usuario_responsavel_nome', 'criado_em',
+        ]) &&
+        d.get('aluno_id', null) is string &&
+        d.aluno_id.size() > 0 &&
+        exists(/databases/$(database)/documents/alunos/$(alunoId)) &&
+        d.get('aluno_nome', null) is string &&
+        d.aluno_nome.size() > 0 && d.aluno_nome.size() <= 200 &&
+        d.get('responsavel_id', null) is string &&
+        d.responsavel_id.size() > 0 &&
+        exists(responsavelPath) &&
+        get(responsavelPath).data.ativo == true &&
+        d.get('responsavel_snapshot', null) is map &&
+        d.responsavel_snapshot.keys().hasOnly(['nome', 'parentesco', 'canal', 'contato']) &&
+        d.responsavel_snapshot.nome == get(responsavelPath).data.nome_completo &&
+        d.responsavel_snapshot.parentesco == get(responsavelPath).data.parentesco &&
+        d.responsavel_snapshot.contato == get(responsavelPath).data.telefone &&
+        d.responsavel_snapshot.canal == d.get('meio_contato', null) &&
+        d.get('meio_contato', null) in ['telefone', 'whatsapp', 'email', 'presencial', 'outro'] &&
+        d.get('datas_faltas_relacionadas', null) is list &&
+        d.datas_faltas_relacionadas.size() > 0 &&
+        d.datas_faltas_relacionadas.size() <= 50 &&
+        d.datas_faltas_relacionadas[0] is string &&
+        d.datas_faltas_relacionadas.join('|').matches(
+          '^[0-9]{4}-[0-9]{2}-[0-9]{2}([|][0-9]{4}-[0-9]{2}-[0-9]{2}){0,49}$'
+        ) &&
+        d.get('motivo_ocorrencia', null) is string &&
+        d.motivo_ocorrencia.size() > 0 && d.motivo_ocorrencia.size() <= 500 &&
+        d.get('status_ocorrencia', null) is string &&
+        d.status_ocorrencia.size() > 0 && d.status_ocorrencia.size() <= 100 &&
+        d.get('observacoes', null) is string &&
+        d.observacoes.size() > 0 && d.observacoes.size() <= 5000 &&
+        d.get('usuario_responsavel_id', null) == request.auth.uid &&
+        d.get('usuario_responsavel_nome', null) is string &&
+        d.usuario_responsavel_nome.size() > 0 && d.usuario_responsavel_nome.size() <= 200 &&
+        d.get('contatado_em', null) == request.time &&
+        d.get('criado_em', null) == request.time;
+    }
+
     function primeiroDirecaoNaoExistia() {
       return !exists(/databases/$(database)/documents/sistema/bootstrap);
     }
@@ -509,14 +557,7 @@ service cloud.firestore {
 
     match /contatos_familia/{contactId} {
       allow read: if canUseSystem();
-      allow create: if (isDirection() || isPedagogue() || isAdministrative()) &&
-        exists(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)) &&
-        request.resource.data.responsavel_id is string &&
-        exists(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)) &&
-        get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.ativo == true &&
-        request.resource.data.responsavel_snapshot.nome == get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.nome_completo &&
-        request.resource.data.responsavel_snapshot.parentesco == get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.parentesco &&
-        request.resource.data.responsavel_snapshot.contato == get(/databases/$(database)/documents/alunos/$(request.resource.data.aluno_id)/responsaveis/$(request.resource.data.responsavel_id)).data.telefone;
+      allow create: if canUseSystem() && validContact(request.resource.data);
       // Registros de contato preservam o destinatário e os dados usados naquele momento.
       allow update: if false;
       allow delete: if isDirection();
