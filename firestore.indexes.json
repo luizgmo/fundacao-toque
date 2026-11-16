@@ -112,13 +112,6 @@
         { "fieldPath": "tipo_modelo", "order": "ASCENDING" },
         { "fieldPath": "versao", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "documentos",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "tipo_documento", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": [
@@ -126,6 +119,14 @@
       "collectionGroup": "chunks",
       "fieldPath": "conteudo_base64",
       "indexes": []
+    },
+    {
+      "collectionGroup": "documentos",
+      "fieldPath": "tipo_documento",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
     }
   ]
 }

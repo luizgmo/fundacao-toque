@@ -519,11 +519,11 @@ export type UltimasAtualizacoes = {
 
 // Últimas atualizações: mistura registros_atividade + sessoes_chamada + relatorios_pedagogicos.
 // Se todas as fontes falharem, lança o erro; se só algumas falharem, informa quais.
-export async function getUltimasAtualizacoes(maxItems = 6): Promise<UltimasAtualizacoes> {
+export async function getUltimasAtualizacoes(maxItems = 6, incluirRelatorios = true): Promise<UltimasAtualizacoes> {
   const fontes = [
     { nome: 'atividades', q: query(collection(db, 'registros_atividade'), orderBy('atualizado_em', 'desc'), limit(5)) },
     { nome: 'chamadas', q: query(collection(db, 'sessoes_chamada'), orderBy('atualizado_em', 'desc'), limit(5)) },
-    { nome: 'relatórios', q: query(collection(db, 'relatorios_pedagogicos'), orderBy('atualizado_em', 'desc'), limit(5)) },
+    ...(incluirRelatorios ? [{ nome: 'relatórios', q: query(collection(db, 'relatorios_pedagogicos'), orderBy('atualizado_em', 'desc'), limit(5)) }] : []),
   ]
   const resultados = await Promise.allSettled(fontes.map((fonte) => getDocs(fonte.q)))
   const fontesComFalha = fontes.filter((_, i) => resultados[i].status === 'rejected').map((f) => f.nome)
@@ -593,7 +593,7 @@ export type TarefaDoDia = {
 
 // Tarefas de hoje: verifica se já existe chamada, atividade e relatório. Cada
 // verificação que falhar aparece como "não verificada", nunca como pendente com zero.
-export async function getTarefasDeHoje(): Promise<TarefaDoDia[]> {
+export async function getTarefasDeHoje(incluirRelatorios = true): Promise<TarefaDoDia[]> {
   const hoje = todayISO()
   const inicioDoDia = new Date()
   inicioDoDia.setHours(0, 0, 0, 0)
@@ -603,7 +603,7 @@ export async function getTarefasDeHoje(): Promise<TarefaDoDia[]> {
   const [chamadas, atividades, relatorios] = await Promise.all([
     metrica(() => getDocs(query(collection(db, 'sessoes_chamada'), where('data_chamada', '==', hoje))).then((s) => s.size), 'chamadas de hoje'),
     metrica(() => getDocs(query(collection(db, 'registros_atividade'), where('data_atividade', '==', hoje))).then((s) => s.size), 'atividades de hoje'),
-    metrica(
+    incluirRelatorios ? metrica(
       () =>
         getDocs(
           query(
@@ -614,7 +614,7 @@ export async function getTarefasDeHoje(): Promise<TarefaDoDia[]> {
           ),
         ).then((s) => s.size),
       'relatórios concluídos hoje',
-    ),
+    ) : Promise.resolve(null),
   ])
 
   const tarefa = (m: Metrica<number>, rotulo: (n: number) => string, base: string, prazo: string): TarefaDoDia =>
@@ -625,7 +625,7 @@ export async function getTarefasDeHoje(): Promise<TarefaDoDia[]> {
   return [
     tarefa(chamadas, (n) => `Frequência de hoje (${n} registrada${n === 1 ? '' : 's'})`, 'Frequência de hoje', 'Prazo: 12h00'),
     tarefa(atividades, (n) => `Atividades de hoje (${n} registrada${n === 1 ? '' : 's'})`, 'Atividades de hoje', 'Prazo: 17h00'),
-    tarefa(relatorios, (n) => `Relatórios concluídos hoje (${n})`, 'Relatórios concluídos hoje', 'Prazo: hoje'),
+    ...(relatorios ? [tarefa(relatorios, (n) => `Relatórios concluídos hoje (${n})`, 'Relatórios concluídos hoje', 'Prazo: hoje')] : []),
   ]
 }
 

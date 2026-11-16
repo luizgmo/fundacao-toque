@@ -1,160 +1,245 @@
-.modelos-page .modelos-list {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  margin-top: 1rem;
-}
-
-.modelo-card {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1rem;
-  background: var(--surface);
-}
-
-.modelo-card.inativo {
-  opacity: 0.6;
-  border-style: dashed;
-}
-
-.modelo-card-header {
+.modelos-page .modelos-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 0.5rem;
+  gap: 16px;
+  margin: 28px 0 18px;
 }
-
-.modelo-card-header > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.modelos-section-heading h3 {
+  margin: 0 0 5px;
+  color: var(--navy-800);
+  font-size: 17px;
 }
-
-.modelo-versao {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.modelo-status {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.modelo-status.ativo {
-  background: var(--green-50);
-  color: var(--green-600);
-}
-
-.modelo-status.inativo {
-  background: var(--red-50);
-  color: var(--red-600);
-}
-
-.modelo-card-body {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0.75rem;
-}
-
-.modelo-tipo {
-  font-size: 12px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-muted);
-}
-
-.modelo-campos {
-  list-style: none;
+.modelos-section-heading p {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
-
-.modelo-campos li {
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--navy-900);
+.modelos-section-heading .entity-tag {
+  flex-shrink: 0;
 }
-
-.modelo-card-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 0.5rem;
+.modelos-page .modelos-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 390px), 1fr));
+  align-items: stretch;
 }
-
-.campo-remover {
-  padding: 2px 6px;
+.modelos-page .modelo-card {
+  gap: 20px;
 }
-
-.campos-lista {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.modelos-page .entity-card-title h3 {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
-
-.campo-item {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.75rem;
+.modelos-page .entity-code {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.modelo-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.modelo-status.ativo {
+  color: var(--green-700);
+  background: var(--green-100);
+}
+.modelo-status.inativo {
+  color: var(--text-muted);
   background: var(--surface-subtle);
 }
-
-.campo-grid {
+.modelo-card-body {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 12px;
 }
-
-.campo-opcoes {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-strong);
-}
-
-.campo-opcoes-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 0.4rem;
-  display: block;
-}
-
-.campo-opcao-row {
+.modelo-fields-heading {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 0.25rem;
+  gap: 8px;
 }
-
-.campo-opcao-row input {
+.modelo-fields-heading strong {
+  font-size: 13px;
+  color: var(--navy-700);
+}
+.modelo-fields-heading > span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.modelo-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.modelo-campos li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  background: var(--surface-subtle);
+  border-radius: 9px;
+  min-width: 0;
+}
+.modelo-campos li > strong {
+  color: var(--navy-700);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.modelo-campos li > span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.modelo-required {
+  color: var(--green-700);
+}
+.modelos-page .modelo-card-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.modelo-card-actions .button {
+  min-height: 35px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.modelo-card-actions .button.danger {
+  margin-left: auto;
+  color: var(--danger-600);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.modelo-card-actions .button.danger:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.modelos-page .modelo-modal {
+  width: 100%;
+  max-width: 760px;
+}
+.modelos-page .report-heading-actions .button {
+  display: inline-flex;
+  white-space: nowrap;
+}
+.modelo-editor-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.modelo-editor-fields {
+  min-width: 0;
+}
+.modelo-editor-heading {
+  margin-bottom: 14px;
+}
+.modelo-editor-heading h4 {
+  margin: 0 0 5px;
+  font-size: 14px;
+  color: var(--navy-800);
+}
+.modelo-editor-heading p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.modelos-page .campos-lista {
+  display: grid;
+  gap: 14px;
+}
+.modelos-page .campo-item {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+}
+.modelos-page .campo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.modelos-page .campo-grid .field {
+  margin: 0;
+}
+.modelos-page .campo-grid .field-wide {
+  grid-column: auto;
+}
+.modelos-page .campo-obrigatorio {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  align-items: center;
+  align-self: center;
+}
+.modelos-page .campo-obrigatorio input {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+}
+.modelos-page .campo-remover {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--danger-600);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.modelos-page .campo-opcoes {
+  margin: 12px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.modelos-page .campo-opcoes-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.modelos-page .campo-opcao-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.modelos-page .campo-opcao-row input {
   flex: 1;
+  min-width: 0;
 }
-
-.save-feedback {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-  color: var(--green-600);
-}
-
-.modal-error-banner {
+.modelos-page .modal-error-banner {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
   background: #fef2f2;
   color: #991b1b;
   border: 1px solid #fecaca;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .modelos-page .modelos-section-heading {
+  flex-direction: column;
+  align-items: flex-start;
+}
+  .modelos-page .entity-card-top {
+  flex-wrap: wrap;
+}
+  .modelos-page .campo-grid, .modelo-campos {
+  grid-template-columns: 1fr;
+}
+  .modelo-card-actions .button.danger {
+  margin-left: 0;
+}
 }

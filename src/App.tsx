@@ -5,7 +5,6 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Bell,
   BookOpenCheck,
   CheckCircle2,
   ChevronDown,
@@ -27,7 +26,6 @@ import {
   TrendingUp,
   UserRound,
   Users,
-  X,
 } from 'lucide-react'
 import { CadastrarAluno } from './features/alunos/CadastrarAluno'
 import { ListarAlunos } from './features/alunos/ListarAlunos'
@@ -185,14 +183,6 @@ function Sidebar({
       <aside className={'sidebar' + (isOpen ? ' open' : '')}>
         <div className="sidebar-header">
           <Brand />
-          <button
-            aria-label="Fechar menu"
-            className="icon-button sidebar-close"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         <nav aria-label="Navegação principal" className="sidebar-nav">
@@ -296,10 +286,6 @@ function Topbar({
       </div>
 
       <div className="topbar-actions">
-        <button aria-label="Notificações" className="icon-button notification-button" type="button">
-          <Bell size={19} />
-          <span className="notification-dot" />
-        </button>
         <div
           className="profile-container"
           onClick={() => setProfileMenuOpen((open) => !open)}
@@ -401,6 +387,8 @@ function Dashboard({
   onViewStudent: (studentId: string) => void
   userName?: string
 }) {
+  const { userProfile } = useAuth()
+  const incluirRelatorios = userProfile?.papel === 'direcao' || userProfile?.papel === 'pedagogia'
   const formattedDate = useMemo(() => {
     const text = new Intl.DateTimeFormat('pt-BR', {
       weekday: 'long',
@@ -427,8 +415,8 @@ function Dashboard({
   )
 
   const metricsQuery = useQuery<DashboardMetrics | null>(getDashboardMetrics, null)
-  const timelineQuery = useQuery<UltimasAtualizacoes>(() => getUltimasAtualizacoes(6), { items: [], fontesComFalha: [] })
-  const tarefasQuery = useQuery<TarefaDoDia[]>(getTarefasDeHoje, [])
+  const timelineQuery = useQuery<UltimasAtualizacoes>(() => getUltimasAtualizacoes(6, incluirRelatorios), { items: [], fontesComFalha: [] }, String(incluirRelatorios))
+  const tarefasQuery = useQuery<TarefaDoDia[]>(() => getTarefasDeHoje(incluirRelatorios), [], String(incluirRelatorios))
 
   const metrics = metricsQuery.data
   const faltas = faltasQuery.data?.alertas ?? []

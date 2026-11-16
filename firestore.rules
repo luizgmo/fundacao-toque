@@ -581,7 +581,8 @@ service cloud.firestore {
     }
 
     match /configuracoes_sistema/{settingId} {
-      allow read: if isDirection();
+      // O dashboard de todos os perfis ativos usa o limite de faltas.
+      allow read: if canUseSystem();
       // Somente a Direção altera o limite, com valores inteiros não negativos
       // e registro de quem atualizou e quando.
       allow write: if isDirection() &&

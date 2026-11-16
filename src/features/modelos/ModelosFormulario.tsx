@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
+  FileText,
+  Pencil,
+  Copy,
+  Archive,
   Plus,
   Save,
   Trash2,
@@ -39,10 +43,10 @@ export function ModelosFormulario() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<ModeloFormularioInput>({ ...emptyInput })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [reservedId] = useState(() => novoIdModelo())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,10 +79,32 @@ export function ModelosFormulario() {
   }, [])
 
   const resetForm = () => {
-    setForm({ ...emptyInput, id: reservedId })
+    setShowForm(false)
+    setForm({ ...emptyInput })
     setFormError(null)
     setEditingId(null)
   }
+
+  const novoModelo = () => {
+    resetForm()
+    setMessage(null)
+    setError(null)
+    setForm({ ...emptyInput, id: novoIdModelo(), campos: [] })
+    setShowForm(true)
+  }
+
+  useEffect(() => {
+    if (!showForm) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) setShowForm(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
+  }, [showForm, saving])
 
   const addCampo = () => {
     setForm((current) => ({
@@ -150,8 +176,7 @@ export function ModelosFormulario() {
         return [entrada, ...current]
       })
       setMessage(`Modelo "${form.nome.trim()}" salvo com sucesso.`)
-      setEditingId(null)
-      setForm({ ...emptyInput, id: novoIdModelo() })
+      resetForm()
     } catch (cause) {
       setFormError(failureMessage(cause, 'salvar o modelo de formulário'))
     } finally {
@@ -161,7 +186,9 @@ export function ModelosFormulario() {
 
   const editarModelo = (modelo: ModeloFormularioInput) => {
     setEditingId(modelo.id || null)
-    setForm({ ...modelo })
+    setForm({ ...modelo, campos: modelo.campos.map((campo) => ({ ...campo, opcoes: [...campo.opcoes] })) })
+    setFormError(null)
+    setShowForm(true)
   }
 
   const excluirModelo = async (id: string) => {
@@ -213,6 +240,7 @@ export function ModelosFormulario() {
     }
   }
 
+  const modelosAtivos = modelos.filter((modelo) => modelo.ativo).length
   const isGestor = papel === 'direcao' || papel === 'pedagogia'
 
   return (
@@ -221,14 +249,11 @@ export function ModelosFormulario() {
         <div>
           <span className="eyebrow">Administração &amp; Governança</span>
           <h2>Modelos de Formulário</h2>
-          <p>
-            Crie, edite e versione modelos de formulário pedagógico. Os relatórios
-            anteriores mantêm a versão do modelo com que foram gerados.
-          </p>
+          <p>Defina os campos usados pela equipe nas avaliações pedagógicas dos alunos.</p>
         </div>
         <div className="report-heading-actions">
           {isGestor && (
-            <button className="button primary" onClick={resetForm} type="button">
+            <button className="button primary" onClick={novoModelo} type="button">
               <Plus size={18} /> Novo modelo
             </button>
           )}
@@ -245,39 +270,46 @@ export function ModelosFormulario() {
       {error && <div className="modal-error-banner">{error}</div>}
       {message && <p className="save-feedback">{message}</p>}
 
+      <div className="modelos-section-heading">
+        <div><h3>Modelos cadastrados</h3><p>Selecione um modelo ativo em Relatórios → Pedagógico para preencher a avaliação.</p></div>
+        {!loading && <span className="entity-tag primary">{modelosAtivos} {modelosAtivos === 1 ? 'ativo' : 'ativos'} · {modelos.length} no total</span>}
+      </div>
+
       {loading ? (
         <p className="entity-modal-empty">Carregando modelos…</p>
       ) : modelos.length === 0 ? (
-        <p className="entity-modal-empty">Nenhum modelo cadastrado.</p>
+        <div className="entity-empty form-card"><FileText size={32} /><strong>Nenhum modelo cadastrado</strong><span>Crie o primeiro modelo para padronizar as avaliações da equipe.</span>{isGestor && <button className="button primary" onClick={novoModelo} type="button"><Plus size={16} /> Novo modelo</button>}</div>
       ) : (
-        <div className="modelos-list">
+        <div className="entity-grid modelos-list">
           {modelos.map((m) => {
             const ativo = m.ativo !== false
             return (
               <article
-                className={`modelo-card ${ativo ? '' : 'inativo'}`}
+                className={`entity-card modelo-card ${ativo ? '' : 'inactive'}`}
                 key={m.id || m.nome}
               >
-                <div className="modelo-card-header">
-                  <div>
-                    <strong>{m.nome}</strong>
-                    <span className="modelo-versao">v{m.versao}</span>
+                <div className="entity-card-top">
+                  <span className="entity-icon" aria-hidden="true"><FileText size={22} /></span>
+                  <div className="entity-card-title">
+                    <span className="entity-code">Avaliação pedagógica · versão {m.versao}</span>
+                    <h3>{m.nome}</h3>
                   </div>
                   <span className={`modelo-status ${ativo ? 'ativo' : 'inativo'}`}>
                     {ativo ? 'Ativo' : 'Inativo'}
                   </span>
                 </div>
                 <div className="modelo-card-body">
-                  <span className="modelo-tipo">{m.tipo_modelo}</span>
+                  <div className="modelo-fields-heading"><strong>{m.campos.length} {m.campos.length === 1 ? 'campo' : 'campos'} no formulário</strong><span>* Obrigatório</span></div>
                   <ul className="modelo-campos">
                     {m.campos.map((c) => (
                       <li key={c.chave || c.rotulo}>
-                        {c.rotulo} ({c.tipo}){c.obrigatorio && ' *'}
+                        <strong>{c.rotulo}{c.obrigatorio && <span className="modelo-required"> *</span>}</strong>
+                        <span>{TIPOS_CAMPO[c.tipo]}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
-                <div className="modelo-card-actions">
+                <div className="entity-actions modelo-card-actions">
                   {isGestor && (
                     <>
                       <button
@@ -285,7 +317,7 @@ export function ModelosFormulario() {
                         onClick={() => editarModelo(m)}
                         type="button"
                       >
-                        Editar
+                        <Pencil size={15} /> Editar
                       </button>
                       {ativo ? (
                         <>
@@ -294,14 +326,14 @@ export function ModelosFormulario() {
                             onClick={() => novaVersao(m.id as string)}
                             type="button"
                           >
-                            Nova versão
+                            <Copy size={15} /> Nova versão
                           </button>
                           <button
                             className="button danger"
                             onClick={() => excluirModelo(m.id as string)}
                             type="button"
                           >
-                            Inativar
+                            <Archive size={15} /> Inativar
                           </button>
                         </>
                       ) : (
@@ -322,14 +354,14 @@ export function ModelosFormulario() {
         </div>
       )}
 
-      {(editingId || form.nome.trim() || form.campos.length > 0) && (
-        <div className="modal-backdrop" onClick={() => resetForm()}>
-          <div className="modal-container modelo-modal" onClick={(e) => e.stopPropagation()}>
+      {showForm && (
+        <div className="modal-backdrop" onClick={() => { if (!saving) resetForm() }}>
+          <div aria-labelledby="modelo-modal-title" aria-modal="true" className="modal-container modelo-modal" role="dialog" onClick={(e) => e.stopPropagation()}>
             <header className="modal-header">
               <div className="modal-title-group">
                 <Save className="modal-icon" size={22} />
                 <div>
-                  <h3>{editingId ? 'Editar modelo' : 'Novo modelo de formulário'}</h3>
+                  <h3 id="modelo-modal-title">{editingId ? 'Editar modelo' : 'Novo modelo de formulário'}</h3>
                   <p>Configure os campos que comporão o formulário pedagógico.</p>
                 </div>
               </div>
@@ -337,6 +369,7 @@ export function ModelosFormulario() {
                 aria-label="Fechar"
                 className="icon-button modal-close"
                 onClick={resetForm}
+                disabled={saving}
                 type="button"
               >
                 <X size={20} />
@@ -355,10 +388,12 @@ export function ModelosFormulario() {
             )}
 
             <form className="modal-form" onSubmit={handleSubmit}>
+              <fieldset disabled={saving} className="modelo-editor-fieldset">
               <div className="modal-grid">
                 <label className="field field-wide">
                   <span>Nome do modelo *</span>
                   <input
+                    autoFocus
                     disabled={!isGestor}
                     onChange={(e) => setForm((current) => ({ ...current, nome: e.target.value }))}
                     placeholder="Ex: Avaliação Pedagógica Semestral"
@@ -380,9 +415,10 @@ export function ModelosFormulario() {
                   </select>
                 </label>
 
-                <label className="field field-wide">
-                  <span>Campos do formulário</span>
+                <section className="modelo-editor-fields field-wide" aria-labelledby="modelo-campos-title">
+                  <div className="modelo-editor-heading"><h4 id="modelo-campos-title">Campos do formulário</h4><p>Adicione as perguntas que a equipe deverá responder.</p></div>
                   <div className="campos-lista">
+                    {form.campos.length === 0 && <p className="entity-modal-empty">Nenhum campo adicionado. Use “Adicionar campo” para começar.</p>}
                     {form.campos.map((campo, index) => (
                       <div
                         className="campo-item"
@@ -396,6 +432,7 @@ export function ModelosFormulario() {
                               onChange={(e) =>
                                 updateCampo(index, 'chave', e.target.value)
                               }
+                              required
                               placeholder="ex: observacao_geral"
                               value={campo.chave}
                             />
@@ -428,7 +465,7 @@ export function ModelosFormulario() {
                               ))}
                             </select>
                           </label>
-                          <label className="field">
+                          <label className="toggle-check campo-obrigatorio">
                             <span>Obrigatório</span>
                             <input
                               disabled={!isGestor}
@@ -496,7 +533,7 @@ export function ModelosFormulario() {
                       <Plus size={16} /> Adicionar campo
                     </button>
                   </div>
-                </label>
+                </section>
 
                 <label className="toggle-check field-wide">
                   <input
@@ -523,6 +560,7 @@ export function ModelosFormulario() {
                   {saving ? 'Salvando...' : 'Salvar modelo'}
                 </button>
               </div>
+              </fieldset>
             </form>
           </div>
         </div>

@@ -59,6 +59,19 @@ beforeEach(() => {
 })
 
 describe('dashboard: indicadores conferíveis', () => {
+  it('não consulta relatórios restritos no dashboard Administrativo', async () => {
+    firestore.getDocs.mockImplementation(async (q: Consulta) => {
+      if (q.path === 'relatorios_pedagogicos') throw new Error('permission-denied')
+      return snapshot()
+    })
+    const tarefas = await getTarefasDeHoje(false)
+    const atualizacoes = await getUltimasAtualizacoes(6, false)
+    expect(tarefas).toHaveLength(2)
+    expect(tarefas.every((tarefa) => tarefa.feito === false && !tarefa.erro)).toBe(true)
+    expect(atualizacoes.fontesComFalha).toEqual([])
+    expect(firestore.getDocs.mock.calls.every(([q]) => (q as Consulta).path !== 'relatorios_pedagogicos')).toBe(true)
+  })
+
   it('calcula a frequência do mês corrente e conta justificadas como presença', async () => {
     let consulta: Consulta | undefined
     firestore.getDocs.mockImplementation(async (q: Consulta) => {

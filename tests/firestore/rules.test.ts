@@ -9,6 +9,11 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+  orderBy,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -157,6 +162,32 @@ function fichaComAnexo(uid: string, alunoId = 'aluno-1', extra: Record<string, u
 }
 
 describe('Firestore security rules', () => {
+  it('permite gerenciar modelos à Direção/Pedagogia e apenas ler ao Administrativo', async () => {
+    const modelo = { nome: 'Avaliação', tipo_modelo: 'avaliacao_pedagogica', versao: 1, ativo: true, campos: [] }
+    for (const uid of ['direcao-1', 'pedagogia-1']) {
+      const ref = doc(firestore(uid), 'modelos_formulario', uid)
+      await assertSucceeds(setDoc(ref, modelo))
+      await assertSucceeds(updateDoc(ref, { ativo: false }))
+    }
+    await assertSucceeds(getDocs(query(collection(firestore('admin-1'), 'modelos_formulario'), orderBy('versao', 'desc'))))
+    await assertFails(setDoc(doc(firestore('admin-1'), 'modelos_formulario/negado'), modelo))
+    for (const uid of [undefined, 'inativo-1', 'sem-perfil']) {
+      await assertFails(getDocs(collection(firestore(uid), 'modelos_formulario')))
+      await assertFails(setDoc(doc(firestore(uid), 'modelos_formulario/negado'), modelo))
+    }
+  })
+
+  it('autoriza a consulta de relatórios concluídos do dashboard apenas à Direção/Pedagogia', async () => {
+    for (const uid of ['direcao-1', 'pedagogia-1', 'admin-1']) {
+      const consulta = query(collection(firestore(uid), 'relatorios_pedagogicos'),
+        where('status', '==', 'concluido'),
+        where('atualizado_em', '>=', new Date('2026-11-15T00:00:00Z')),
+        where('atualizado_em', '<', new Date('2026-11-16T00:00:00Z')))
+      if (uid === 'admin-1') await assertFails(getDocs(consulta))
+      else await assertSucceeds(getDocs(consulta))
+    }
+  })
+
   it('nega acesso anônimo e perfil ausente a dados operacionais', async () => {
     await assertFails(getDoc(doc(firestore(), 'alunos/aluno-1')))
     await assertFails(getDoc(doc(firestore('sem-perfil'), 'alunos/aluno-1')))
@@ -659,11 +690,13 @@ describe('Firestore security rules', () => {
       atualizado_em: serverTimestamp(),
     }
 
-    it('somente a Direção lê e escreve a configuração', async () => {
+    it('perfis ativos leem o limite do dashboard, mas somente a Direção o altera', async () => {
       await assertFails(getDoc(doc(firestore(), 'configuracoes_sistema/geral')))
       await assertSucceeds(getDoc(doc(firestore('direcao-1'), 'configuracoes_sistema/geral')))
-      await assertFails(getDoc(doc(firestore('pedagogia-1'), 'configuracoes_sistema/geral')))
-      await assertFails(getDoc(doc(firestore('admin-1'), 'configuracoes_sistema/geral')))
+      await assertSucceeds(getDoc(doc(firestore('pedagogia-1'), 'configuracoes_sistema/geral')))
+      await assertSucceeds(getDoc(doc(firestore('admin-1'), 'configuracoes_sistema/geral')))
+      await assertFails(getDoc(doc(firestore('inativo-1'), 'configuracoes_sistema/geral')))
+      await assertFails(getDoc(doc(firestore('sem-perfil'), 'configuracoes_sistema/geral')))
 
       await assertFails(setDoc(doc(firestore('pedagogia-1'), 'configuracoes_sistema/geral'), configuracaoValida))
       await assertFails(setDoc(doc(firestore('admin-1'), 'configuracoes_sistema/geral'), configuracaoValida))
