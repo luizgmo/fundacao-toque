@@ -181,3 +181,41 @@
   gap: 0.75rem;
   margin-top: 1rem;
 }
+
+/* Reserva espaço para os ícones sem depender dos estilos da tela de login. */
+.user-modal-box .input-icon-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.user-modal-box .input-icon-group input {
+  min-width: 0;
+  padding-inline-start: 42px;
+  padding-inline-end: 12px;
+}
+
+.user-modal-box .field-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.user-modal-box .role-preview-hint svg,
+.user-modal-box .modal-title-group > svg,
+.user-modal-box .modal-close {
+  flex-shrink: 0;
+}
+
+.user-modal-box .modal-form-actions {
+  flex-wrap: wrap;
+}
+
+.gerenciar-usuarios-page .report-heading-actions .button {
+  display: inline-flex;
+}

@@ -232,9 +232,19 @@
     flex-direction: column;
     align-items: stretch;
   }
+  .evolucao-filter {
+    flex: 0 0 auto;
+    min-width: 0;
+    width: 100%;
+  }
+
   .evolucao-filter-reset {
     margin-left: 0;
-    margin-top: 8px;
+    margin-top: 4px;
+  }
+
+  .evolucao-timeline-header {
+    flex-wrap: wrap;
   }
 }
 
@@ -323,4 +333,13 @@
   .evolucao-form-actions .button {
     width: 100%;
   }
+}
+
+.evolucao-page .report-heading-actions {
+  flex-wrap: wrap;
+}
+
+.evolucao-page .report-heading-actions .button {
+  display: inline-flex;
+  max-width: 100%;
 }

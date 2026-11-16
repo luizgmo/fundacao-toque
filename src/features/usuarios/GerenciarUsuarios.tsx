@@ -274,7 +274,7 @@ export function GerenciarUsuarios() {
                 <label className="field field-wide">
                   <span>Nome Completo *</span>
                   <div className="input-icon-group">
-                    <User className="field-icon" size={18} />
+                    <User aria-hidden="true" className="field-icon" size={18} />
                     <input
                       onChange={(e) => setNome(e.target.value)}
                       placeholder="Ex: Carlos Eduardo de Oliveira"
@@ -288,7 +288,7 @@ export function GerenciarUsuarios() {
                 <label className="field field-wide">
                   <span>E-mail Corporativo ou de Acesso *</span>
                   <div className="input-icon-group">
-                    <Mail className="field-icon" size={18} />
+                    <Mail aria-hidden="true" className="field-icon" size={18} />
                     <input
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="carlos.oliveira@fundacaotoque.org.br"
@@ -314,7 +314,7 @@ export function GerenciarUsuarios() {
                 <label className="field field-wide">
                   <span>Senha Provisória (mínimo 6 caracteres) *</span>
                   <div className="input-icon-group">
-                    <Lock className="field-icon" size={18} />
+                    <Lock aria-hidden="true" className="field-icon" size={18} />
                     <input
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Crie a senha inicial para o usuário"

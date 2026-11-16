@@ -41,7 +41,15 @@ Não apague os dados do aluno antes de confirmar que foram copiados para a ficha
 
 ## 4. Publicar regras e índices
 
-Com `firebase.json` apontando para os arquivos desta branch:
+Com `firebase.json` apontando para os arquivos desta branch, a publicação somente do Firestore no projeto `fundacao-toque` é:
+
+```bash
+npx firebase-tools deploy --only firestore:rules,firestore:indexes --project fundacao-toque
+```
+
+Isso publica regras e índices sem incluir Storage. A publicação de `storage.rules` é opcional e só é necessária se for usar a ficha médica em formato de arquivo, que o código atual envia ao Storage. A ficha digital e os anexos de atividades/relatórios ficam no Firestore.
+
+Comandos separados para selecionar os recursos e outro projeto explicitamente:
 
 ```bash
 npx firebase-tools deploy --only firestore:rules --project ID_DO_PROJETO
