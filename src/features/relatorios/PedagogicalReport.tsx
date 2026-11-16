@@ -82,7 +82,8 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
   const [reservedId, setReservedId] = useState(() => novoIdRelatorio())
   // Modelo de formulário selecionado e respostas dinâmicas dos campos configuráveis.
   const [modelos, setModelos] = useState<ModeloFormulario[]>([])
-  const [modelosLoading, setModelosLoading] = useState(false)
+  const [modelosLoading, setModelosLoading] = useState(true)
+  const [modelosError, setModelosError] = useState<unknown>(null)
   const modeloSelecionado = modelos.find((m) => m.id === form.modelo_formulario_id) || null
 
   // Estados separados de carregando / erro / dados para alunos e histórico.
@@ -98,11 +99,12 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
 
   const carregarModelos = async () => {
     setModelosLoading(true)
+    setModelosError(null)
     try {
       const data = await listarModelosAtivos()
       setModelos((current) => mergeModelos(current, data))
     } catch (cause) {
-      console.warn('Não foi possível carregar os modelos de formulário:', cause)
+      setModelosError(cause)
     } finally {
       setModelosLoading(false)
     }
@@ -115,7 +117,10 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
         if (!cancelled) setModelos((current) => mergeModelos(current, data))
       })
       .catch((cause) => {
-        if (!cancelled) console.warn('Não foi possível carregar os modelos de formulário:', cause)
+        if (!cancelled) setModelosError(cause)
+      })
+      .finally(() => {
+        if (!cancelled) setModelosLoading(false)
       })
     return () => {
       cancelled = true
@@ -286,6 +291,7 @@ export function PedagogicalReport({ initialStudentId = '' }: { initialStudentId?
     <div className="report-page-heading"><div><span className="eyebrow">Acompanhamento pedagógico</span><h2>{form.id ? 'Relatório pedagógico' : 'Novo relatório pedagógico'}</h2><p>Campos e periodicidades seguem RF02/RF09 e permanecem sujeitos à validação institucional.</p></div>
       <div className="report-heading-actions"><span className={'report-status ' + (form.status === 'concluido' ? 'completed' : '')}>{form.status === 'concluido' ? 'Concluído' : 'Rascunho'}</span><button className="button secondary" disabled={busy} onClick={() => persist('rascunho')} type="button"><Save size={18}/> Salvar rascunho</button><button className="button primary" disabled={busy || form.status === 'concluido'} onClick={() => persist('concluido')} type="button"><CheckCircle2 size={18}/> Finalizar relatório</button></div>
     </div>
+    {modelosError != null && <LoadError error={modelosError} onRetry={() => void carregarModelos()} what="os modelos de formulário" />}
     {studentsQuery.status === 'error' && <LoadError error={studentsQuery.error} onRetry={studentsQuery.retry} what="os alunos" />}
     {error && <div className="privacy-note" role="alert"><AlertTriangle size={19}/><p>{error}</p></div>}
     {message && <p role="status" className="save-feedback">{message}</p>}

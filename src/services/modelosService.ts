@@ -8,7 +8,6 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  where,
 } from 'firebase/firestore'
 import { confirmWrite } from '../lib/persistence'
 import { db } from '../lib/firebase'
@@ -130,12 +129,12 @@ export async function obterModelo(id: string): Promise<ModeloFormulario | null> 
 }
 
 export async function listarModelos(ativosApenas = false): Promise<ModeloFormulario[]> {
-  const constraints: unknown[] = []
-  if (ativosApenas) constraints.push(where('ativo', '==', true))
-  constraints.push(orderBy('versao', 'desc'))
-  const q = query(collection(db, COLLECTION), ...(constraints as never[]))
+  // Compartilha a consulta da administração, sem exigir índice composto
+  // para combinar o estado ativo com a ordenação por versão.
+  const q = query(collection(db, COLLECTION), orderBy('versao', 'desc'))
   const snap = await getDocs(q)
-  return snap.docs.map((item) => asModelo(item.id, item.data() as Record<string, unknown>))
+  const modelos = snap.docs.map((item) => asModelo(item.id, item.data() as Record<string, unknown>))
+  return ativosApenas ? modelos.filter((modelo) => modelo.ativo) : modelos
 }
 
 export async function listarModelosAtivos(): Promise<ModeloFormulario[]> {
